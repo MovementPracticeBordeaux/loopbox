@@ -79,13 +79,13 @@ details summary{cursor:pointer;font-weight:600;}
       <input type="range" id="bpm" min="60" max="160" value="90" aria-label="Tempo">
     </div>
   </div>
-  <div class="row">
-    <span class="lbl">Mesures</span>
-    <div class="seg" id="bars"><button data-b="1">1</button><button data-b="2" class="on">2</button><button data-b="4">4</button></div>
-    <button id="metro" class="on" style="margin-left:auto">Métronome</button>
+  <div class="row" style="flex-wrap:wrap">
+    <button id="metro" class="on">Métronome</button>
+    <button id="snap" class="on">Caler sur le tempo</button>
+    <button id="mix" style="margin-left:auto">Prise : remplace</button>
   </div>
   <div class="dots" id="dots"></div>
-  <p class="hint" id="lockhint" style="display:none">Tempo et durée verrouillés tant qu'il y a des prises. Efface les pistes pour les changer.</p>
+  <p class="hint" id="lockhint" style="display:none"></p>
 </div>
 
 <div id="tracks"></div>
@@ -112,13 +112,13 @@ details summary{cursor:pointer;font-weight:600;}
   </details>
   <details style="margin-top:10px">
     <summary>Aide rapide</summary>
-    <p class="hint">Appuie sur ● : un décompte d'une mesure, puis la piste enregistre exactement une boucle. Rappuie sur ● pour annuler. Un nouvel enregistrement remplace la prise (↶ pour revenir en arrière). M = muet, S = solo. Le curseur du haut règle le volume, celui du bas le panoramique gauche/droite. Le projet est sauvegardé dans ce navigateur.</p>
+    <p class="hint">● démarre l'enregistrement, ■ l'arrête. <b>La première prise définit la boucle</b> : avec « Caler sur le tempo » actif, sa durée est arrondie à un nombre entier de temps du tempo choisi (décompte de 4 temps si le métronome est actif). Ensuite, sur les autres pistes, ● lance la prise quand tu veux et ■ l'arrête : le son se place là où tu l'as joué dans la boucle (ex. un snare seulement sur les temps 2 et 4). La prise s'arrête seule au bout d'une boucle. « Prise » : remplace la portion enregistrée de la piste, ou ajoute par-dessus ce qui existe. ↶ annule, ✕ efface. M = muet, S = solo. Le projet est sauvegardé dans ce navigateur.</p>
   </details>
 </div>
 
 <script>
 (()=>{
-const N=10, B=1024;
+const N=10, B=1024, MAXMASTER=30;
 const COLORS=['#e8472b','#f08a24','#e6b800','#7cb518','#1f9d55','#16a5a5','#2b7fe0','#6a5acd','#b04fc7','#d6457f'];
 const $=(s,r=document)=>r.querySelector(s);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -126,7 +126,8 @@ const mod=(a,b)=>((a%b)+b)%b;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 // ---------- état ----------
-let bpm=90, bars=2, metroOn=true, fin=false, mvol=0.9, ingain=2, comp=0.1;
+let bpm=90, metroOn=true, fin=false, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
+let loopLen=0, beats=4, lastLoop=null, dotsN=0;
 let running=false, t0=0, nextBeat=0, schedTimer=null;
 let micStream=null, micSrc=null, inGainNode=null, proc=null, inAn=null;
 let base=null, blockK=0, cap=null, recObj=null;
@@ -135,9 +136,8 @@ const ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'int
 const SR=ctx.sampleRate;
 
 function msg(t){ $('#msg').textContent=t||''; }
-const loopSamples=()=>Math.round(bars*4*60/bpm*SR);
-const loopSec=()=>loopSamples()/SR;
-const beatDur=()=>loopSec()/(bars*4);
+const loopSec=()=>loopLen/SR;
+const beatDur=()=>loopLen?loopSec()/beats:60/bpm;
 
 // ---------- chaîne master ----------
 function makeChain(c){
@@ -257,38 +257,80 @@ function gather(blocks,s,e){
 }
 
 // ---------- enregistrement ----------
-async function arm(i){
-  const t=tracks[i];
-  if(recObj){ const same=recObj.i===i; cancelRec(); if(same) return; }
+async function toggleRec(i){
+  if(recObj){
+    if(recObj.i===i && ctx.currentTime<recObj.tp) cancelRec(); else stopRec();
+    return;
+  }
   if(!(await ensureMic())) return;
-  const L=loopSec();
-  let tb;
-  if(!running){ startTransport(true); tb=t0; }
-  else{ const now=ctx.currentTime; tb=now<t0?t0:t0+Math.ceil((now+0.3-t0)/L)*L; }
-  stopSrc(t);
-  const LS=loopSamples();
-  recObj={i,tb,LS};
-  cap={blocks:[],check:k=>{
-    const s=Math.round((tb+comp-base)*SR), e=s+LS;
-    if((k+1)*B>=e) finishRec(s,e);
-  }};
+  if(recObj) return;
+  if(!loopLen){
+    if(running) stopTransport();
+    startTransport(metroOn);
+    recObj={i,master:true,tp:t0,stopT:null,len:0};
+  } else {
+    let tp;
+    if(!running){ startTransport(metroOn); tp=t0; } else tp=ctx.currentTime+0.04;
+    recObj={i,master:false,tp,stopT:null,len:0};
+  }
+  cap={blocks:[],check:capCheck};
+  lockUI();
+}
+function capCheck(k){
+  const r=recObj; if(!r) return;
+  const now=ctx.currentTime;
+  if(r.stopT===null){
+    if(r.master){ if(now>=r.tp+MAXMASTER) stopRec(r.tp+MAXMASTER); }
+    else if(now>=r.tp+loopSec()) stopRec(r.tp+loopSec());
+    if(r.stopT===null) return;
+  }
+  const s=Math.round((r.tp+comp-base)*SR), e=s+r.len;
+  if((k+1)*B>=e) finishRec(s,e);
+}
+function stopRec(atTime){
+  const r=recObj; if(!r||r.stopT!==null) return;
+  const now=ctx.currentTime;
+  if(atTime===undefined&&now<r.tp){ cancelRec(); return; }
+  const st=atTime===undefined?now:atTime;
+  const D=Math.round((st-r.tp)*SR);
+  if(D<SR*(r.master?0.25:0.08)){ cancelRec(); msg('Prise trop courte, rien enregistré.'); return; }
+  r.stopT=st;
+  if(r.master){
+    const bd0=60/bpm;
+    r.n=Math.max(1,Math.round(D/SR/bd0));
+    r.len=snap?Math.round(r.n*bd0*SR):D;
+  } else r.len=Math.min(D,loopLen);
 }
 function cancelRec(){
-  const r=recObj; if(!r) return;
+  if(!recObj) return;
   cap=null; recObj=null;
-  startSrc(tracks[r.i]);
+  lockUI();
 }
 function finishRec(s,e){
   const r=recObj; if(!r) return;
   const blocks=cap.blocks;
   cap=null; recObj=null;
   const d=gather(blocks,s,e);
-  const F=32;
   for(let i=0;i<d.length;i++) d[i]=clamp(d[i],-1,1);
-  for(let i=0;i<F;i++){ const g=i/F; d[i]*=g; d[d.length-1-i]*=g; }
-  const ab=ctx.createBuffer(1,d.length,SR); ab.copyToChannel(d,0);
+  const Fi=Math.min(8,d.length>>1), Fo=Math.min(32,d.length>>1);
+  for(let i=0;i<Fi;i++) d[i]*=(i+1)/Fi;
+  for(let i=0;i<Fo;i++) d[d.length-1-i]*=i/Fo;
   const t=tracks[r.i];
-  t.prev=t.buf; t.buf=ab;
+  if(r.master){
+    loopLen=r.len; beats=r.n; t0=r.tp;
+    tracks.forEach(x=>x.prev=null);
+    const nb=ctx.createBuffer(1,loopLen,SR); nb.copyToChannel(d,0);
+    t.buf=nb;
+    nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
+    buildDots();
+  } else {
+    const L=loopLen, out=new Float32Array(L);
+    if(t.buf) out.set(t.buf.getChannelData(0));
+    const start=Math.round(mod(r.tp-t0,loopSec())*SR)%L;
+    for(let i=0;i<d.length;i++){ const idx=(start+i)%L; out[idx]=mixMode?clamp(out[idx]+d[i],-1,1):d[i]; }
+    const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(out,0);
+    t.prev=t.buf; t.buf=nb;
+  }
   drawWave(t); startSrc(t); lockUI(); scheduleSave();
 }
 
@@ -304,12 +346,18 @@ tracks.forEach(t=>{
   <div class="btns"><button class="m" aria-label="Muet">M</button><button class="s" aria-label="Solo">S</button><button class="u" aria-label="Annuler">↶</button><button class="x" aria-label="Effacer">✕</button></div>`;
   wrap.appendChild(el);
   t.el=el; t.canvas=$('canvas',el); t.ph=$('.ph',el); t.tag=$('.tag',el);
-  $('.rec',el).onclick=()=>arm(t.id);
+  $('.rec',el).onclick=()=>toggleRec(t.id);
   $('.vol',el).oninput=e=>{t.vol=+e.target.value;applyGains();scheduleSave();};
   $('.pan',el).oninput=e=>{t.panv=+e.target.value;applyGains();scheduleSave();};
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
-  $('.u',el).onclick=()=>{ if(recObj&&recObj.i===t.id) return; const b=t.buf;t.buf=t.prev;t.prev=b; drawWave(t); startSrc(t); if(!t.buf) stopSrc(t); lockUI(); scheduleSave(); };
+  $('.u',el).onclick=()=>{
+    if(recObj) return;
+    if(!t.prev&&!t.buf) return;
+    if(!loopLen&&t.prev){ if(lastLoop&&lastLoop.loopLen===t.prev.length){ loopLen=lastLoop.loopLen; beats=lastLoop.beats; buildDots(); } else return; }
+    if(loopLen&&t.prev&&t.prev.length!==loopLen) return;
+    const b=t.buf;t.buf=t.prev;t.prev=b; drawWave(t); startSrc(t); if(!t.buf) stopSrc(t); lockUI(); scheduleSave();
+  };
   $('.x',el).onclick=()=>{ if(recObj&&recObj.i===t.id) cancelRec(); if(!t.buf) return; t.prev=t.buf;t.buf=null;stopSrc(t);drawWave(t);lockUI();scheduleSave(); };
 });
 function drawWave(t){
@@ -327,46 +375,55 @@ function drawWave(t){
 function uiTrack(t,now){
   let st='empty', label=t.buf?'':'vide';
   if(recObj&&recObj.i===t.id){
-    if(now<recObj.tb){ st='armed'; label='Prêt… '+Math.ceil((recObj.tb-now)/beatDur()); }
-    else{ st='rec'; label='● REC '+Math.min(100,Math.round((now-recObj.tb)/loopSec()*100))+'%'; }
+    if(now<recObj.tp){ st='armed'; label='Décompte '+Math.max(1,Math.ceil((recObj.tp-now)/beatDur())); }
+    else if(recObj.stopT!==null){ st='rec'; label='Finalisation…'; }
+    else{ st='rec'; label='● REC '+(now-recObj.tp).toFixed(1)+' s'+(recObj.master?' · ■ pour fermer la boucle':''); }
   } else if(t.buf) st='ready';
   const cls='card trk '+st;
   if(t.cache.cls!==cls){ t.el.className=cls; t.cache.cls=cls; }
   if(t.cache.label!==label){ t.tag.textContent=label; t.cache.label=label; }
-  const rb=$('.rec',t.el), rtxt=(st==='armed'||st==='rec')?'■':'●';
+  const rb=$('.rec',t.el), rtxt=(recObj&&recObj.i===t.id)?'■':'●';
   if(t.cache.rtxt!==rtxt){ rb.textContent=rtxt; t.cache.rtxt=rtxt; }
   $('.m',t.el).classList.toggle('on',t.mute);
   $('.s',t.el).classList.toggle('on',t.solo);
-  $('.u',t.el).disabled=!(t.prev||t.buf)||st==='rec'||st==='armed';
+  $('.u',t.el).disabled=!(t.prev||t.buf)||!!(recObj&&recObj.i===t.id);
   $('.x',t.el).disabled=!t.buf&&st==='empty';
 }
 
 // ---------- contrôles ----------
 function buildDots(){
-  const d=$('#dots'); d.innerHTML='';
-  for(let i=0;i<bars*4;i++){ const e=document.createElement('i'); if(i%4===0&&i>0) e.className='g'; d.appendChild(e); }
+  const d=$('#dots'); d.innerHTML=''; dotsN=loopLen?beats:4;
+  for(let i=0;i<dotsN;i++){ const e=document.createElement('i'); if(i%4===0&&i>0) e.className='g'; d.appendChild(e); }
+}
+function updBpm(){
+  if(loopLen){ const real=beats*60/loopSec(); $('#bpmv').textContent=real.toFixed(1).replace('.',','); $('#bpm').value=clamp(Math.round(real),60,160); }
+  else{ $('#bpmv').textContent=bpm; $('#bpm').value=bpm; }
 }
 function lockUI(){
-  const locked=tracks.some(t=>t.buf)||!!recObj;
-  $('#bpm').disabled=locked;
-  $('#bars').querySelectorAll('button').forEach(b=>b.disabled=locked);
-  $('#lockhint').style.display=locked?'block':'none';
+  if(loopLen&&!tracks.some(t=>t.buf)&&!recObj){
+    lastLoop={loopLen,beats}; loopLen=0; beats=4;
+    if(running){ t0=ctx.currentTime+0.05; nextBeat=0; }
+    buildDots();
+  }
+  const locked=!!loopLen||!!recObj;
+  $('#bpm').disabled=locked; $('#snap').disabled=locked;
+  const h=$('#lockhint');
+  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
+  else h.style.display='none';
+  updBpm();
 }
 $('#play').onclick=async()=>{
   try{ await ctx.resume(); }catch(e){}
+  if(recObj){ if(ctx.currentTime<recObj.tp) cancelRec(); else stopRec(); return; }
   if(running) stopTransport(); else startTransport(false);
 };
 $('#bpm').oninput=e=>{
   bpm=+e.target.value; $('#bpmv').textContent=bpm;
-  tracks.forEach(t=>t.prev=null); scheduleSave();
+  if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
+  scheduleSave();
 };
-$('#bars').onclick=e=>{
-  const b=e.target.closest('button'); if(!b||b.disabled) return;
-  if(running) stopTransport();
-  bars=+b.dataset.b;
-  $('#bars').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
-  tracks.forEach(t=>t.prev=null); buildDots(); scheduleSave();
-};
+$('#snap').onclick=e=>{ snap=!snap; e.target.classList.toggle('on',snap); scheduleSave(); };
+$('#mix').onclick=e=>{ mixMode=!mixMode; e.target.textContent='Prise : '+(mixMode?'ajoute':'remplace'); e.target.classList.toggle('on',mixMode); scheduleSave(); };
 $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
 $('#mvol').oninput=e=>{ mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(); };
 $('#fin').onclick=e=>{ fin=!fin; chain.setFin(fin); e.target.textContent='Finalisation : '+(fin?'ON':'OFF'); e.target.classList.toggle('on',fin); scheduleSave(); };
@@ -379,7 +436,7 @@ $('#clearAll').onclick=e=>{
   b.dataset.arm='0'; b.textContent='Tout effacer'; clearTimeout(clearTimer);
   if(recObj) cancelRec();
   tracks.forEach(t=>{ stopSrc(t); t.buf=null; t.prev=null; drawWave(t); });
-  lockUI(); scheduleSave();
+  lastLoop=null; lockUI(); scheduleSave();
 };
 
 // ---------- calibration ----------
@@ -449,7 +506,7 @@ $('#exp').onclick=async()=>{
   if(!tracks.some(t=>t.buf)){ msg("Rien à exporter : enregistre au moins une piste."); return; }
   btn.disabled=true; const old=btn.textContent; btn.textContent='Rendu en cours…'; msg('');
   try{
-    const reps=+$('#reps').value, LS=loopSamples();
+    const reps=+$('#reps').value, LS=loopLen;
     const off=new OfflineAudioContext(2,LS*reps,SR);
     const ch=makeChain(off); ch.vol.gain.value=mvol; ch.setFin(fin); ch.out.connect(off.destination);
     const anySolo=tracks.some(t=>t.solo);
@@ -480,7 +537,7 @@ function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(saveProj,700); }
 async function saveProj(){
   try{
     const db=await idb();
-    const data={bpm,bars,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo}))};
+    const data={bpm,loopLen,beats,snap,mixMode,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo}))};
     await new Promise((res,rej)=>{const tx=db.transaction('proj','readwrite');tx.objectStore('proj').put(data,'main');tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
   }catch(e){}
 }
@@ -489,15 +546,18 @@ async function loadProj(){
     const db=await idb();
     const d=await new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get('main');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
     if(!d) return;
-    bpm=d.bpm||90; bars=d.bars||2; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=!!d.fin;
+    bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=!!d.fin;
+    const firstLen=((d.tracks||[]).find(s=>s&&s.pcm&&s.pcm.length)||{pcm:{length:0}}).pcm.length;
+    loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
     (d.tracks||[]).forEach((s,i)=>{
       const t=tracks[i]; if(!t||!s) return;
       t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo;
-      if(s.pcm&&s.pcm.length){ const b=ctx.createBuffer(1,s.pcm.length,s.sr||SR); b.copyToChannel(s.pcm,0); t.buf=b; }
+      if(s.pcm&&s.pcm.length&&s.pcm.length===loopLen){ const b=ctx.createBuffer(1,s.pcm.length,s.sr||SR); b.copyToChannel(s.pcm,0); t.buf=b; }
       $('.vol',t.el).value=t.vol; $('.pan',t.el).value=t.panv; drawWave(t);
     });
-    $('#bpm').value=bpm; $('#bpmv').textContent=bpm;
-    $('#bars').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.b===bars));
+    if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; }
+    $('#snap').classList.toggle('on',snap);
+    $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
     $('#mvol').value=mvol; chain.vol.gain.value=mvol;
     chain.setFin(fin); $('#fin').textContent='Finalisation : '+(fin?'ON':'OFF'); $('#fin').classList.toggle('on',fin);
     $('#ingain').value=ingain; $('#ingv').textContent=ingain.toFixed(1)+'×';
@@ -512,14 +572,16 @@ function peak(an){ an.getFloatTimeDomainData(fbuf); let p=0; for(let i=0;i<fbuf.
 function frame(){
   const now=ctx.currentTime, L=loopSec(), bd=beatDur();
   let pos=0, inCount=false;
-  if(running){ if(now<t0) inCount=true; else pos=((now-t0)%L)/L; }
-  const cur=running&&!inCount?Math.floor(pos*bars*4):-1;
+  if(running){ if(now<t0) inCount=true; else if(loopLen) pos=((now-t0)%L)/L; }
+  if(dotsN!==(loopLen?beats:4)) buildDots();
+  let cur=-1;
+  if(running&&!inCount) cur=loopLen?Math.floor(pos*beats):mod(Math.floor((now-t0)/bd),4);
   const dots=$('#dots').children;
   for(let i=0;i<dots.length;i++) dots[i].classList.toggle('on',i===cur);
   $('#cd').textContent=inCount?'Décompte '+Math.ceil((t0-now)/bd):'';
   tracks.forEach(t=>{
     uiTrack(t,now);
-    const show=t.buf&&running&&!inCount&&!(recObj&&recObj.i===t.id);
+    const show=t.buf&&running&&!inCount&&loopLen;
     t.ph.style.opacity=show?1:0;
     if(show) t.ph.style.left=(pos*100)+'%';
   });
