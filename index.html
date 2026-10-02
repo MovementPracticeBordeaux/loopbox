@@ -86,7 +86,13 @@ details summary{cursor:pointer;font-weight:600;}
   </div>
   <div class="dots" id="dots"></div>
   <p class="hint" id="lockhint" style="display:none"></p>
-  <div class="row" id="adj" style="display:none"><button id="adjm">Boucle −1 temps</button><button id="adjp">Boucle +1 temps</button></div>
+</div>
+
+<div class="card" id="editor" style="display:none">
+  <div class="row" style="margin-top:0"><b>Garder la partie propre</b><span id="edlbl" class="lbl" style="margin-left:auto"></span></div>
+  <canvas id="edc" style="width:100%;height:84px;display:block;margin-top:8px;border-radius:8px;background:var(--soft);touch-action:none"></canvas>
+  <div class="row"><button id="sm">◀ début</button><button id="sp">début ▶</button><button id="em" style="margin-left:auto">◀ fin</button><button id="ep">fin ▶</button></div>
+  <p class="hint">Les traits fins sont les temps. Glisse un repère rouge sur la forme d'onde, ou utilise les boutons : la sélection tourne en boucle en direct. Possible tant que cette piste est la seule enregistrée. Une fois ta partie propre choisie, enregistre les autres pistes par-dessus.</p>
 </div>
 
 <div id="tracks"></div>
@@ -113,7 +119,7 @@ details summary{cursor:pointer;font-weight:600;}
   </details>
   <details style="margin-top:10px">
     <summary>Aide rapide</summary>
-    <p class="hint">● démarre l'enregistrement, ■ l'arrête. <b>La première prise définit la boucle.</b> Règle d'abord le tempo près de ce que tu vas jouer (le métronome te guide, avec un décompte de 4 temps). Avec « Auto-caler le beat », l'appli détecte tes premiers sons : la boucle commence pile sur ton premier son, le tempo exact est déduit de ton jeu, et la fin est calée sur un temps entier, sans blanc. Si la détection échoue, elle se rabat sur le tempo du curseur. Les boutons « Boucle −1 / +1 temps » corrigent la longueur tant que seule cette piste est enregistrée. Ensuite, sur les autres pistes, ● lance la prise quand tu veux et ■ l'arrête : le son se place là où tu l'as joué dans la boucle. « Prise » : remplace la portion enregistrée, ou ajoute par-dessus. ↶ annule, ✕ efface. M = muet, S = solo. Le projet est sauvegardé dans ce navigateur.</p>
+    <p class="hint">● démarre l'enregistrement, ■ l'arrête. <b>La première prise définit la boucle.</b> Règle d'abord le tempo près de ce que tu vas jouer (le métronome te guide, avec un décompte de 4 temps). Avec « Auto-caler le beat », l'appli détecte tes premiers sons : la boucle commence pile sur ton premier son, le tempo exact est déduit de ton jeu, et la fin est calée sur un temps entier, sans blanc. Si la détection échoue, elle se rabat sur le tempo du curseur. Le cadre « Garder la partie propre » te laisse couper la prise de base : tu choisis les temps à garder (début et fin), tant que seule cette piste est enregistrée. Ensuite, sur les autres pistes, ● lance la prise quand tu veux et ■ l'arrête : le son se place là où tu l'as joué dans la boucle. « Prise » : remplace la portion enregistrée, ou ajoute par-dessus. ↶ annule, ✕ efface. M = muet, S = solo. Le projet est sauvegardé dans ce navigateur.</p>
   </details>
 </div>
 
@@ -352,18 +358,71 @@ function applyFades(d){
   for(let i=0;i<Fi;i++) d[i]*=(i+1)/Fi;
   for(let i=0;i<Fo;i++) d[d.length-1-i]*=i/Fo;
 }
-function adjustLoop(delta){
-  const m=masterTake; if(!m||recObj) return;
-  const n2=m.n+delta; if(n2<1||n2>64) return;
-  const LS2=Math.round(n2*m.T*SR), out=new Float32Array(LS2);
-  for(let i=0;i<LS2;i++){ const src=m.start0+i; if(src<m.raw.length) out[i]=m.raw[src]; }
+function selLimits(m){ const Tn=m.T*SR; return {smin:Math.ceil((m.pre-m.anchor)/Tn), emax:Math.ceil((m.raw.length-m.anchor)/Tn)}; }
+function buildFromSel(){
+  const m=masterTake, Tn=m.T*SR, t=tracks[m.i];
+  let startS=Math.round(m.anchor+m.s*Tn)-m.pre;
+  const LS=Math.round(m.n*Tn);
+  if(m.det){
+    const c=Math.round(m.anchor+m.s*Tn), w=Math.round(0.03*SR), a=Math.max(0,c-w), b=Math.min(m.raw.length,c+w);
+    let pk=0; for(let i=a;i<b;i++){ const v=Math.abs(m.raw[i]); if(v>pk) pk=v; }
+    if(pk>0.05){ for(let i=a;i<b;i++){ if(Math.abs(m.raw[i])>0.25*pk){ startS=i-m.pre; break; } } }
+  }
+  const out=new Float32Array(LS);
+  for(let i=0;i<LS;i++){ const src=startS+i; if(src>=0&&src<m.raw.length) out[i]=m.raw[src]; }
   applyFades(out);
-  const t=tracks[m.i]; stopSrc(t);
-  const nb=ctx.createBuffer(1,LS2,SR); nb.copyToChannel(out,0);
-  t.buf=nb; t.prev=null; loopLen=LS2; beats=n2; m.n=n2;
+  stopSrc(t);
+  const nb=ctx.createBuffer(1,LS,SR); nb.copyToChannel(out,0);
+  t.buf=nb; t.prev=null; loopLen=LS; beats=m.n; t0=m.tp+startS/SR;
   nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
   buildDots(); drawWave(t); startSrc(t); lockUI(); scheduleSave();
 }
+function setSel(s,e){
+  const m=masterTake; if(!m||recObj) return;
+  const L=selLimits(m); s=Math.max(L.smin,s); e=Math.min(L.emax,e);
+  if(e-s<1||e-s>64) return;
+  m.s=s; m.n=e-s; buildFromSel();
+}
+let drag=null;
+function peaksOf(raw,w){
+  const p=new Float32Array(w), step=raw.length/w;
+  for(let i=0;i<w;i++){ let m=0; const a=Math.floor(i*step), z=Math.min(raw.length,Math.floor((i+1)*step)); for(let j=a;j<z;j+=8){ const v=Math.abs(raw[j]); if(v>m) m=v; } p[i]=m; }
+  return p;
+}
+function drawEditor(){
+  const m=masterTake; if(!m) return;
+  const c=$('#edc'), dpr=window.devicePixelRatio||1;
+  const w=Math.floor(c.clientWidth*dpr), h=Math.floor(c.clientHeight*dpr); if(!w||!h) return;
+  c.width=w; c.height=h;
+  const g=c.getContext('2d'); g.clearRect(0,0,w,h);
+  const N=m.raw.length, Tn=m.T*SR, px=x=>x/N*w;
+  if(!m.pk||m.pk.length!==w) m.pk=peaksOf(m.raw,w);
+  let mx=0.15; for(let i=0;i<m.pk.length;i++) if(m.pk[i]>mx) mx=m.pk[i];
+  g.fillStyle='#9b968d';
+  for(let x=0;x<w;x++){ const hh=Math.max(1,m.pk[x]/mx*h*0.85); g.fillRect(x,(h-hh)/2,1,hh); }
+  for(let k=Math.ceil(-m.anchor/Tn); m.anchor+k*Tn<N; k++){ const x=px(m.anchor+k*Tn); g.fillStyle=mod(k,4)===0?'rgba(128,128,128,.6)':'rgba(128,128,128,.25)'; g.fillRect(x,0,1,h); }
+  const s0=drag?drag.s:m.s, e0=drag?drag.e:m.s+m.n;
+  const sx=px(m.anchor+s0*Tn), ex=px(m.anchor+e0*Tn);
+  g.fillStyle='rgba(232,71,43,.18)'; g.fillRect(sx,0,ex-sx,h);
+  g.fillStyle='#e8472b'; g.fillRect(sx-1.5*dpr,0,3*dpr,h); g.fillRect(ex-1.5*dpr,0,3*dpr,h);
+  $('#edlbl').textContent='Temps '+(s0+1)+' → '+e0+' ('+(e0-s0)+' temps)';
+}
+(()=>{
+  const ed=$('#edc');
+  const beatAt=ev=>{ const m=masterTake, r=ed.getBoundingClientRect(); const smp=(ev.clientX-r.left)/r.width*m.raw.length; return Math.round((smp-m.anchor)/(m.T*SR)); };
+  const move=ev=>{ const m=masterTake; if(!m||!drag) return; const b=beatAt(ev), L=selLimits(m);
+    if(drag.which==='s') drag.s=clamp(b,L.smin,drag.e-1); else drag.e=clamp(b,drag.s+1,L.emax);
+    drawEditor(); };
+  ed.addEventListener('pointerdown',ev=>{ const m=masterTake; if(!m||recObj) return; try{ ed.setPointerCapture(ev.pointerId); }catch(e){}
+    const b=beatAt(ev), s=m.s, e=m.s+m.n; drag={s,e,which:Math.abs(b-s)<=Math.abs(b-e)?'s':'e'}; move(ev); });
+  ed.addEventListener('pointermove',move);
+  const end=()=>{ if(!drag) return; const d=drag; drag=null; setSel(d.s,d.e); drawEditor(); };
+  ed.addEventListener('pointerup',end); ed.addEventListener('pointercancel',end);
+  $('#sm').onclick=()=>{ const m=masterTake; if(m) setSel(m.s-1,m.s+m.n); };
+  $('#sp').onclick=()=>{ const m=masterTake; if(m) setSel(m.s+1,m.s+m.n); };
+  $('#em').onclick=()=>{ const m=masterTake; if(m) setSel(m.s,m.s+m.n-1); };
+  $('#ep').onclick=()=>{ const m=masterTake; if(m) setSel(m.s,m.s+m.n+1); };
+})();
 function finishRec(s,e){
   const r=recObj; if(!r) return;
   const blocks=cap.blocks;
@@ -372,23 +431,24 @@ function finishRec(s,e){
   for(let i=0;i<raw.length;i++) raw[i]=clamp(raw[i],-1,1);
   const t=tracks[r.i];
   if(r.master){
-    let start0=0,LS,n,T=null,det=false;
-    if(snap){
-      const an=analyzeBeat(raw,r.D);
-      if(an){ start0=Math.max(0,an.o1-Math.round(0.003*SR)); n=an.n; T=an.T; det=true; }
-      else { n=r.n; T=60/bpm; }
-      LS=Math.round(n*T*SR);
-    } else { LS=r.D; n=r.n; }
-    const d=new Float32Array(LS);
-    for(let i=0;i<LS;i++){ const src=start0+i; if(src<raw.length) d[i]=raw[src]; }
-    applyFades(d);
-    loopLen=LS; beats=n; t0=r.tp+start0/SR;
     tracks.forEach(x=>x.prev=null);
-    const nb=ctx.createBuffer(1,loopLen,SR); nb.copyToChannel(d,0);
-    t.buf=nb;
-    masterTake=snap?{i:r.i,raw,start0,T,n,det}:null;
-    nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
-    buildDots();
+    if(snap){
+      const an=analyzeBeat(raw,r.D), pre=Math.round(0.003*SR);
+      masterTake=an
+        ?{i:r.i,raw,tp:r.tp,anchor:an.o1,pre:Math.min(pre,an.o1),T:an.T,s:0,n:an.n,det:true}
+        :{i:r.i,raw,tp:r.tp,anchor:0,pre:0,T:60/bpm,s:0,n:r.n,det:false};
+      buildFromSel();
+    } else {
+      masterTake=null;
+      const LS=r.D, d=new Float32Array(LS);
+      for(let i=0;i<LS;i++) d[i]=i<raw.length?raw[i]:0;
+      applyFades(d);
+      loopLen=LS; beats=r.n; t0=r.tp;
+      const nb=ctx.createBuffer(1,loopLen,SR); nb.copyToChannel(d,0);
+      t.buf=nb;
+      nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
+      buildDots();
+    }
   } else {
     const d=raw; applyFades(d);
     if(masterTake&&masterTake.i===r.i) masterTake=null;
@@ -476,10 +536,11 @@ function lockUI(){
   const locked=!!loopLen||!!recObj;
   $('#bpm').disabled=locked; $('#snap').disabled=locked;
   const h=$('#lockhint');
-  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM'+(masterTake&&masterTake.det?', calée sur ton premier son':'')+'. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
+  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM'+(masterTake&&masterTake.det?', calée sur ton jeu':'')+'. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
   else h.style.display='none';
-  const adj=!!(masterTake&&masterTake.T&&loopLen&&!recObj&&tracks.filter(t=>t.buf).length===1&&tracks[masterTake.i].buf);
-  $('#adj').style.display=adj?'flex':'none';
+  const ed=!!(masterTake&&masterTake.T&&loopLen&&!recObj&&tracks.filter(t=>t.buf).length===1&&tracks[masterTake.i].buf);
+  $('#editor').style.display=ed?'block':'none';
+  if(ed) drawEditor();
   updBpm();
 }
 $('#play').onclick=async()=>{
@@ -492,8 +553,6 @@ $('#bpm').oninput=e=>{
   if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
   scheduleSave();
 };
-$('#adjm').onclick=()=>adjustLoop(-1);
-$('#adjp').onclick=()=>adjustLoop(1);
 $('#snap').onclick=e=>{ snap=!snap; e.target.classList.toggle('on',snap); scheduleSave(); };
 $('#mix').onclick=e=>{ mixMode=!mixMode; e.target.textContent='Prise : '+(mixMode?'ajoute':'remplace'); e.target.classList.toggle('on',mixMode); scheduleSave(); };
 $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
