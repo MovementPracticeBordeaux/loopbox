@@ -81,11 +81,12 @@ details summary{cursor:pointer;font-weight:600;}
   </div>
   <div class="row" style="flex-wrap:wrap">
     <button id="metro" class="on">Métronome</button>
-    <button id="snap" class="on">Caler sur le tempo</button>
+    <button id="snap" class="on">Auto-caler le beat</button>
     <button id="mix" style="margin-left:auto">Prise : remplace</button>
   </div>
   <div class="dots" id="dots"></div>
   <p class="hint" id="lockhint" style="display:none"></p>
+  <div class="row" id="adj" style="display:none"><button id="adjm">Boucle −1 temps</button><button id="adjp">Boucle +1 temps</button></div>
 </div>
 
 <div id="tracks"></div>
@@ -112,7 +113,7 @@ details summary{cursor:pointer;font-weight:600;}
   </details>
   <details style="margin-top:10px">
     <summary>Aide rapide</summary>
-    <p class="hint">● démarre l'enregistrement, ■ l'arrête. <b>La première prise définit la boucle</b> : avec « Caler sur le tempo » actif, sa durée est arrondie à un nombre entier de temps du tempo choisi (décompte de 4 temps si le métronome est actif). Ensuite, sur les autres pistes, ● lance la prise quand tu veux et ■ l'arrête : le son se place là où tu l'as joué dans la boucle (ex. un snare seulement sur les temps 2 et 4). La prise s'arrête seule au bout d'une boucle. « Prise » : remplace la portion enregistrée de la piste, ou ajoute par-dessus ce qui existe. ↶ annule, ✕ efface. M = muet, S = solo. Le projet est sauvegardé dans ce navigateur.</p>
+    <p class="hint">● démarre l'enregistrement, ■ l'arrête. <b>La première prise définit la boucle.</b> Règle d'abord le tempo près de ce que tu vas jouer (le métronome te guide, avec un décompte de 4 temps). Avec « Auto-caler le beat », l'appli détecte tes premiers sons : la boucle commence pile sur ton premier son, le tempo exact est déduit de ton jeu, et la fin est calée sur un temps entier, sans blanc. Si la détection échoue, elle se rabat sur le tempo du curseur. Les boutons « Boucle −1 / +1 temps » corrigent la longueur tant que seule cette piste est enregistrée. Ensuite, sur les autres pistes, ● lance la prise quand tu veux et ■ l'arrête : le son se place là où tu l'as joué dans la boucle. « Prise » : remplace la portion enregistrée, ou ajoute par-dessus. ↶ annule, ✕ efface. M = muet, S = solo. Le projet est sauvegardé dans ce navigateur.</p>
   </details>
 </div>
 
@@ -127,7 +128,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 // ---------- état ----------
 let bpm=90, metroOn=true, fin=false, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
-let loopLen=0, beats=4, lastLoop=null, dotsN=0;
+let loopLen=0, beats=4, lastLoop=null, dotsN=0, masterTake=null;
 let running=false, t0=0, nextBeat=0, schedTimer=null;
 let micStream=null, micSrc=null, inGainNode=null, proc=null, inAn=null;
 let base=null, blockK=0, cap=null, recObj=null;
@@ -297,8 +298,9 @@ function stopRec(atTime){
   r.stopT=st;
   if(r.master){
     const bd0=60/bpm;
+    r.D=D;
     r.n=Math.max(1,Math.round(D/SR/bd0));
-    r.len=snap?Math.round(r.n*bd0*SR):D;
+    r.len=snap?D+Math.round(0.8*bd0*SR):D;
   } else r.len=Math.min(D,loopLen);
 }
 function cancelRec(){
@@ -306,24 +308,90 @@ function cancelRec(){
   cap=null; recObj=null;
   lockUI();
 }
+function detectOnsets(x,len){
+  const hop=256, nF=Math.floor(len/hop);
+  if(nF<4) return [];
+  const e=new Float32Array(nF);
+  for(let j=0;j<nF;j++){ let sum=0; const a=j*hop; for(let i=0;i<hop;i++){ const v=x[a+i]; sum+=v*v; } e[j]=Math.log(1+2000*Math.sqrt(sum/hop)); }
+  const fl=new Float32Array(nF); let mx=0;
+  for(let j=1;j<nF;j++){ fl[j]=Math.max(0,e[j]-Math.max(e[j-1],j>1?e[j-2]:0)); if(fl[j]>mx) mx=fl[j]; }
+  if(mx<0.3) return [];
+  const thr=0.25*mx, minGap=Math.round(0.07*SR/hop), on=[];
+  let last=-1e9;
+  for(let j=1;j<nF-1;j++){
+    if(fl[j]>=thr&&fl[j]>=fl[j-1]&&fl[j]>=fl[j+1]&&j-last>=minGap){
+      const a=Math.max(0,(j-2)*hop), b=Math.min(len,(j+2)*hop);
+      let pk=0; for(let i=a;i<b;i++){ const v=Math.abs(x[i]); if(v>pk) pk=v; }
+      let idx=a; for(let i=a;i<b;i++){ if(Math.abs(x[i])>0.25*pk){ idx=i; break; } }
+      on.push({n:idx,w:fl[j]}); last=j;
+    }
+  }
+  return on;
+}
+function analyzeBeat(raw,D){
+  const on=detectOnsets(raw,D);
+  if(on.length<3) return null;
+  const o1=on[0].n, rel=on.map(o=>(o.n-o1)/SR), w=on.map(o=>o.w), sw=w.reduce((a,b)=>a+b,0);
+  const g0=60/bpm/4;
+  const coh=g=>{ let re=0,im=0; for(let i=0;i<rel.length;i++){ const ph=2*Math.PI*rel[i]/g; re+=w[i]*Math.cos(ph); im+=w[i]*Math.sin(ph); } return Math.hypot(re,im)/sw; };
+  let best=-1,bg=g0;
+  for(let g=g0*0.85;g<=g0*1.18;g+=0.00002){
+    const sc=coh(g)*Math.exp(-0.5*Math.pow(Math.log(g/g0)/0.12,2));
+    if(sc>best){ best=sc; bg=g; }
+  }
+  const c=coh(bg);
+  if(c<0.55) return null;
+  const T=4*bg, tm=rel[rel.length-1];
+  const nMin=Math.floor(tm/T+0.1)+1;
+  const nStop=((D-o1)/SR)/T;
+  const n=Math.max(1,nMin,Math.floor(nStop+0.2));
+  return {o1,T,n,coh:c};
+}
+function applyFades(d){
+  const Fi=Math.min(8,d.length>>1), Fo=Math.min(32,d.length>>1);
+  for(let i=0;i<Fi;i++) d[i]*=(i+1)/Fi;
+  for(let i=0;i<Fo;i++) d[d.length-1-i]*=i/Fo;
+}
+function adjustLoop(delta){
+  const m=masterTake; if(!m||recObj) return;
+  const n2=m.n+delta; if(n2<1||n2>64) return;
+  const LS2=Math.round(n2*m.T*SR), out=new Float32Array(LS2);
+  for(let i=0;i<LS2;i++){ const src=m.start0+i; if(src<m.raw.length) out[i]=m.raw[src]; }
+  applyFades(out);
+  const t=tracks[m.i]; stopSrc(t);
+  const nb=ctx.createBuffer(1,LS2,SR); nb.copyToChannel(out,0);
+  t.buf=nb; t.prev=null; loopLen=LS2; beats=n2; m.n=n2;
+  nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
+  buildDots(); drawWave(t); startSrc(t); lockUI(); scheduleSave();
+}
 function finishRec(s,e){
   const r=recObj; if(!r) return;
   const blocks=cap.blocks;
   cap=null; recObj=null;
-  const d=gather(blocks,s,e);
-  for(let i=0;i<d.length;i++) d[i]=clamp(d[i],-1,1);
-  const Fi=Math.min(8,d.length>>1), Fo=Math.min(32,d.length>>1);
-  for(let i=0;i<Fi;i++) d[i]*=(i+1)/Fi;
-  for(let i=0;i<Fo;i++) d[d.length-1-i]*=i/Fo;
+  const raw=gather(blocks,s,e);
+  for(let i=0;i<raw.length;i++) raw[i]=clamp(raw[i],-1,1);
   const t=tracks[r.i];
   if(r.master){
-    loopLen=r.len; beats=r.n; t0=r.tp;
+    let start0=0,LS,n,T=null,det=false;
+    if(snap){
+      const an=analyzeBeat(raw,r.D);
+      if(an){ start0=Math.max(0,an.o1-Math.round(0.003*SR)); n=an.n; T=an.T; det=true; }
+      else { n=r.n; T=60/bpm; }
+      LS=Math.round(n*T*SR);
+    } else { LS=r.D; n=r.n; }
+    const d=new Float32Array(LS);
+    for(let i=0;i<LS;i++){ const src=start0+i; if(src<raw.length) d[i]=raw[src]; }
+    applyFades(d);
+    loopLen=LS; beats=n; t0=r.tp+start0/SR;
     tracks.forEach(x=>x.prev=null);
     const nb=ctx.createBuffer(1,loopLen,SR); nb.copyToChannel(d,0);
     t.buf=nb;
+    masterTake=snap?{i:r.i,raw,start0,T,n,det}:null;
     nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
     buildDots();
   } else {
+    const d=raw; applyFades(d);
+    if(masterTake&&masterTake.i===r.i) masterTake=null;
     const L=loopLen, out=new Float32Array(L);
     if(t.buf) out.set(t.buf.getChannelData(0));
     const start=Math.round(mod(r.tp-t0,loopSec())*SR)%L;
@@ -401,15 +469,17 @@ function updBpm(){
 }
 function lockUI(){
   if(loopLen&&!tracks.some(t=>t.buf)&&!recObj){
-    lastLoop={loopLen,beats}; loopLen=0; beats=4;
+    lastLoop={loopLen,beats}; loopLen=0; beats=4; masterTake=null;
     if(running){ t0=ctx.currentTime+0.05; nextBeat=0; }
     buildDots();
   }
   const locked=!!loopLen||!!recObj;
   $('#bpm').disabled=locked; $('#snap').disabled=locked;
   const h=$('#lockhint');
-  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
+  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM'+(masterTake&&masterTake.det?', calée sur ton premier son':'')+'. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
   else h.style.display='none';
+  const adj=!!(masterTake&&masterTake.T&&loopLen&&!recObj&&tracks.filter(t=>t.buf).length===1&&tracks[masterTake.i].buf);
+  $('#adj').style.display=adj?'flex':'none';
   updBpm();
 }
 $('#play').onclick=async()=>{
@@ -422,6 +492,8 @@ $('#bpm').oninput=e=>{
   if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
   scheduleSave();
 };
+$('#adjm').onclick=()=>adjustLoop(-1);
+$('#adjp').onclick=()=>adjustLoop(1);
 $('#snap').onclick=e=>{ snap=!snap; e.target.classList.toggle('on',snap); scheduleSave(); };
 $('#mix').onclick=e=>{ mixMode=!mixMode; e.target.textContent='Prise : '+(mixMode?'ajoute':'remplace'); e.target.classList.toggle('on',mixMode); scheduleSave(); };
 $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
