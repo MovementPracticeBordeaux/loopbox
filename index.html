@@ -68,6 +68,8 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .tog[aria-expanded="true"] .chev{transform:rotate(90deg);}
 .flags{font-size:17px;}
 .tbody{margin-top:2px;}
+.impbox{margin-top:10px;padding:12px 14px;background:var(--surf2);border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:10px;font-size:17px;}
+.impbox .row{margin-top:10px;}
 .tn{font-family:'Bebas Neue',Impact,sans-serif;font-size:24px;letter-spacing:.06em;}
 .fxbadge{margin-left:auto;padding:2px 12px;border-radius:99px;background:var(--grad);font-size:15px;font-weight:600;color:#fff;}
 .fxbadge:empty{display:none;}
@@ -499,11 +501,12 @@ function detectOnsets(x,len){
   }
   return on;
 }
-function analyzeBeat(raw,D){
+function analyzeBeat(raw,D,prior){
+  prior=prior||bpm;
   const on=detectOnsets(raw,D);
   if(on.length<3) return null;
   const o1=on[0].n, rel=on.map(o=>(o.n-o1)/SR), w=on.map(o=>o.w), sw=w.reduce((a,b)=>a+b,0);
-  const g0=60/bpm/4;
+  const g0=60/prior/4;
   const coh=g=>{ let re=0,im=0; for(let i=0;i<rel.length;i++){ const ph=2*Math.PI*rel[i]/g; re+=w[i]*Math.cos(ph); im+=w[i]*Math.sin(ph); } return Math.hypot(re,im)/sw; };
   let best=-1,bg=g0;
   for(let g=g0*0.85;g<=g0*1.18;g+=0.00002){
@@ -517,6 +520,85 @@ function analyzeBeat(raw,D){
   const nStop=((D-o1)/SR)/T;
   const n=Math.max(1,nMin,Math.floor(nStop+0.2));
   return {o1,T,n,coh:c};
+}
+function readFile(file){
+  if(file.arrayBuffer) return file.arrayBuffer();
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsArrayBuffer(file); });
+}
+async function importFile(t,file){
+  if(recObj){ msg("Termine l'enregistrement en cours avant d'importer."); return; }
+  if(file.size>30*1024*1024){ msg('Fichier trop lourd : 30 Mo maximum.'); return; }
+  try{ await ctx.resume(); }catch(e){}
+  msg('Lecture du fichier…');
+  let ab;
+  try{ ab=await ctx.decodeAudioData(await readFile(file)); }
+  catch(e){ msg("Impossible de lire ce fichier. Formats courants acceptés : MP3, WAV, M4A, OGG."); return; }
+  const n=Math.min(ab.length,MAXLOOP*SR), mono=new Float32Array(n), nc=ab.numberOfChannels;
+  for(let c=0;c<nc;c++){ const d=ab.getChannelData(c); for(let i=0;i<n;i++) mono[i]+=d[i]/nc; }
+  for(let i=0;i<n;i++) mono[i]=clamp(mono[i],-1,1);
+  let pk=0; for(let i=0;i<n;i++){ const v=Math.abs(mono[i]); if(v>pk) pk=v; }
+  if(pk<0.001){ msg('Ce fichier semble silencieux.'); return; }
+  msg(ab.length>n?'Fichier long : seules les '+MAXLOOP+' premières secondes sont utilisées.':'');
+  if(!loopLen){ importFirst(t.id,mono); return; }
+  const L=loopLen;
+  if(Math.abs(n-L)/L<0.01){ applyImport(t,mono,'once'); return; }
+  const box=$('.impbox',t.el), btns=$('.imbtns',t.el), txt=$('.imptxt',t.el);
+  const dur=(n/SR).toFixed(1).replace('.',','), ld=(L/SR).toFixed(1).replace('.',',');
+  btns.innerHTML='';
+  const add=(label,fn,primary)=>{ const b=document.createElement('button'); b.textContent=label; if(primary) b.className='primary'; b.onclick=()=>{ box.hidden=true; fn(); }; btns.appendChild(b); };
+  if(n<L){
+    txt.textContent='Ton fichier dure '+dur+' s, la boucle '+ld+' s. Comment le placer ?';
+    add('Une fois, depuis le début',()=>applyImport(t,mono,'once'),true);
+    add('Répéter pour remplir',()=>applyImport(t,mono,'repeat'));
+  } else {
+    txt.textContent='Ton fichier dure '+dur+' s, la boucle '+ld+' s. Comment le placer ?';
+    add('Couper à la longueur de la boucle',()=>applyImport(t,mono,'once'),true);
+    const k=Math.ceil(n/baseLen-0.01);
+    if(k>=2&&k<=8&&baseLen*k<=MAXLOOP*SR) add('Allonger la boucle (×'+k+') pour tout garder',()=>{ setRepAll(k); if(rep===k) applyImport(t,mono,'once'); });
+  }
+  add('Annuler',()=>{});
+  box.hidden=false;
+}
+function applyImport(t,mono,mode){
+  const L=loopLen, seg=new Float32Array(L);
+  for(let i=0;i<L;i++) seg[i]=mode==='repeat'?mono[i%mono.length]:(i<mono.length?mono[i]:0);
+  applyFades(seg);
+  const old=t.buf?t.buf.getChannelData(0):null, out=new Float32Array(L);
+  for(let i=0;i<L;i++) out[i]=(mixMode&&old)?clamp(old[i]+seg[i],-1,1):seg[i];
+  const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(out,0);
+  loopHist=null; if(masterTake&&masterTake.i===t.id) masterTake=null;
+  t.prev=t.buf; t.buf=nb;
+  drawWave(t); startSrc(t); lockUI(); scheduleSave();
+  msg('');
+}
+function importFirst(i,raw){
+  if(running) stopTransport();
+  startTransport(false);
+  const t=tracks[i], D=raw.length, tp=ctx.currentTime+0.2, T0=60/bpm;
+  tracks.forEach(x=>x.prev=null);
+  let an=null;
+  if(snap){
+    let best=-1;
+    for(let p=70;p<=170;p+=5){
+      const a=analyzeBeat(raw,D,p); if(!a) continue;
+      const sc=a.coh*Math.exp(-0.5*Math.pow(Math.log((60/p)/T0)/0.45,2));
+      if(sc>best){ best=sc; an=a; }
+    }
+  }
+  if(an){
+    const pre=Math.round(0.003*SR);
+    masterTake={i,raw,tp,anchor:an.o1,pre:Math.min(pre,an.o1),T:an.T,s:0,n:an.n,rep:1,det:true};
+    buildFromSel();
+    msg('Rythme détecté : '+an.n+' temps à '+(60/an.T).toFixed(1).replace('.',',')+' BPM.');
+  } else {
+    const d=new Float32Array(raw); applyFades(d);
+    loopLen=D; beats=Math.max(1,Math.round(D/SR*bpm/60)); t0=tp; masterTake=null;
+    baseLen=D; baseBeats=beats; rep=1; loopHist=null;
+    const nb=ctx.createBuffer(1,D,SR); nb.copyToChannel(d,0); t.buf=nb;
+    nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
+    buildDots(); drawWave(t); startSrc(t); lockUI(); scheduleSave();
+    msg("Rythme non détecté : la boucle garde la durée exacte du fichier.");
+  }
 }
 function applyFades(d){
   const Fi=Math.min(8,d.length>>1), Fo=Math.min(32,d.length>>1);
@@ -676,6 +758,7 @@ const HELP={
   mix:"<b>Prise : remplace / ajoute</b>. <b>Remplace</b> : une nouvelle prise efface la partie de la piste qu'elle recouvre. <b>Ajoute</b> : elle se superpose à ce qui est déjà sur la piste (pratique pour empiler plusieurs sons sur la même piste).",
   editor:"<b>Garder la partie propre</b>. Après ta première prise, la forme d'onde apparaît avec les temps (traits fins). Glisse les repères rouges, ou utilise les boutons, pour ne garder que le passage réussi : il tourne en boucle en direct. Disponible tant que cette piste est la seule enregistrée.",
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
+  imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
@@ -732,10 +815,12 @@ tracks.forEach(t=>{
   el.className='card trk'; el.style.setProperty('--c',COLORS[t.id]);
   el.innerHTML=`<div class="row th"><button class="tog" aria-expanded="false" data-help="trk"><span class="chev">▸</span><span class="tn">Piste ${t.id+1}</span><span class="flags"></span><span class="fxbadge"></span></button><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button></div>
   <div class="wave"><canvas></canvas><i class="ph"></i><span class="tag">vide</span></div>
+  <div class="impbox" hidden><div class="imptxt"></div><div class="row wrap imbtns"></div></div>
   <div class="tbody" hidden>
   <div class="row" style="margin-top:12px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
   <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="vol">Volume</span></div><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}"></div>
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
+  <div class="row wrap"><button class="imp" data-help="imp">⬆ Importer un fichier audio</button><input type="file" class="impfile" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac" hidden></div>
   <div class="panel">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
     <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
@@ -756,6 +841,8 @@ tracks.forEach(t=>{
   $('.pan',el).oninput=e=>{t.panv=+e.target.value;$('.pv',el).textContent=panText(t.panv);applyGains();scheduleSave();};
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
+  $('.imp',el).onclick=()=>{ try{ ctx.resume(); }catch(e){} $('.impfile',el).click(); };
+  $('.impfile',el).onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importFile(t,f); };
   $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); };
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(); }; });
