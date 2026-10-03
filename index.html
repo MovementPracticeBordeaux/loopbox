@@ -227,7 +227,7 @@ const metroGain=ctx.createGain(); metroGain.gain.value=0.35; metroGain.connect(c
 for(let i=0;i<N;i++){
   const g=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
   const eq=makeEq(ctx,[0,0,0]); g.connect(eq.inp); eq.out.connect(p||chain.inp); if(p) p.connect(chain.inp);
-  tracks.push({id:i,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
+  tracks.push({id:i,live:true,offT:0,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
 }
 // ---------- égaliseur par piste ----------
 const EQ_PRESETS=[['flat','Plat',[0,0,0]],['punch','Punch',[5,-2,3]],['clair','Clair',[-2,1,6]],['voix','Voix nette',[-6,4,2]],['chaud','Chaud',[4,1,-4]]];
@@ -316,11 +316,23 @@ function setFx(t){
   if(t.fxType==='none'){ t.eq.out.connect(dest); }
   else{ t.fx=makeFx(ctx,t.fxType,t.fxAmt,beatDur()); t.eq.out.connect(t.fx.inp); t.fx.out.connect(dest); }
 }
-function applyGains(){
-  const anySolo=tracks.some(t=>t.solo);
+function setLive(t,on){
+  if(on&&!t.live){ try{ t.gain.connect(t.eq.inp); t.live=true; }catch(e){} }
+  else if(!on&&t.live){ try{ t.gain.disconnect(t.eq.inp); t.live=false; }catch(e){} }
+}
+function applyGains(only){
+  const anySolo=tracks.some(t=>t.solo), now=ctx.currentTime;
   tracks.forEach(t=>{
+    if(only&&t!==only) return;
     const aud=!t.mute&&(!anySolo||t.solo);
-    t.gain.gain.setTargetAtTime(aud?t.vol:0,ctx.currentTime,0.01);
+    const target=(aud&&t.vol>=0.004)?t.vol:0;
+    clearTimeout(t.offT); t.offT=0;
+    if(target>0){ setLive(t,true); t.gain.gain.setTargetAtTime(target,now,0.01); }
+    else{
+      t.gain.gain.setTargetAtTime(0,now,0.01);
+      // piste inaudible : on la déconnecte après le fondu pour ne plus faire travailler ses effets
+      t.offT=setTimeout(()=>{ t.offT=0; setLive(t,false); },250);
+    }
     if(t.pan) t.pan.pan.value=t.panv;
   });
 }
@@ -837,18 +849,18 @@ tracks.forEach(t=>{
   t.el=el; t.canvas=$('canvas',el); t.ph=$('.ph',el); t.tag=$('.tag',el);
   attachHelp(el);
   $('.rec',el).onclick=()=>toggleRec(t.id);
-  $('.vol',el).oninput=e=>{t.vol=+e.target.value;applyGains();scheduleSave();};
-  $('.pan',el).oninput=e=>{t.panv=+e.target.value;$('.pv',el).textContent=panText(t.panv);applyGains();scheduleSave();};
-  $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
-  $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
+  $('.vol',el).oninput=e=>{t.vol=+e.target.value;applyGains(t);scheduleSave(true);};
+  $('.pan',el).oninput=e=>{t.panv=+e.target.value;$('.pv',el).textContent=panText(t.panv);applyGains(t);scheduleSave(true);};
+  $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave(true);};
+  $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave(true);};
   $('.imp',el).onclick=()=>{ try{ ctx.resume(); }catch(e){} $('.impfile',el).click(); };
   $('.impfile',el).onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importFile(t,f); };
   $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); };
-  el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(); }; });
-  el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(); }; });
-  $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(); };
-  $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(); };
-  $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(); };
+  el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
+  el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
+  $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(true); };
+  $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(true); };
+  $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(true); };
   $('.u',el).onclick=()=>{
     if(recObj) return;
     if(!t.prev&&!t.buf) return;
@@ -937,17 +949,17 @@ $('#play').onclick=async()=>{
 $('#bpm').oninput=e=>{
   bpm=+e.target.value; $('#bpmv').textContent=bpm;
   if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
-  scheduleSave();
+  scheduleSave(true);
 };
-$('#snap').onclick=e=>{ snap=!snap; e.target.classList.toggle('on',snap); scheduleSave(); };
-$('#mix').onclick=e=>{ mixMode=!mixMode; e.target.textContent='Prise : '+(mixMode?'ajoute':'remplace'); e.target.classList.toggle('on',mixMode); scheduleSave(); };
+$('#snap').onclick=e=>{ snap=!snap; e.target.classList.toggle('on',snap); scheduleSave(true); };
+$('#mix').onclick=e=>{ mixMode=!mixMode; e.target.textContent='Prise : '+(mixMode?'ajoute':'remplace'); e.target.classList.toggle('on',mixMode); scheduleSave(true); };
 $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
-$('#mvol').oninput=e=>{ mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(); };
+$('#mvol').oninput=e=>{ mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(true); };
 function showFin(){ $('#finseg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.l===fin)); }
-$('#finseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; fin=+b.dataset.l; chain.setFin(fin); showFin(); scheduleSave(); };
-$('#ingain').oninput=e=>{ ingain=+e.target.value; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1); scheduleSave(); };
-$('#norm').onclick=e=>{ normOn=!normOn; e.target.classList.toggle('on',normOn); scheduleSave(); };
-$('#comp').oninput=e=>{ comp=(+e.target.value)/1000; $('#compv').textContent=e.target.value+'ms'; scheduleSave(); };
+$('#finseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; fin=+b.dataset.l; chain.setFin(fin); showFin(); scheduleSave(true); };
+$('#ingain').oninput=e=>{ ingain=+e.target.value; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1); scheduleSave(true); };
+$('#norm').onclick=e=>{ normOn=!normOn; e.target.classList.toggle('on',normOn); scheduleSave(true); };
+$('#comp').oninput=e=>{ comp=(+e.target.value)/1000; $('#compv').textContent=e.target.value+'ms'; scheduleSave(true); };
 let clearTimer=null;
 $('#clearAll').onclick=e=>{
   const b=e.target;
@@ -991,7 +1003,7 @@ $('#cal').onclick=async()=>{
   comp=clamp(med,0,0.4);
   $('#comp').value=Math.round(comp*1000); $('#compv').textContent=Math.round(comp*1000)+'ms';
   out.textContent='Latence mesurée : '+Math.round(med*1000)+' ms ('+offs.length+'/6 clics exploitables). Fais un test d\'enregistrement pour vérifier à l\'oreille.';
-  scheduleSave();
+  scheduleSave(true);
 };
 
 // ---------- export ----------
@@ -1055,22 +1067,31 @@ $('#exp').onclick=async()=>{
 
 // ---------- sauvegarde ----------
 function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('loopbox',1);r.onupgradeneeded=()=>r.result.createObjectStore('proj');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-let saveT=null;
-function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(saveProj,700); }
+let saveT=null, audioDirty=true;
+function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 async function saveProj(){
+  const withAudio=audioDirty; audioDirty=false;
   try{
     const db=await idb();
-    const data={bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType,eq:t.eqv}))};
-    await new Promise((res,rej)=>{const tx=db.transaction('proj','readwrite');tx.objectStore('proj').put(data,'main');tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
-  }catch(e){}
+    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType,eq:t.eqv}))};
+    const audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
+    await new Promise((res,rej)=>{
+      const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
+      st.put(main,'main'); if(audio) st.put(audio,'audio');
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
+    });
+  }catch(e){ if(withAudio) audioDirty=true; }
 }
 async function loadProj(){
   try{
     const db=await idb();
-    const d=await new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get('main');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+    const get=k=>new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+    const d=await get('main');
     if(!d) return;
+    const audio=d.v===2?(await get('audio')):null;
+    const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
     normOn=d.normOn!==false; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
-    const firstLen=((d.tracks||[]).find(s=>s&&s.pcm&&s.pcm.length)||{pcm:{length:0}}).pcm.length;
+    const firstLen=((d.tracks||[]).map(pcmOf).find(p=>p&&p.length)||{length:0}).length;
     loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
     baseLen=d.baseLen||loopLen; baseBeats=d.baseBeats||beats; rep=d.rep||1;
     if(baseLen*rep!==loopLen){ baseLen=loopLen; baseBeats=beats; rep=1; }
@@ -1078,10 +1099,12 @@ async function loadProj(){
       const t=tracks[i]; if(!t||!s) return;
       t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; t.fxType=(FX_LIST.some(f=>f[0]===s.fx)?s.fx:'none'); t.fxAmt=s.fa??0.5; t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
       t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
-      if(s.pcm&&s.pcm.length&&s.pcm.length===loopLen){ const b=ctx.createBuffer(1,s.pcm.length,s.sr||SR); b.copyToChannel(s.pcm,0); t.buf=b; }
+      const pcm=pcmOf(s,i);
+      if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
       setFx(t); syncTrackUI(t); drawWave(t);
     });
     if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; baseLen=0; baseBeats=4; rep=1; }
+    audioDirty=(d.v!==2);   // ancien format : on réécrit au nouveau format à la prochaine sauvegarde
     $('#norm').classList.toggle('on',normOn);
     $('#snap').classList.toggle('on',snap);
     $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
