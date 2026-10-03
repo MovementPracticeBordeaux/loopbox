@@ -83,6 +83,8 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .panel{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
 .field+.field{margin-top:12px;}
 .field .row{margin-bottom:4px;}
+.w2{width:84px;flex:none;}
+.eqr{min-height:36px;padding:4px 14px;font-size:16px;}
 [hidden]{display:none!important;}
 .foot{color:var(--faint);text-align:center;font-size:15px;margin-top:24px;}
 </style>
@@ -214,9 +216,19 @@ const metroGain=ctx.createGain(); metroGain.gain.value=0.35; metroGain.connect(c
 // ---------- pistes ----------
 for(let i=0;i<N;i++){
   const g=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
-  g.connect(p||chain.inp); if(p) p.connect(chain.inp);
-  tracks.push({id:i,srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
+  const eq=makeEq(ctx,[0,0,0]); g.connect(eq.inp); eq.out.connect(p||chain.inp); if(p) p.connect(chain.inp);
+  tracks.push({id:i,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
 }
+// ---------- égaliseur par piste ----------
+function makeEq(c,v){
+  const lo=c.createBiquadFilter(), mid=c.createBiquadFilter(), hi=c.createBiquadFilter();
+  lo.type='lowshelf'; lo.frequency.value=200; lo.gain.value=v[0];
+  mid.type='peaking'; mid.frequency.value=1000; mid.Q.value=0.9; mid.gain.value=v[1];
+  hi.type='highshelf'; hi.frequency.value=4000; hi.gain.value=v[2];
+  lo.connect(mid); mid.connect(hi);
+  return {inp:lo,out:hi,lo,mid,hi};
+}
+function dbText(v){ return (v>0?'+':'')+v+' dB'; }
 // ---------- effets par piste ----------
 const SRC_LIST=[
  {id:'beatbox',name:'Beatbox / bruits de bouche',hp:40,mul:0.8,gate:0},
@@ -287,11 +299,11 @@ function makeFx(c,type,amt,beat){
   return {inp,out,set:(a,b)=>upd(a,b),dispose(){ oscs.forEach(o=>{ try{o.stop();}catch(e){} }); all.forEach(n=>{ try{n.disconnect();}catch(e){} }); }};
 }
 function setFx(t){
-  try{ t.gain.disconnect(); }catch(e){}
+  try{ t.eq.out.disconnect(); }catch(e){}
   if(t.fx){ t.fx.dispose(); t.fx=null; }
   const dest=t.pan||chain.inp;
-  if(t.fxType==='none'){ t.gain.connect(dest); }
-  else{ t.fx=makeFx(ctx,t.fxType,t.fxAmt,beatDur()); t.gain.connect(t.fx.inp); t.fx.out.connect(dest); }
+  if(t.fxType==='none'){ t.eq.out.connect(dest); }
+  else{ t.fx=makeFx(ctx,t.fxType,t.fxAmt,beatDur()); t.eq.out.connect(t.fx.inp); t.fx.out.connect(dest); }
 }
 function applyGains(){
   const anySolo=tracks.some(t=>t.solo);
@@ -643,6 +655,7 @@ const HELP={
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir). La forme d'onde montre ce qui est enregistré. <b>Volume</b> règle sa force, <b>Muet</b> la coupe, <b>Solo</b> n'écoute qu'elle. <b>Réglages & effets</b> ouvre le panoramique, les effets, annuler et effacer.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
+  eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
   fx:"<b>Effet</b> : transforme le son de cette piste. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves.",
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
@@ -683,6 +696,7 @@ function syncTrackUI(t){
   const el=t.el;
   $('.vol',el).value=t.vol; $('.pan',el).value=t.panv; $('.pv',el).textContent=panText(t.panv);
   $('.srcsel',el).value=t.srcType;
+  el.querySelectorAll('.eq').forEach((r,k)=>{ r.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); });
   $('.fxsel',el).value=t.fxType; $('.fxamt',el).value=t.fxAmt; $('.av',el).textContent=Math.round(t.fxAmt*100)+'%';
   $('.fxamt',el).disabled=t.fxType==='none';
   const nm=(FX_LIST.find(f=>f[0]===t.fxType)||[0,''])[1].split(' (')[0];
@@ -699,6 +713,10 @@ tracks.forEach(t=>{
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button><button class="more" aria-expanded="false">⚙ Réglages & effets ▾</button></div>
   <div class="panel" hidden>
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span><button class="eqr" style="margin-left:auto">Remettre à plat</button></div>
+      <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
+      <div class="row"><span class="lbl w2">Médiums</span><input type="range" class="eq" data-b="1" min="-12" max="12" step="1" value="0" aria-label="Médiums piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
+      <div class="row"><span class="lbl w2">Aigus</span><input type="range" class="eq" data-b="2" min="-12" max="12" step="1" value="0" aria-label="Aigus piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="fx">Effet</span></div><select class="fxsel" aria-label="Effet piste ${t.id+1}">${FX_LIST.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}</select></div>
     <div class="field"><div class="row"><span class="lbl" data-help="fxamt">Intensité de l'effet</span><span class="av val" style="margin-left:auto">50%</span></div><input type="range" class="fxamt" min="0" max="1" step="0.01" value="0.5" aria-label="Intensité de l'effet piste ${t.id+1}"></div>
     <div class="row wrap"><button class="u" data-help="undo">↶ Annuler</button><button class="x" data-help="clear">✕ Effacer</button></div>
@@ -712,6 +730,8 @@ tracks.forEach(t=>{
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
   $('.more',el).onclick=e=>{ const p=$('.panel',el); p.hidden=!p.hidden; e.target.textContent='⚙ Réglages & effets '+(p.hidden?'▾':'▴'); e.target.setAttribute('aria-expanded',String(!p.hidden)); };
+  el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); scheduleSave(); }; });
+  $('.eqr',el).onclick=()=>{ t.eqv=[0,0,0]; t.eq.lo.gain.value=0; t.eq.mid.gain.value=0; t.eq.hi.gain.value=0; syncTrackUI(t); scheduleSave(); };
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(); };
   $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(); };
   $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(); };
@@ -896,7 +916,8 @@ $('#exp').onclick=async()=>{
       s.connect(g);
       let dest=ch.inp;
       if(off.createStereoPanner){ const p=off.createStereoPanner(); p.pan.value=t.panv; p.connect(ch.inp); dest=p; }
-      if(t.fxType!=='none'){ const f=makeFx(off,t.fxType,t.fxAmt,beatDur()); g.connect(f.inp); f.out.connect(dest); } else g.connect(dest);
+      const q=makeEq(off,t.eqv); g.connect(q.inp);
+      if(t.fxType!=='none'){ const f=makeFx(off,t.fxType,t.fxAmt,beatDur()); q.out.connect(f.inp); f.out.connect(dest); } else q.out.connect(dest);
       s.start(0);
     });
     const rendered=await off.startRendering();
@@ -917,7 +938,7 @@ function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(saveProj,700); }
 async function saveProj(){
   try{
     const db=await idb();
-    const data={bpm,loopLen,beats,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType}))};
+    const data={bpm,loopLen,beats,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType,eq:t.eqv}))};
     await new Promise((res,rej)=>{const tx=db.transaction('proj','readwrite');tx.objectStore('proj').put(data,'main');tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
   }catch(e){}
 }
@@ -932,6 +953,7 @@ async function loadProj(){
     (d.tracks||[]).forEach((s,i)=>{
       const t=tracks[i]; if(!t||!s) return;
       t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; t.fxType=(FX_LIST.some(f=>f[0]===s.fx)?s.fx:'none'); t.fxAmt=s.fa??0.5; t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
+      t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
       if(s.pcm&&s.pcm.length&&s.pcm.length===loopLen){ const b=ctx.createBuffer(1,s.pcm.length,s.sr||SR); b.copyToChannel(s.pcm,0); t.buf=b; }
       setFx(t); syncTrackUI(t); drawWave(t);
     });
