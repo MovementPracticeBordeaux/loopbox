@@ -154,6 +154,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
     <summary>Réglages micro et latence</summary>
     <div class="row"><span class="lbl w" data-help="ingain">Gain micro</span><input type="range" id="ingain" min="0.5" max="6" step="0.1" value="2"><span class="val" id="ingv" style="width:48px;text-align:right">2.0×</span></div>
     <div class="row"><span class="lbl w" data-help="comp">Latence</span><input type="range" id="comp" min="0" max="400" step="1" value="100"><span class="val" id="compv" style="width:56px;text-align:right">100ms</span></div>
+    <div class="row"><button id="norm" class="on" data-help="lvl">Niveau auto des prises</button></div>
     <div class="row"><button id="cal" data-help="cal">Calibrer automatiquement</button></div>
     <p class="hint" id="calmsg">Calibration : sans casque, volume moyen, pièce calme. À refaire si tu changes de casque ou d'appareil.</p>
   </details>
@@ -171,6 +172,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 // ---------- état ----------
 let bpm=90, metroOn=true, fin=0, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
+let normOn=true, curProf=null, hpNode=null, gEnv=0, gGain=1;
 let loopLen=0, beats=4, lastLoop=null, dotsN=0, masterTake=null;
 let running=false, t0=0, nextBeat=0, schedTimer=null;
 let micStream=null, micSrc=null, inGainNode=null, proc=null, inAn=null;
@@ -178,6 +180,7 @@ let base=null, blockK=0, cap=null, recObj=null;
 const tracks=[];
 const ctx=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
 const SR=ctx.sampleRate;
+function profOf(id){ return SRC_LIST.find(p=>p.id===id)||SRC_LIST[0]; }
 
 function msg(t){ $('#msg').textContent=t||''; }
 const loopSec=()=>loopLen/SR;
@@ -212,9 +215,15 @@ const metroGain=ctx.createGain(); metroGain.gain.value=0.35; metroGain.connect(c
 for(let i=0;i<N;i++){
   const g=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
   g.connect(p||chain.inp); if(p) p.connect(chain.inp);
-  tracks.push({id:i,buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
+  tracks.push({id:i,srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
 }
 // ---------- effets par piste ----------
+const SRC_LIST=[
+ {id:'beatbox',name:'Beatbox / bruits de bouche',hp:40,mul:0.8,gate:0},
+ {id:'voice',name:'Voix (chant, parole)',hp:90,mul:1,gate:0.012},
+ {id:'perc',name:'Percussions (table, objets)',hp:35,mul:1.25,gate:0},
+ {id:'env',name:'Environnement proche (clés, papier…)',hp:120,mul:2,gate:0}
+];
 const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (son sale)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
 const irCache=new WeakMap();
 function makeIR(c){
@@ -349,19 +358,42 @@ async function ensureMic(){
   inGainNode=ctx.createGain(); inGainNode.gain.value=ingain;
   proc=ctx.createScriptProcessor(B,1,1);
   const sink=ctx.createGain(); sink.gain.value=0;
-  micSrc.connect(inGainNode); inGainNode.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
-  inAn=ctx.createAnalyser(); inAn.fftSize=1024; inGainNode.connect(inAn);
+  hpNode=ctx.createBiquadFilter(); hpNode.type='highpass'; hpNode.Q.value=0.707;
+  micSrc.connect(inGainNode); inGainNode.connect(hpNode); hpNode.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+  inAn=ctx.createAnalyser(); inAn.fftSize=1024; hpNode.connect(inAn);
+  applyProfile(curProf||profOf('beatbox'));
   blockK=0; base=null;
   proc.onaudioprocess=e=>{
     const inp=e.inputBuffer.getChannelData(0);
     const k=blockK++;
     const cand=ctx.currentTime-(k+1)*B/SR;
     if(base===null||cand<base) base=cand;
-    if(cap){ cap.blocks.push({k,d:new Float32Array(inp)}); if(cap.check) cap.check(k); }
+    if(cap){ const blk=new Float32Array(inp); if(curProf&&curProf.gate) gateBlock(blk); cap.blocks.push({k,d:blk}); if(cap.check) cap.check(k); }
   };
   try{ navigator.audioSession.type='play-and-record'; }catch(e){}
   msg('');
   return true;
+}
+function applyProfile(p){
+  curProf=p; gEnv=0; gGain=1;
+  if(hpNode) hpNode.frequency.value=p.hp;
+  if(inGainNode) inGainNode.gain.value=ingain*p.mul;
+}
+function gateBlock(x){
+  const thr=curProf.gate, rel=Math.exp(-1/(SR*0.1));
+  for(let i=0;i<x.length;i++){
+    const v=Math.abs(x[i]);
+    gEnv=v>gEnv?v:gEnv*rel;
+    const target=gEnv>thr?1:0.12;
+    gGain=target>gGain?1:gGain+(target-gGain)*0.002;
+    x[i]*=gGain;
+  }
+}
+function autoLevel(d){
+  if(!normOn) return;
+  let pk=0; for(let i=0;i<d.length;i++){ const v=Math.abs(d[i]); if(v>pk) pk=v; }
+  if(pk<0.03||pk>=0.7) return;
+  const f=Math.min(8,0.7/pk); for(let i=0;i<d.length;i++) d[i]*=f;
 }
 function gather(blocks,s,e){
   const out=new Float32Array(e-s);
@@ -382,6 +414,7 @@ async function toggleRec(i){
   }
   if(!(await ensureMic())) return;
   if(recObj) return;
+  applyProfile(profOf(tracks[i].srcType));
   if(!loopLen){
     if(running) stopTransport();
     startTransport(metroOn);
@@ -564,6 +597,7 @@ function finishRec(s,e){
   cap=null; recObj=null;
   const raw=gather(blocks,s,e);
   for(let i=0;i<raw.length;i++) raw[i]=clamp(raw[i],-1,1);
+  autoLevel(raw);
   const t=tracks[r.i];
   if(r.master){
     tracks.forEach(x=>x.prev=null);
@@ -620,6 +654,8 @@ const HELP={
   exp:"<b>Exporter</b> : crée un fichier son (WAV, qualité CD) de ton mix, avec tous tes réglages et effets. Choisis avant combien de fois la boucle est répétée dans le fichier.",
   ingain:"<b>Gain micro</b> : amplifie le micro avant l'enregistrement. Si ton « Niveau micro » reste très faible, augmente. S'il devient rouge, baisse.",
   comp:"<b>Latence</b> : le petit retard entre le moment où tu joues et celui où ton téléphone l'enregistre. Si tes sons arrivent trop tard dans la boucle, augmente cette valeur. Le bouton « Calibrer » la règle tout seul.",
+  src:"<b>Type de son</b> : dis à l'appli ce que tu vas enregistrer sur cette piste. Elle adapte le <b>filtre des graves</b> (plus fort pour la voix, pour éviter les « pop » et le bruit de manipulation ; très léger pour le beatbox et les percussions, pour garder les « boum »), la <b>sensibilité</b> (plus élevée pour les sons faibles et proches de l'environnement) et, pour la <b>voix</b>, un filtre qui atténue le bruit de fond entre les phrases. Cela ne change pas le micro du téléphone lui-même : le plus important reste la distance entre ta bouche et le micro.",
+  lvl:"<b>Niveau auto des prises</b> : après chaque prise, si elle est trop faible, l'appli la remonte automatiquement à un bon volume. Pratique si tu t'éloignes du micro ou si tu fais des sons doux. Désactive-le si tu préfères régler le volume toi-même.",
   cal:"<b>Calibrer</b> : le téléphone joue des clics et mesure le retard avec son propre micro. Il faut être <b>sans casque</b>, volume moyen, dans un endroit calme. À refaire si tu changes de casque ou d'appareil."
 };
 function attachHelp(root){
@@ -646,6 +682,7 @@ function panText(v){ return v<-0.05?'Gauche '+Math.round(-v*100)+'%':v>0.05?'Dro
 function syncTrackUI(t){
   const el=t.el;
   $('.vol',el).value=t.vol; $('.pan',el).value=t.panv; $('.pv',el).textContent=panText(t.panv);
+  $('.srcsel',el).value=t.srcType;
   $('.fxsel',el).value=t.fxType; $('.fxamt',el).value=t.fxAmt; $('.av',el).textContent=Math.round(t.fxAmt*100)+'%';
   $('.fxamt',el).disabled=t.fxType==='none';
   const nm=(FX_LIST.find(f=>f[0]===t.fxType)||[0,''])[1].split(' (')[0];
@@ -656,6 +693,7 @@ tracks.forEach(t=>{
   el.className='card trk'; el.style.setProperty('--c',COLORS[t.id]);
   el.innerHTML=`<div class="row th"><span class="tn" data-help="trk">Piste ${t.id+1}</span><span class="fxbadge"></span></div>
   <div class="wave"><canvas></canvas><i class="ph"></i><span class="tag">vide</span></div>
+  <div class="row" style="margin-top:10px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
   <div class="row"><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button>
     <div class="vwrap"><div class="row vl"><span class="lbl" data-help="vol">Volume</span></div><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}"></div></div>
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button><button class="more" aria-expanded="false">⚙ Réglages & effets ▾</button></div>
@@ -674,6 +712,7 @@ tracks.forEach(t=>{
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
   $('.more',el).onclick=e=>{ const p=$('.panel',el); p.hidden=!p.hidden; e.target.textContent='⚙ Réglages & effets '+(p.hidden?'▾':'▴'); e.target.setAttribute('aria-expanded',String(!p.hidden)); };
+  $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(); };
   $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(); };
   $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(); };
   $('.u',el).onclick=()=>{
@@ -764,7 +803,8 @@ $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroO
 $('#mvol').oninput=e=>{ mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(); };
 function showFin(){ $('#finseg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.l===fin)); }
 $('#finseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; fin=+b.dataset.l; chain.setFin(fin); showFin(); scheduleSave(); };
-$('#ingain').oninput=e=>{ ingain=+e.target.value; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain; scheduleSave(); };
+$('#ingain').oninput=e=>{ ingain=+e.target.value; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1); scheduleSave(); };
+$('#norm').onclick=e=>{ normOn=!normOn; e.target.classList.toggle('on',normOn); scheduleSave(); };
 $('#comp').oninput=e=>{ comp=(+e.target.value)/1000; $('#compv').textContent=e.target.value+'ms'; scheduleSave(); };
 let clearTimer=null;
 $('#clearAll').onclick=e=>{
@@ -782,6 +822,7 @@ $('#cal').onclick=async()=>{
   if(recObj) cancelRec();
   if(running) stopTransport();
   if(!(await ensureMic())) return;
+  applyProfile(profOf('beatbox'));
   out.textContent='Mesure en cours… reste silencieux, sans casque.';
   const c0=ctx.currentTime+0.6, times=[0,1,2,3,4,5].map(j=>c0+j*0.6);
   times.forEach(tt=>{
@@ -876,7 +917,7 @@ function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(saveProj,700); }
 async function saveProj(){
   try{
     const db=await idb();
-    const data={bpm,loopLen,beats,snap,mixMode,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt}))};
+    const data={bpm,loopLen,beats,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({pcm:t.buf?t.buf.getChannelData(0).slice():null,sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType}))};
     await new Promise((res,rej)=>{const tx=db.transaction('proj','readwrite');tx.objectStore('proj').put(data,'main');tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});
   }catch(e){}
 }
@@ -885,16 +926,17 @@ async function loadProj(){
     const db=await idb();
     const d=await new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get('main');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
     if(!d) return;
-    bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
+    normOn=d.normOn!==false; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
     const firstLen=((d.tracks||[]).find(s=>s&&s.pcm&&s.pcm.length)||{pcm:{length:0}}).pcm.length;
     loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
     (d.tracks||[]).forEach((s,i)=>{
       const t=tracks[i]; if(!t||!s) return;
-      t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; t.fxType=(FX_LIST.some(f=>f[0]===s.fx)?s.fx:'none'); t.fxAmt=s.fa??0.5;
+      t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; t.fxType=(FX_LIST.some(f=>f[0]===s.fx)?s.fx:'none'); t.fxAmt=s.fa??0.5; t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
       if(s.pcm&&s.pcm.length&&s.pcm.length===loopLen){ const b=ctx.createBuffer(1,s.pcm.length,s.sr||SR); b.copyToChannel(s.pcm,0); t.buf=b; }
       setFx(t); syncTrackUI(t); drawWave(t);
     });
     if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; }
+    $('#norm').classList.toggle('on',normOn);
     $('#snap').classList.toggle('on',snap);
     $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
     $('#mvol').value=mvol; chain.vol.gain.value=mvol;
