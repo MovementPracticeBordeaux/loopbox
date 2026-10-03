@@ -536,7 +536,7 @@ function lockUI(){
   const locked=!!loopLen||!!recObj;
   $('#bpm').disabled=locked; $('#snap').disabled=locked;
   const h=$('#lockhint');
-  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM'+(masterTake&&masterTake.det?', calée sur ton jeu':'')+'. Pour refaire la boucle de base, efface toutes les pistes (✕).'; }
+  if(loopLen){ h.style.display='block'; h.textContent='Boucle : '+beats+' temps à '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM'+(masterTake&&masterTake.det?', calée sur ton jeu':'')+'. Pour refaire la boucle de base, efface toutes les pistes (✕).'+(!masterTake?' Le cadre pour couper la prise n\'apparaît qu\'après un nouvel enregistrement de base, avec « Auto-caler le beat » actif.':(tracks.filter(t=>t.buf).length>1?' Efface les autres pistes pour recouper la prise de base.':'')); }
   else h.style.display='none';
   const ed=!!(masterTake&&masterTake.T&&loopLen&&!recObj&&tracks.filter(t=>t.buf).length===1&&tracks[masterTake.i].buf);
   $('#editor').style.display=ed?'block':'none';
