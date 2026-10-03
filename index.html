@@ -225,9 +225,9 @@ const metroGain=ctx.createGain(); metroGain.gain.value=0.35; metroGain.connect(c
 
 // ---------- pistes ----------
 for(let i=0;i<N;i++){
-  const g=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
-  const eq=makeEq(ctx,[0,0,0]); g.connect(eq.inp); eq.out.connect(p||chain.inp); if(p) p.connect(chain.inp);
-  tracks.push({id:i,live:true,offT:0,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
+  const g=ctx.createGain(), inp=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
+  const eq=makeEq(ctx,[0,0,0]); inp.connect(eq.inp); eq.out.connect(g); g.connect(p||chain.inp); if(p) p.connect(chain.inp);
+  tracks.push({id:i,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}});
 }
 // ---------- égaliseur par piste ----------
 const EQ_PRESETS=[['flat','Plat',[0,0,0]],['punch','Punch',[5,-2,3]],['clair','Clair',[-2,1,6]],['voix','Voix nette',[-6,4,2]],['chaud','Chaud',[4,1,-4]]];
@@ -279,7 +279,7 @@ function makeFx(c,type,amt,beat){
     const ws=nd(c.createWaveShaper()), lp=nd(c.createBiquadFilter()); lp.type='lowpass'; lp.frequency.value=5000;
     inp.connect(ws); ws.connect(lp); lp.connect(wet);
     let lastS=-1;
-    upd=a=>{ const st=Math.max(4,Math.round(64-a*58)); if(st!==lastS){ lastS=st; const n=2048, cu=new Float32Array(n); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=Math.round(x*st)/st; } ws.curve=cu; } dry.gain.value=0; wet.gain.value=1; };
+    upd=a=>{ const st=Math.max(12,Math.round(64-a*52)); if(st!==lastS){ lastS=st; const n=2048, cu=new Float32Array(n); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=Math.round(x*st)/st; } ws.curve=cu; } dry.gain.value=0; wet.gain.value=1; };
   } else if(type==='muffle'){
     const lp=nd(c.createBiquadFilter()); lp.type='lowpass'; lp.Q.value=0.7;
     inp.connect(lp); lp.connect(wet);
@@ -311,14 +311,19 @@ function makeFx(c,type,amt,beat){
 }
 function setFx(t){
   try{ t.eq.out.disconnect(); }catch(e){}
-  if(t.fx){ t.fx.dispose(); t.fx=null; }
-  const dest=t.pan||chain.inp;
-  if(t.fxType==='none'){ t.eq.out.connect(dest); }
-  else{ t.fx=makeFx(ctx,t.fxType,t.fxAmt,beatDur()); t.eq.out.connect(t.fx.inp); t.fx.out.connect(dest); }
+  (t.fxn||[]).forEach(f=>f.dispose()); t.fxn=[];
+  let prev=t.eq.out;
+  t.fxs.forEach(sl=>{
+    if(sl.type==='none') return;
+    const f=makeFx(ctx,sl.type,sl.amt,beatDur()); f.slot=sl;
+    prev.connect(f.inp); prev=f.out; t.fxn.push(f);
+  });
+  prev.connect(t.gain);
 }
+function fxNames(t){ return t.fxs.filter(sl=>sl.type!=='none').map(sl=>((FX_LIST.find(f=>f[0]===sl.type)||[0,''])[1]).split(' (')[0]).join(' + '); }
 function setLive(t,on){
-  if(on&&!t.live){ try{ t.gain.connect(t.eq.inp); t.live=true; }catch(e){} }
-  else if(!on&&t.live){ try{ t.gain.disconnect(t.eq.inp); t.live=false; }catch(e){} }
+  if(on&&!t.live){ try{ t.inp.connect(t.eq.inp); t.live=true; }catch(e){} }
+  else if(!on&&t.live){ try{ t.inp.disconnect(t.eq.inp); t.live=false; }catch(e){} }
 }
 function applyGains(only){
   const anySolo=tracks.some(t=>t.solo), now=ctx.currentTime;
@@ -344,7 +349,7 @@ function startSrc(t){
   const L=t.buf.duration;
   const when=Math.max(ctx.currentTime+0.02,t0);
   const off=when>t0?mod(when-t0,L):0;
-  const s=ctx.createBufferSource(); s.buffer=t.buf; s.loop=true; s.connect(t.gain);
+  const s=ctx.createBufferSource(); s.buffer=t.buf; s.loop=true; s.connect(t.inp);
   try{ s.start(when,off); t.src=s; }catch(e){ msg('Lecture impossible : '+e.message); }
 }
 
@@ -775,7 +780,7 @@ const HELP={
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
   eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Les boutons rapides règlent les trois d'un coup : <b>Punch</b> (plus de corps et d'attaque), <b>Clair</b> (plus brillant), <b>Voix nette</b> (moins de graves boueux, voix plus présente), <b>Chaud</b> (plus rond, moins agressif). Tu peux ensuite affiner avec les curseurs. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
-  fx:"<b>Effet</b> : transforme le son de cette piste. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves.",
+  fx:"<b>Effets</b> : transforment le son de cette piste. Tu peux en <b>empiler jusqu'à 4</b> (« + Ajouter un effet ») : ils s'appliquent <b>dans l'ordre, de haut en bas</b>, et chacun a sa propre intensité. Le ✕ retire un effet. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves. Les effets agissent <b>avant</b> le volume de la piste : baisser le volume n'en change pas le caractère.",
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
   clear:"<b>Effacer</b> : vide cette piste. Tu peux annuler juste après avec « Annuler ».",
@@ -811,16 +816,31 @@ function attachHelp(root){
 // ---------- UI pistes ----------
 const wrap=$('#tracks');
 function panText(v){ return v<-0.05?'Gauche '+Math.round(-v*100)+'%':v>0.05?'Droite '+Math.round(v*100)+'%':'Centre'; }
+function updFxBadge(t){ $('.fxbadge',t.el).textContent=fxNames(t); }
+function renderFx(t){
+  const box=$('.fxlist',t.el); box.innerHTML='';
+  t.fxs.forEach((sl,k)=>{
+    const d=document.createElement('div'); d.className='fxslot';
+    d.innerHTML=`<div class="row"><select class="fxsel" aria-label="Effet ${k+1} piste ${t.id+1}">${FX_LIST.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}</select>${t.fxs.length>1?`<button class="fxrm" aria-label="Retirer l'effet ${k+1}">✕</button>`:''}</div>
+      <div class="row"><span class="lbl">Intensité</span><input type="range" class="fxamt" min="0" max="1" step="0.01" value="${sl.amt}" aria-label="Intensité effet ${k+1} piste ${t.id+1}"><span class="av val" style="width:48px;text-align:right">${Math.round(sl.amt*100)}%</span></div>`;
+    box.appendChild(d);
+    const sel=$('.fxsel',d), am=$('.fxamt',d);
+    sel.value=sl.type; am.disabled=sl.type==='none';
+    sel.onchange=e=>{ sl.type=e.target.value; am.disabled=sl.type==='none'; setFx(t); updFxBadge(t); scheduleSave(true); };
+    am.oninput=e=>{ sl.amt=+e.target.value; $('.av',d).textContent=Math.round(sl.amt*100)+'%'; const f=t.fxn.find(x=>x.slot===sl); if(f) f.set(sl.amt,beatDur()); scheduleSave(true); };
+    const rm=$('.fxrm',d);
+    if(rm) rm.onclick=()=>{ t.fxs.splice(k,1); if(!t.fxs.length) t.fxs.push({type:'none',amt:0.5}); setFx(t); renderFx(t); scheduleSave(true); };
+  });
+  $('.fxadd',t.el).disabled=t.fxs.length>=4;
+  updFxBadge(t);
+}
 function syncTrackUI(t){
   const el=t.el;
   $('.vol',el).value=t.vol; $('.pan',el).value=t.panv; $('.pv',el).textContent=panText(t.panv);
   $('.srcsel',el).value=t.srcType;
   el.querySelectorAll('.eq').forEach((r,k)=>{ r.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); });
   el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,k)=>v===t.eqv[k])); });
-  $('.fxsel',el).value=t.fxType; $('.fxamt',el).value=t.fxAmt; $('.av',el).textContent=Math.round(t.fxAmt*100)+'%';
-  $('.fxamt',el).disabled=t.fxType==='none';
-  const nm=(FX_LIST.find(f=>f[0]===t.fxType)||[0,''])[1].split(' (')[0];
-  $('.fxbadge',el).textContent=t.fxType==='none'?'':nm;
+  renderFx(t);
 }
 tracks.forEach(t=>{
   const el=document.createElement('div');
@@ -840,8 +860,9 @@ tracks.forEach(t=>{
       <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Médiums</span><input type="range" class="eq" data-b="1" min="-12" max="12" step="1" value="0" aria-label="Médiums piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Aigus</span><input type="range" class="eq" data-b="2" min="-12" max="12" step="1" value="0" aria-label="Aigus piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="fx">Effet</span></div><select class="fxsel" aria-label="Effet piste ${t.id+1}">${FX_LIST.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}</select></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="fxamt">Intensité de l'effet</span><span class="av val" style="margin-left:auto">50%</span></div><input type="range" class="fxamt" min="0" max="1" step="0.01" value="0.5" aria-label="Intensité de l'effet piste ${t.id+1}"></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="fx">Effets (tu peux en empiler)</span></div>
+      <div class="fxlist"></div>
+      <div class="row"><button class="fxadd">+ Ajouter un effet</button></div></div>
     <div class="row wrap"><button class="u" data-help="undo">↶ Annuler</button><button class="x" data-help="clear">✕ Effacer</button></div>
   </div>
   </div>`;
@@ -859,8 +880,7 @@ tracks.forEach(t=>{
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(true); };
-  $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(true); };
-  $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(true); };
+  $('.fxadd',el).onclick=()=>{ if(t.fxs.length>=4) return; t.fxs.push({type:'none',amt:0.5}); renderFx(t); };
   $('.u',el).onclick=()=>{
     if(recObj) return;
     if(!t.prev&&!t.buf) return;
@@ -939,7 +959,7 @@ function lockUI(){
     $('#growlbl').textContent=beats+' temps'+(rep>1?' (×'+rep+')':'');
   }
   updBpm();
-  tracks.forEach(t=>{ if(t.fx) t.fx.set(t.fxAmt,beatDur()); });
+  tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
 }
 $('#play').onclick=async()=>{
   try{ await ctx.resume(); }catch(e){}
@@ -1047,11 +1067,13 @@ $('#exp').onclick=async()=>{
       if(t.mute||(anySolo&&!t.solo)) return;
       const s=off.createBufferSource(); s.buffer=t.buf; s.loop=true;
       const g=off.createGain(); g.gain.value=t.vol;
-      s.connect(g);
       let dest=ch.inp;
       if(off.createStereoPanner){ const p=off.createStereoPanner(); p.pan.value=t.panv; p.connect(ch.inp); dest=p; }
-      const q=makeEq(off,t.eqv); g.connect(q.inp);
-      if(t.fxType!=='none'){ const f=makeFx(off,t.fxType,t.fxAmt,beatDur()); q.out.connect(f.inp); f.out.connect(dest); } else q.out.connect(dest);
+      g.connect(dest);
+      const q=makeEq(off,t.eqv); s.connect(q.inp);
+      let prev=q.out;
+      t.fxs.forEach(sl=>{ if(sl.type==='none') return; const f=makeFx(off,sl.type,sl.amt,beatDur()); prev.connect(f.inp); prev=f.out; });
+      prev.connect(g);
       s.start(0);
     });
     const rendered=await off.startRendering();
@@ -1073,7 +1095,7 @@ async function saveProj(){
   const withAudio=audioDirty; audioDirty=false;
   try{
     const db=await idb();
-    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fx:t.fxType,fa:t.fxAmt,st:t.srcType,eq:t.eqv}))};
+    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,eq:t.eqv}))};
     const audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
     await new Promise((res,rej)=>{
       const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
@@ -1097,7 +1119,9 @@ async function loadProj(){
     if(baseLen*rep!==loopLen){ baseLen=loopLen; baseBeats=beats; rep=1; }
     (d.tracks||[]).forEach((s,i)=>{
       const t=tracks[i]; if(!t||!s) return;
-      t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; t.fxType=(FX_LIST.some(f=>f[0]===s.fx)?s.fx:'none'); t.fxAmt=s.fa??0.5; t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
+      t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; const okT=x=>FX_LIST.some(f=>f[0]===x);
+      t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,4).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
+      t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
       t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
       const pcm=pcmOf(s,i);
       if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
