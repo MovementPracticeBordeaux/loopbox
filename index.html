@@ -19,7 +19,7 @@
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px);background:var(--bg);}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-body{margin:0 auto;background:var(--bg);color:var(--ink);font-family:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;font-size:18px;line-height:1.3;max-width:560px;padding:14px 12px 56px;}
+body{margin:0 auto;background:var(--bg);color:var(--ink);font-family:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;font-size:18px;line-height:1.3;max-width:560px;padding:14px 12px 124px;}
 h1{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:46px;letter-spacing:.05em;margin:4px 2px 0;line-height:1;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
 h2{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;font-size:28px;letter-spacing:.06em;margin:20px 2px 8px;}
 .sub{color:var(--mut);margin:2px 2px 12px;font-size:17px;}
@@ -93,6 +93,13 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .w2{width:84px;flex:none;}
 .eqr{min-height:36px;padding:4px 14px;font-size:16px;}
 [hidden]{display:none!important;}
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:50;pointer-events:none;}
+.dockin{pointer-events:auto;max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:rgba(11,11,13,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid var(--line);}
+.dockplay{width:56px;height:56px;border-radius:50%;font-size:24px;padding:0;flex:none;background:var(--grad);border:none;color:#fff;}
+.dockinfo{flex:1;min-width:0;}
+#dtxt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dprog{height:6px;border-radius:3px;background:var(--surf2);margin-top:7px;overflow:hidden;}
+.dprog i{display:block;height:100%;width:0;background:var(--grad);}
 .foot{color:var(--faint);text-align:center;font-size:15px;margin-top:24px;}
 </style>
 </head>
@@ -172,9 +179,13 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 </section>
 <p class="foot">LoopBox · Movement Practice Bordeaux</p>
 
+<div class="dock"><div class="dockin">
+  <button class="dockplay" id="play2" aria-label="Lecture / arrêt de toutes les pistes">▶</button>
+  <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
+</div></div>
 <script>
 (()=>{
-const N=10, B=1024, MAXMASTER=30, MAXLOOP=40;
+const MAXFX=2, N=10, B=1024, MAXMASTER=30, MAXLOOP=40;
 const COLORS=['#e8472b','#f08a24','#e6b800','#7cb518','#1f9d55','#16a5a5','#2b7fe0','#6a5acd','#b04fc7','#d6457f'];
 const $=(s,r=document)=>r.querySelector(s);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -368,6 +379,7 @@ function sched(){
     nextBeat++;
   }
 }
+function setPlayIcon(on){ $('#play').textContent=on?'■':'▶'; $('#play2').textContent=on?'■':'▶'; }
 function startTransport(countIn){
   if(running) return;
   const bd=beatDur(), now=ctx.currentTime+0.12;
@@ -376,14 +388,14 @@ function startTransport(countIn){
   running=true;
   tracks.forEach(startSrc);
   schedTimer=setInterval(sched,25); sched();
-  $('#play').textContent='■';
+  setPlayIcon(true);
 }
 function stopTransport(){
   if(recObj) cancelRec();
   clearInterval(schedTimer); schedTimer=null;
   tracks.forEach(stopSrc);
   running=false;
-  $('#play').textContent='▶';
+  setPlayIcon(false);
 }
 
 // ---------- micro ----------
@@ -780,7 +792,7 @@ const HELP={
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
   eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Les boutons rapides règlent les trois d'un coup : <b>Punch</b> (plus de corps et d'attaque), <b>Clair</b> (plus brillant), <b>Voix nette</b> (moins de graves boueux, voix plus présente), <b>Chaud</b> (plus rond, moins agressif). Tu peux ensuite affiner avec les curseurs. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
-  fx:"<b>Effets</b> : transforment le son de cette piste. Tu peux en <b>empiler jusqu'à 4</b> (« + Ajouter un effet ») : ils s'appliquent <b>dans l'ordre, de haut en bas</b>, et chacun a sa propre intensité. Le ✕ retire un effet. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves. Les effets agissent <b>avant</b> le volume de la piste : baisser le volume n'en change pas le caractère.",
+  fx:"<b>Effets</b> : transforment le son de cette piste. Tu peux en <b>empiler 2</b> (« + Ajouter un effet ») : ils s'appliquent <b>dans l'ordre, de haut en bas</b>, et chacun a sa propre intensité. Le ✕ retire un effet. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves. Les effets agissent <b>avant</b> le volume de la piste : baisser le volume n'en change pas le caractère.",
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
   clear:"<b>Effacer</b> : vide cette piste. Tu peux annuler juste après avec « Annuler ».",
@@ -831,7 +843,7 @@ function renderFx(t){
     const rm=$('.fxrm',d);
     if(rm) rm.onclick=()=>{ t.fxs.splice(k,1); if(!t.fxs.length) t.fxs.push({type:'none',amt:0.5}); setFx(t); renderFx(t); scheduleSave(true); };
   });
-  $('.fxadd',t.el).disabled=t.fxs.length>=4;
+  $('.fxadd',t.el).disabled=t.fxs.length>=MAXFX;
   updFxBadge(t);
 }
 function syncTrackUI(t){
@@ -880,7 +892,7 @@ tracks.forEach(t=>{
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(true); };
-  $('.fxadd',el).onclick=()=>{ if(t.fxs.length>=4) return; t.fxs.push({type:'none',amt:0.5}); renderFx(t); };
+  $('.fxadd',el).onclick=()=>{ if(t.fxs.length>=MAXFX) return; t.fxs.push({type:'none',amt:0.5}); renderFx(t); };
   $('.u',el).onclick=()=>{
     if(recObj) return;
     if(!t.prev&&!t.buf) return;
@@ -961,11 +973,12 @@ function lockUI(){
   updBpm();
   tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
 }
-$('#play').onclick=async()=>{
+const onPlay=async()=>{
   try{ await ctx.resume(); }catch(e){}
   if(recObj){ if(ctx.currentTime<recObj.tp) cancelRec(); else stopRec(); return; }
   if(running) stopTransport(); else startTransport(false);
 };
+$('#play').onclick=onPlay; $('#play2').onclick=onPlay;
 $('#bpm').oninput=e=>{
   bpm=+e.target.value; $('#bpmv').textContent=bpm;
   if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
@@ -1120,7 +1133,7 @@ async function loadProj(){
     (d.tracks||[]).forEach((s,i)=>{
       const t=tracks[i]; if(!t||!s) return;
       t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; const okT=x=>FX_LIST.some(f=>f[0]===x);
-      t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,4).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
+      t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,MAXFX).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
       t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
       t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
       const pcm=pcmOf(s,i);
@@ -1143,6 +1156,7 @@ async function loadProj(){
 // ---------- boucle d'affichage ----------
 const mOut=$('#mOut'), mIn=$('#mIn'), fbuf=new Float32Array(1024);
 function peak(an){ an.getFloatTimeDomainData(fbuf); let p=0; for(let i=0;i<fbuf.length;i++){ const v=Math.abs(fbuf[i]); if(v>p)p=v; } return p; }
+let dockTxt='';
 function frame(){
   const now=ctx.currentTime, L=loopSec(), bd=beatDur();
   let pos=0, inCount=false;
@@ -1150,6 +1164,13 @@ function frame(){
   if(dotsN!==(loopLen?beats:4)) buildDots();
   let cur=-1;
   if(running&&!inCount) cur=loopLen?Math.floor(pos*beats):mod(Math.floor((now-t0)/bd),4);
+  let dtxt;
+  if(recObj) dtxt=now<recObj.tp?'Décompte…':'● Enregistrement en cours';
+  else if(!running) dtxt=loopLen?"À l'arrêt · "+beats+' temps':"À l'arrêt";
+  else if(inCount&&t0-now>0.25) dtxt='Décompte…';
+  else dtxt=loopLen?'En lecture · '+beats+' temps · '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM':'Métronome en marche';
+  if(dtxt!==dockTxt){ dockTxt=dtxt; $('#dtxt').textContent=dtxt; }
+  $('#dbar').style.width=(running&&!inCount&&loopLen?pos*100:0)+'%';
   const dots=$('#dots').children;
   for(let i=0;i<dots.length;i++) dots[i].classList.toggle('on',i===cur);
   $('#cd').textContent=inCount?'Décompte '+Math.ceil((t0-now)/bd):'';
