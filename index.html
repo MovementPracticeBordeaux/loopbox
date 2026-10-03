@@ -75,6 +75,8 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .fxbadge:empty{display:none;}
 .wave{position:relative;height:48px;background:rgba(255,255,255,.05);border-radius:10px;overflow:hidden;margin-top:8px;}
 .wave canvas{position:absolute;inset:0;width:100%;height:100%;}
+.wave{cursor:pointer;}
+.wave .mk{position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:var(--orange);opacity:0;transition:opacity .35s;left:0;pointer-events:none;}
 .wave .ph{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:0;left:0;}
 .wave .tag{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--mut);font-weight:600;pointer-events:none;}
 .trk.rec .tag,.trk.armed .tag{color:#fff;}
@@ -98,7 +100,8 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .dockplay{width:56px;height:56px;border-radius:50%;font-size:24px;padding:0;flex:none;background:var(--grad);border:none;color:#fff;}
 .dockinfo{flex:1;min-width:0;}
 #dtxt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.dprog{height:6px;border-radius:3px;background:var(--surf2);margin-top:7px;overflow:hidden;}
+.dprog{position:relative;cursor:pointer;height:6px;border-radius:3px;background:var(--surf2);margin-top:7px;overflow:hidden;}
+.dprog::after{content:"";position:absolute;inset:-14px 0;}
 .dprog i{display:block;height:100%;width:0;background:var(--grad);}
 .foot{color:var(--faint);text-align:center;font-size:15px;margin-top:24px;}
 </style>
@@ -151,7 +154,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 </section>
 
 <div class="row" style="justify-content:space-between;margin-top:20px"><h2 style="margin:0 2px">Tes pistes</h2><button id="foldall" class="eqr">Tout déplier</button></div>
-<div style="height:8px"></div>
+<p class="hint" style="margin:2px 2px 10px">Touche la forme d'onde d'une piste pour <b>relancer la lecture à cet endroit</b> (calé sur le temps le plus proche). Tu peux aussi toucher la barre de progression en bas.</p>
 <div id="tracks"></div>
 
 <h2>Mix général</h2>
@@ -858,7 +861,7 @@ tracks.forEach(t=>{
   const el=document.createElement('div');
   el.className='card trk'; el.style.setProperty('--c',COLORS[t.id]);
   el.innerHTML=`<div class="row th"><button class="tog" aria-expanded="false" data-help="trk"><span class="chev">▸</span><span class="tn">Piste ${t.id+1}</span><span class="flags"></span><span class="fxbadge"></span></button><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button></div>
-  <div class="wave"><canvas></canvas><i class="ph"></i><span class="tag">vide</span></div>
+  <div class="wave"><canvas></canvas><i class="ph"></i><i class="mk"></i><span class="tag">vide</span></div>
   <div class="impbox" hidden><div class="imptxt"></div><div class="row wrap imbtns"></div></div>
   <div class="tbody" hidden>
   <div class="row" style="margin-top:12px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
@@ -888,6 +891,7 @@ tracks.forEach(t=>{
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave(true);};
   $('.imp',el).onclick=()=>{ try{ ctx.resume(); }catch(e){} $('.impfile',el).click(); };
   $('.impfile',el).onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importFile(t,f); };
+  $('.wave',el).onclick=e=>{ const r=e.currentTarget.getBoundingClientRect(); if(!r.width) return; seekTo((e.clientX-r.left)/r.width,t); };
   $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); };
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
@@ -973,12 +977,28 @@ function lockUI(){
   updBpm();
   tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
 }
+function seekTo(frac,t){
+  if(!loopLen){ msg("Enregistre ou importe d'abord une boucle."); return; }
+  if(recObj){ msg("Impossible de changer de position pendant un enregistrement."); return; }
+  msg('');
+  try{ ctx.resume(); }catch(e){}
+  const L=loopSec();
+  let k=Math.round(clamp(frac,0,1)*beats); if(k>=beats) k=0;
+  const p=k/beats*L;
+  if(!running) startTransport(false);
+  t0=ctx.currentTime+0.06-p;
+  nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
+  tracks.forEach(startSrc);
+  const tt=t||null;
+  (tt?[tt]:tracks).forEach(x=>{ const mk=$('.mk',x.el); mk.style.left=(k/beats*100)+'%'; mk.style.opacity=1; clearTimeout(x.mkT); x.mkT=setTimeout(()=>{ mk.style.opacity=0; },700); });
+}
 const onPlay=async()=>{
   try{ await ctx.resume(); }catch(e){}
   if(recObj){ if(ctx.currentTime<recObj.tp) cancelRec(); else stopRec(); return; }
   if(running) stopTransport(); else startTransport(false);
 };
 $('#play').onclick=onPlay; $('#play2').onclick=onPlay;
+$('.dprog').onclick=e=>{ const r=e.currentTarget.getBoundingClientRect(); if(!r.width) return; seekTo((e.clientX-r.left)/r.width,null); };
 $('#bpm').oninput=e=>{
   bpm=+e.target.value; $('#bpmv').textContent=bpm;
   if(running&&!loopLen&&!recObj){ t0=ctx.currentTime+0.05; nextBeat=0; }
@@ -1176,7 +1196,7 @@ function frame(){
   $('#cd').textContent=inCount?'Décompte '+Math.ceil((t0-now)/bd):'';
   tracks.forEach(t=>{
     uiTrack(t,now);
-    const show=t.buf&&running&&!inCount&&loopLen;
+    const show=running&&!inCount&&loopLen;
     t.ph.style.opacity=show?1:0;
     if(show) t.ph.style.left=(pos*100)+'%';
   });
