@@ -62,7 +62,12 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .how li{margin-bottom:8px;}
 /* pistes */
 .trk{border-left:4px solid var(--c);}
-.th{justify-content:flex-start;}
+.th{justify-content:flex-start;gap:6px;}
+.tog{flex:1;min-width:0;display:flex;align-items:center;gap:8px;justify-content:flex-start;text-align:left;background:transparent;border:none;border-radius:10px;padding:4px 2px;min-height:48px;font-weight:400;}
+.tog .chev{display:inline-block;width:18px;flex:none;color:var(--mut);transition:transform .15s;}
+.tog[aria-expanded="true"] .chev{transform:rotate(90deg);}
+.flags{font-size:17px;}
+.tbody{margin-top:2px;}
 .tn{font-family:'Bebas Neue',Impact,sans-serif;font-size:24px;letter-spacing:.06em;}
 .fxbadge{margin-left:auto;padding:2px 12px;border-radius:99px;background:var(--grad);font-size:15px;font-weight:600;color:#fff;}
 .fxbadge:empty{display:none;}
@@ -102,7 +107,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
     <li><b>Règle le tempo</b> (la vitesse), puis appuie sur <b>● REC</b> sur la piste 1. Après 4 clics de décompte, joue ta boucle de base.</li>
     <li>Appuie sur <b>■ STOP</b> : l'appli repère ton rythme et crée une boucle parfaitement calée.</li>
     <li>Appuie sur <b>● REC</b> sur une autre piste et ajoute un son par-dessus : tout se superpose en boucle.</li>
-    <li>Règle le <b>volume</b>, coupe ou isole une piste (<b>Muet / Solo</b>) et ajoute des <b>effets</b> dans « Réglages & effets ».</li>
+    <li>Touche le <b>nom d'une piste</b> pour ouvrir ses réglages : <b>volume</b>, <b>Muet / Solo</b>, <b>tonalité</b> et <b>effets</b>.</li>
   </ol>
   <p class="hint">Partout, appuie sur le petit <b>?</b> pour comprendre un réglage. Un casque est conseillé, pour que le micro ne capte pas la musique.</p>
 </details>
@@ -136,7 +141,8 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
   <div class="row" style="margin-top:10px"><button id="growundo" style="display:none">↶ Annuler le dernier changement de durée</button></div>
 </section>
 
-<h2>Tes pistes</h2>
+<div class="row" style="justify-content:space-between;margin-top:20px"><h2 style="margin:0 2px">Tes pistes</h2><button id="foldall" class="eqr">Tout déplier</button></div>
+<div style="height:8px"></div>
 <div id="tracks"></div>
 
 <h2>Mix général</h2>
@@ -670,7 +676,7 @@ const HELP={
   mix:"<b>Prise : remplace / ajoute</b>. <b>Remplace</b> : une nouvelle prise efface la partie de la piste qu'elle recouvre. <b>Ajoute</b> : elle se superpose à ce qui est déjà sur la piste (pratique pour empiler plusieurs sons sur la même piste).",
   editor:"<b>Garder la partie propre</b>. Après ta première prise, la forme d'onde apparaît avec les temps (traits fins). Glisse les repères rouges, ou utilise les boutons, pour ne garder que le passage réussi : il tourne en boucle en direct. Disponible tant que cette piste est la seule enregistrée.",
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
-  trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir). La forme d'onde montre ce qui est enregistré. <b>Volume</b> règle sa force, <b>Muet</b> la coupe, <b>Solo</b> n'écoute qu'elle. <b>Réglages & effets</b> ouvre le panoramique, les effets, annuler et effacer.",
+  trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
   eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Les boutons rapides règlent les trois d'un coup : <b>Punch</b> (plus de corps et d'attaque), <b>Clair</b> (plus brillant), <b>Voix nette</b> (moins de graves boueux, voix plus présente), <b>Chaud</b> (plus rond, moins agressif). Tu peux ensuite affiner avec les curseurs. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
@@ -724,13 +730,13 @@ function syncTrackUI(t){
 tracks.forEach(t=>{
   const el=document.createElement('div');
   el.className='card trk'; el.style.setProperty('--c',COLORS[t.id]);
-  el.innerHTML=`<div class="row th"><span class="tn" data-help="trk">Piste ${t.id+1}</span><span class="fxbadge"></span></div>
+  el.innerHTML=`<div class="row th"><button class="tog" aria-expanded="false" data-help="trk"><span class="chev">▸</span><span class="tn">Piste ${t.id+1}</span><span class="flags"></span><span class="fxbadge"></span></button><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button></div>
   <div class="wave"><canvas></canvas><i class="ph"></i><span class="tag">vide</span></div>
-  <div class="row" style="margin-top:10px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-  <div class="row"><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button>
-    <div class="vwrap"><div class="row vl"><span class="lbl" data-help="vol">Volume</span></div><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}"></div></div>
-  <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button><button class="more" aria-expanded="false">⚙ Réglages & effets ▾</button></div>
-  <div class="panel" hidden>
+  <div class="tbody" hidden>
+  <div class="row" style="margin-top:12px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
+  <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="vol">Volume</span></div><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}"></div>
+  <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
+  <div class="panel">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
     <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
       <div class="seg eqp" style="margin-top:8px">${EQ_PRESETS.map(p=>`<button data-p="${p[0]}">${p[1]}</button>`).join('')}</div>
@@ -740,6 +746,7 @@ tracks.forEach(t=>{
     <div class="field"><div class="row"><span class="lbl" data-help="fx">Effet</span></div><select class="fxsel" aria-label="Effet piste ${t.id+1}">${FX_LIST.map(f=>`<option value="${f[0]}">${f[1]}</option>`).join('')}</select></div>
     <div class="field"><div class="row"><span class="lbl" data-help="fxamt">Intensité de l'effet</span><span class="av val" style="margin-left:auto">50%</span></div><input type="range" class="fxamt" min="0" max="1" step="0.01" value="0.5" aria-label="Intensité de l'effet piste ${t.id+1}"></div>
     <div class="row wrap"><button class="u" data-help="undo">↶ Annuler</button><button class="x" data-help="clear">✕ Effacer</button></div>
+  </div>
   </div>`;
   wrap.appendChild(el);
   t.el=el; t.canvas=$('canvas',el); t.ph=$('.ph',el); t.tag=$('.tag',el);
@@ -749,7 +756,7 @@ tracks.forEach(t=>{
   $('.pan',el).oninput=e=>{t.panv=+e.target.value;$('.pv',el).textContent=panText(t.panv);applyGains();scheduleSave();};
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
-  $('.more',el).onclick=e=>{ const p=$('.panel',el); p.hidden=!p.hidden; e.target.textContent='⚙ Réglages & effets '+(p.hidden?'▾':'▴'); e.target.setAttribute('aria-expanded',String(!p.hidden)); };
+  $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); };
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(); }; });
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(); };
@@ -765,6 +772,8 @@ tracks.forEach(t=>{
   $('.x',el).onclick=()=>{ if(recObj&&recObj.i===t.id) cancelRec(); if(!t.buf) return; loopHist=null; t.prev=t.buf;t.buf=null;stopSrc(t);drawWave(t);lockUI();scheduleSave(); };
   syncTrackUI(t);
 });
+function updFold(){ const any=tracks.some(t=>!$('.tbody',t.el).hidden); $('#foldall').textContent=any?'Tout replier':'Tout déplier'; }
+$('#foldall').onclick=()=>{ const any=tracks.some(t=>!$('.tbody',t.el).hidden); tracks.forEach(t=>{ $('.tbody',t.el).hidden=any; $('.tog',t.el).setAttribute('aria-expanded',String(!any)); }); updFold(); };
 attachHelp(document);
 try{ const how=$('#how'); if(localStorage.getItem('lb_how')==='0') how.open=false; how.addEventListener('toggle',()=>{ try{ localStorage.setItem('lb_how',how.open?'1':'0'); }catch(e){} }); }catch(e){}
 
@@ -792,6 +801,8 @@ function uiTrack(t,now){
   if(t.cache.label!==label){ t.tag.textContent=label; t.cache.label=label; }
   const rb=$('.rec',t.el), rtxt=(recObj&&recObj.i===t.id)?'■ STOP':'● REC';
   if(t.cache.rtxt!==rtxt){ rb.textContent=rtxt; t.cache.rtxt=rtxt; }
+  const fl=(t.mute?'🔇':'')+(t.solo?'🎧':'');
+  if(t.cache.fl!==fl){ $('.flags',t.el).textContent=fl; t.cache.fl=fl; }
   $('.m',t.el).classList.toggle('on',t.mute);
   $('.s',t.el).classList.toggle('on',t.solo);
   $('.u',t.el).disabled=!(t.prev||t.buf)||!!(recObj&&recObj.i===t.id);
