@@ -220,6 +220,7 @@ for(let i=0;i<N;i++){
   tracks.push({id:i,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxType:'none',fxAmt:0.5,fx:null,el:null,cache:{}});
 }
 // ---------- égaliseur par piste ----------
+const EQ_PRESETS=[['flat','Plat',[0,0,0]],['punch','Punch',[5,-2,3]],['clair','Clair',[-2,1,6]],['voix','Voix nette',[-6,4,2]],['chaud','Chaud',[4,1,-4]]];
 function makeEq(c,v){
   const lo=c.createBiquadFilter(), mid=c.createBiquadFilter(), hi=c.createBiquadFilter();
   lo.type='lowshelf'; lo.frequency.value=200; lo.gain.value=v[0];
@@ -655,7 +656,7 @@ const HELP={
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir). La forme d'onde montre ce qui est enregistré. <b>Volume</b> règle sa force, <b>Muet</b> la coupe, <b>Solo</b> n'écoute qu'elle. <b>Réglages & effets</b> ouvre le panoramique, les effets, annuler et effacer.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
-  eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
+  eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Les boutons rapides règlent les trois d'un coup : <b>Punch</b> (plus de corps et d'attaque), <b>Clair</b> (plus brillant), <b>Voix nette</b> (moins de graves boueux, voix plus présente), <b>Chaud</b> (plus rond, moins agressif). Tu peux ensuite affiner avec les curseurs. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
   fx:"<b>Effet</b> : transforme le son de cette piste. <b>Écho</b> : répétitions calées sur le tempo. <b>Réverbération</b> : son de grande salle. <b>Saturation</b> : son sale et puissant. <b>Lo-fi 8 bits</b> : son de vieille console. <b>Étouffé</b> : comme derrière un mur. <b>Radio</b> : voix de téléphone. <b>Pulsation</b> : le volume bat au rythme du tempo. <b>Flanger</b> : effet de jet qui passe. <b>Robot</b> : voix métallique. <b>Basses boostées</b> : plus de graves.",
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
@@ -697,6 +698,7 @@ function syncTrackUI(t){
   $('.vol',el).value=t.vol; $('.pan',el).value=t.panv; $('.pv',el).textContent=panText(t.panv);
   $('.srcsel',el).value=t.srcType;
   el.querySelectorAll('.eq').forEach((r,k)=>{ r.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); });
+  el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,k)=>v===t.eqv[k])); });
   $('.fxsel',el).value=t.fxType; $('.fxamt',el).value=t.fxAmt; $('.av',el).textContent=Math.round(t.fxAmt*100)+'%';
   $('.fxamt',el).disabled=t.fxType==='none';
   const nm=(FX_LIST.find(f=>f[0]===t.fxType)||[0,''])[1].split(' (')[0];
@@ -713,7 +715,8 @@ tracks.forEach(t=>{
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button><button class="more" aria-expanded="false">⚙ Réglages & effets ▾</button></div>
   <div class="panel" hidden>
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span><button class="eqr" style="margin-left:auto">Remettre à plat</button></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
+      <div class="seg eqp" style="margin-top:8px">${EQ_PRESETS.map(p=>`<button data-p="${p[0]}">${p[1]}</button>`).join('')}</div>
       <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Médiums</span><input type="range" class="eq" data-b="1" min="-12" max="12" step="1" value="0" aria-label="Médiums piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Aigus</span><input type="range" class="eq" data-b="2" min="-12" max="12" step="1" value="0" aria-label="Aigus piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div></div>
@@ -730,8 +733,8 @@ tracks.forEach(t=>{
   $('.m',el).onclick=()=>{t.mute=!t.mute;applyGains();scheduleSave();};
   $('.s',el).onclick=()=>{t.solo=!t.solo;applyGains();scheduleSave();};
   $('.more',el).onclick=e=>{ const p=$('.panel',el); p.hidden=!p.hidden; e.target.textContent='⚙ Réglages & effets '+(p.hidden?'▾':'▴'); e.target.setAttribute('aria-expanded',String(!p.hidden)); };
-  el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); scheduleSave(); }; });
-  $('.eqr',el).onclick=()=>{ t.eqv=[0,0,0]; t.eq.lo.gain.value=0; t.eq.mid.gain.value=0; t.eq.hi.gain.value=0; syncTrackUI(t); scheduleSave(); };
+  el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(); }; });
+  el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(); }; });
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(); };
   $('.fxsel',el).onchange=e=>{ t.fxType=e.target.value; setFx(t); syncTrackUI(t); scheduleSave(); };
   $('.fxamt',el).oninput=e=>{ t.fxAmt=+e.target.value; if(t.fx) t.fx.set(t.fxAmt,beatDur()); $('.av',el).textContent=Math.round(t.fxAmt*100)+'%'; scheduleSave(); };
