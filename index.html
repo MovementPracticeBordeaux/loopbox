@@ -94,6 +94,14 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .field .row{margin-bottom:4px;}
 .w2{width:84px;flex:none;}
 .eqr{min-height:36px;padding:4px 14px;font-size:16px;}
+.projbar #projbtn{border-radius:12px;justify-content:flex-start;font-size:19px;}
+input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:44px;min-width:0;}
+.prow{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line);}
+.prow .pn{flex:1;min-width:0;}
+.prow .pn b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.prow .pn small{color:var(--mut);font-size:15px;}
+.prow button{min-height:38px;padding:4px 12px;font-size:16px;}
+.cur{color:var(--orange);font-size:15px;font-weight:600;}
 [hidden]{display:none!important;}
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:50;pointer-events:none;}
 .dockin{pointer-events:auto;max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:rgba(11,11,13,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid var(--line);}
@@ -113,6 +121,20 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
   <h1>LOOPBOX</h1>
   <p class="sub">Ton studio de loops : beatbox, percussions, bruits du quotidien.</p>
 </header>
+<section class="card projbar">
+  <div class="row" style="margin-top:0">
+    <button id="projbtn" class="grow1" aria-expanded="false">📁 <span id="projname">Mon projet</span> ▾</button>
+    <span id="savestate" class="lbl" style="white-space:nowrap">✓ Enregistré</span>
+  </div>
+  <div id="projmenu" hidden>
+    <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="proj">Nom du projet</span></div>
+      <div class="row" style="margin-top:6px"><input id="projinp" type="text" maxlength="40" style="flex:1" aria-label="Nom du projet"><button id="projren">Renommer</button></div></div>
+    <div class="row wrap"><button id="projsave" class="primary">💾 Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
+    <div class="field" style="margin-top:16px"><div class="row"><span class="lbl">Mes projets</span></div><div id="projlist"></div></div>
+    <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="projfile">Fichier (sauvegarde de sécurité)</span></div>
+      <div class="row wrap" style="margin-top:6px"><button id="projexp">⬇ Sauvegarder dans un fichier</button><button id="projimp">⬆ Ouvrir un fichier</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div></div>
+  </div>
+</section>
 <p id="msg" role="status"></p>
 
 <details class="card how" id="how" open>
@@ -911,6 +933,8 @@ const HELP={
   mix:"<b>Prise : remplace / ajoute</b>. <b>Remplace</b> : une nouvelle prise efface la partie de la piste qu'elle recouvre. <b>Ajoute</b> : elle se superpose à ce qui est déjà sur la piste (pratique pour empiler plusieurs sons sur la même piste).",
   editor:"<b>Garder la partie propre</b>. Après ta première prise, la forme d'onde apparaît avec les temps (traits fins). Glisse les repères rouges, ou utilise les boutons, pour ne garder que le passage réussi : il tourne en boucle en direct. Disponible tant que cette piste est la seule enregistrée.",
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
+  proj:"<b>Projets</b> : chaque projet garde ses pistes, sa boucle et tous ses réglages. Ton travail est <b>enregistré automatiquement</b> dans ce navigateur (indication en haut à droite) ; « Enregistrer » force l'enregistrement tout de suite. « Enregistrer une copie » crée un nouveau projet à partir de celui-ci (avec le nom écrit dans la case). Dans « Mes projets », tu ouvres ou supprimes un projet. La latence et le gain du micro sont communs à tous les projets.",
+  projfile:"<b>Fichier de sauvegarde</b> : crée un fichier « .loopbox » avec tout le projet (sons et réglages), à garder dans tes téléchargements ou à envoyer ailleurs. <b>Important</b> : les projets du navigateur disparaissent si tu effaces les données du site ou du navigateur ; le fichier, lui, reste. « Ouvrir un fichier » le recharge comme un nouveau projet. Le son y est stocké en qualité CD (16 bits).",
   pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
   tsel:"<b>Garder la partie propre (cette piste)</b> : choisis les temps à conserver sur cette piste, le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
@@ -1095,13 +1119,17 @@ function addTrack(){
   applyGains(t); updTrackBtns(); updFold(); lockUI();
   return t;
 }
+function disposeTrack(t){
+  stopSrc(t); clearTimeout(t.offT); clearTimeout(t.mkT);
+  if(t.pjob){ t.pjob.cancel=true; t.pjob=null; }
+  (t.fxn||[]).forEach(f=>f.dispose());
+  [t.inp,t.eq.lo,t.eq.mid,t.eq.hi,t.gain,t.pan].forEach(n=>{ try{ if(n) n.disconnect(); }catch(e){} });
+  if(t.el) t.el.remove();
+}
 function removeLastTrack(){
   const t=tracks[tracks.length-1];
   if(!t||tracks.length<=1||t.buf||(recObj&&recObj.i===t.id)) return;
-  stopSrc(t); clearTimeout(t.offT); clearTimeout(t.mkT);
-  (t.fxn||[]).forEach(f=>f.dispose());
-  [t.inp,t.eq.lo,t.eq.mid,t.eq.hi,t.gain,t.pan].forEach(n=>{ try{ if(n) n.disconnect(); }catch(e){} });
-  t.el.remove(); tracks.pop();
+  disposeTrack(t); tracks.pop();
   updTrackBtns(); updFold(); applyGains(); lockUI(); scheduleSave();
 }
 function updFold(){ const any=tracks.some(t=>!$('.tbody',t.el).hidden); $('#foldall').textContent=any?'Tout replier':'Tout déplier'; }
@@ -1340,9 +1368,9 @@ $('#exp').onclick=async()=>{
     const rendered=await off.startRendering();
     const blob=new Blob([wav16(rendered)],{type:'audio/wav'});
     const url=URL.createObjectURL(blob), a=document.createElement('a');
-    a.href=url; a.download='loopbox-mix.wav'; document.body.appendChild(a); a.click(); a.remove();
+    a.href=url; a.download=safeName(projName)+'.wav'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),60000);
-    msg('Export prêt : le fichier loopbox-mix.wav est dans tes téléchargements.');
+    msg('Export prêt : le fichier '+safeName(projName)+'.wav est dans tes téléchargements.');
   }catch(e){
     msg("Export impossible : "+((e&&(e.message||e.code))||'erreur'));
   }finally{ btn.disabled=false; btn.textContent=old; }
@@ -1350,61 +1378,207 @@ $('#exp').onclick=async()=>{
 
 // ---------- sauvegarde ----------
 function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('loopbox',1);r.onupgradeneeded=()=>r.result.createObjectStore('proj');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+const idbGet=(db,k)=>new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+const idbPut=(db,pairs,dels)=>new Promise((res,rej)=>{ const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj'); pairs.forEach(([k,v])=>st.put(v,k)); (dels||[]).forEach(k=>st.delete(k)); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error); });
+let projId=null, projName='Mon projet', projIndex={cur:null,list:[]}, devLoaded=false;
 let saveT=null, audioDirty=true;
-function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); saveT=setTimeout(saveProj,settingsOnly?300:700); }
+const newId=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function safeName(n){ return (String(n||'loopbox').replace(/[\\/:*?"<>|]+/g,'').trim()||'loopbox').slice(0,40); }
+function uniqueName(base){ const names=new Set(projIndex.list.map(p=>p.name)); if(!names.has(base)) return base; let k=2; while(names.has(base+' '+k)) k++; return base+' '+k; }
+function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent=st==='ok'?'✓ Enregistré':st==='err'?'⚠ Non enregistré':'Enregistrement…'; }
+function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
+function mainData(){
+  return {v:2,name:projName,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
+    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null}))};
+}
+function summary(){ return {id:projId,name:projName,updated:Date.now(),beats:loopLen?beats:0,bpm:loopLen?+(beats*60/loopSec()).toFixed(1):bpm,ntr:tracks.filter(t=>t.buf).length,dur:loopLen?+loopSec().toFixed(1):0}; }
 async function saveProj(){
+  clearTimeout(saveT); saveT=null;
+  if(!projId) return;
   const withAudio=audioDirty; audioDirty=false;
   try{
     const db=await idb();
-    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null}))};
-    const audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
-    await new Promise((res,rej)=>{
-      const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
-      st.put(main,'main'); if(audio) st.put(audio,'audio');
-      tx.oncomplete=res; tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error);
-    });
-  }catch(e){ if(withAudio) audioDirty=true; }
+    const main=mainData(), audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
+    const sm=summary(), i=projIndex.list.findIndex(p=>p.id===projId);
+    if(i>=0) projIndex.list[i]=sm; else projIndex.list.push(sm);
+    projIndex.cur=projId;
+    const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn}]];
+    if(audio) pairs.push(['p:'+projId+':audio',audio]);
+    await idbPut(db,pairs);
+    setSaveState('ok'); updProjList();
+    if(!window.__persistAsked){ window.__persistAsked=true; try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){} }
+  }catch(e){ if(withAudio) audioDirty=true; setSaveState('err'); }
+}
+function refreshGlobalUI(){
+  $('#norm').classList.toggle('on',normOn);
+  $('#snap').classList.toggle('on',snap);
+  $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
+  $('#mvol').value=mvol; chain.vol.gain.value=mvol;
+  chain.setFin(fin); showFin();
+  $('#ingain').value=ingain; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1);
+  $('#comp').value=Math.round(comp*1000); $('#compv').textContent=Math.round(comp*1000)+'ms';
+}
+function resetProject(){
+  if(recObj) cancelRec();
+  stopTransport(); paused=false;
+  tracks.slice().forEach(disposeTrack); tracks.length=0; $('#tracks').innerHTML='';
+  loopLen=0; beats=4; baseLen=0; baseBeats=4; rep=1; loopHist=null; masterTake=null; lastLoop=null;
+  bpm=90; snap=true; mixMode=false; mvol=0.9; fin=0;
+  addTrack();
+  refreshGlobalUI(); buildDots(); applyGains(); lockUI(); msg('');
+}
+function applyProject(d,audio){
+  const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
+  const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||!!s.pt||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox'); };
+  let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&used(s,i)) need=i+1; });
+  while(tracks.length<need&&tracks.length<MAXTRACKS) addTrack();
+  if(!devLoaded){ if(d.normOn!=null) normOn=d.normOn!==false; if(d.comp!=null) comp=d.comp; if(d.ingain) ingain=d.ingain; }
+  bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
+  const firstLen=((d.tracks||[]).map(pcmOf).find(p=>p&&p.length)||{length:0}).length;
+  loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
+  baseLen=d.baseLen||loopLen; baseBeats=d.baseBeats||beats; rep=d.rep||1;
+  if(baseLen*rep!==loopLen){ baseLen=loopLen; baseBeats=beats; rep=1; }
+  (d.tracks||[]).forEach((s,i)=>{
+    const t=tracks[i]; if(!t||!s) return;
+    t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; const okT=x=>FX_LIST.some(f=>f[0]===x);
+    t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,MAXFX).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
+    t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
+    t.pitch=clamp(Math.round(+s.pt||0),-12,12);
+    t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
+    const pcm=pcmOf(s,i);
+    if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
+    if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats&&s.sel[1]-s.sel[0]>=1) t.sel={s:s.sel[0],e:s.sel[1]};
+    setFx(t); syncTrackUI(t); drawWave(t);
+  });
+  if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; baseLen=0; baseBeats=4; rep=1; }
+  audioDirty=(d.v!==2);
+  refreshGlobalUI(); buildDots(); applyGains(); lockUI();
 }
 async function loadProj(){
   try{
     const db=await idb();
-    const get=k=>new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
-    const d=await get('main');
-    if(!d) return;
-    const audio=d.v===2?(await get('audio')):null;
-    const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
-    const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||!!s.pt||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox'); };
-    let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&used(s,i)) need=i+1; });
-    while(tracks.length<need&&tracks.length<MAXTRACKS) addTrack();
-    normOn=d.normOn!==false; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
-    const firstLen=((d.tracks||[]).map(pcmOf).find(p=>p&&p.length)||{length:0}).length;
-    loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
-    baseLen=d.baseLen||loopLen; baseBeats=d.baseBeats||beats; rep=d.rep||1;
-    if(baseLen*rep!==loopLen){ baseLen=loopLen; baseBeats=beats; rep=1; }
-    (d.tracks||[]).forEach((s,i)=>{
-      const t=tracks[i]; if(!t||!s) return;
-      t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; const okT=x=>FX_LIST.some(f=>f[0]===x);
-      t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,MAXFX).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
-      t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
-      t.pitch=clamp(Math.round(+s.pt||0),-12,12);
-      t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
-      const pcm=pcmOf(s,i);
-      if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
-      if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats&&s.sel[1]-s.sel[0]>=1) t.sel={s:s.sel[0],e:s.sel[1]};
-      setFx(t); syncTrackUI(t); drawWave(t);
-    });
-    if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; baseLen=0; baseBeats=4; rep=1; }
-    audioDirty=(d.v!==2);   // ancien format : on réécrit au nouveau format à la prochaine sauvegarde
-    $('#norm').classList.toggle('on',normOn);
-    $('#snap').classList.toggle('on',snap);
-    $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
-    $('#mvol').value=mvol; chain.vol.gain.value=mvol;
-    chain.setFin(fin); showFin();
-    $('#ingain').value=ingain; $('#ingv').textContent=ingain.toFixed(1)+'×';
-    $('#comp').value=Math.round(comp*1000); $('#compv').textContent=Math.round(comp*1000)+'ms';
-    buildDots(); applyGains(); lockUI();
-  }catch(e){}
+    const dev=await idbGet(db,'device');
+    if(dev){ devLoaded=true; if(dev.comp!=null) comp=dev.comp; if(dev.ingain) ingain=dev.ingain; normOn=dev.normOn!==false; }
+    let idx=await idbGet(db,'index');
+    if(!idx){
+      // première ouverture avec les projets : on reprend l'ancien projet unique s'il existe
+      const id=newId(); idx={cur:id,list:[]};
+      const legacy=await idbGet(db,'main');
+      const pairs=[['index',idx]];
+      if(legacy){ legacy.name=legacy.name||'Mon projet'; pairs.push(['p:'+id+':main',legacy]); const la=legacy.v===2?await idbGet(db,'audio'):null; if(la) pairs.push(['p:'+id+':audio',la]); }
+      await idbPut(db,pairs);
+    }
+    projIndex=idx;
+    projId=idx.cur||(idx.list[0]&&idx.list[0].id)||newId();
+    const d=await idbGet(db,'p:'+projId+':main');
+    const known=idx.list.find(p=>p.id===projId);
+    projName=(d&&d.name)||(known&&known.name)||'Mon projet';
+    if(d){ const audio=d.v===2?await idbGet(db,'p:'+projId+':audio'):null; applyProject(d,audio); }
+    else refreshGlobalUI();
+    if(!known||(d&&d.v!==2)) await saveProj();
+    setSaveState('ok');
+  }catch(e){ projId=projId||newId(); }
+  updProjUI();
 }
+async function openProject(id,force){
+  if(id===projId&&!force) return;
+  await saveProj();
+  try{
+    const db=await idb();
+    const d=await idbGet(db,'p:'+id+':main');
+    const audio=d&&d.v===2?await idbGet(db,'p:'+id+':audio'):null;
+    resetProject();
+    projId=id; projName=(d&&d.name)||((projIndex.list.find(p=>p.id===id)||{}).name)||'Projet';
+    if(d) applyProject(d,audio);
+    await saveProj();
+    updProjUI(); msg('Projet « '+projName+' » ouvert.');
+  }catch(e){ msg("Impossible d'ouvrir ce projet."); }
+}
+async function newProject(){
+  await saveProj();
+  resetProject();
+  projId=newId(); projName=uniqueName('Nouveau projet');
+  audioDirty=true; await saveProj(); updProjUI(); msg('Nouveau projet créé.');
+}
+async function saveCopy(name){
+  await saveProj();
+  projId=newId(); projName=uniqueName(name||projName+' (copie)');
+  audioDirty=true; await saveProj(); updProjUI(); msg('Copie enregistrée : « '+projName+' ».');
+}
+async function deleteProject(id){
+  try{
+    const db=await idb();
+    projIndex.list=projIndex.list.filter(p=>p.id!==id);
+    if(id===projId){
+      projId=null; projIndex.cur=null;
+      await idbPut(db,[['index',projIndex]],['p:'+id+':main','p:'+id+':audio']);
+      const next=[...projIndex.list].sort((a,b)=>b.updated-a.updated)[0];
+      if(next) await openProject(next.id,true);
+      else { resetProject(); projId=newId(); projName='Mon projet'; audioDirty=true; await saveProj(); }
+    } else await idbPut(db,[['index',projIndex]],['p:'+id+':main','p:'+id+':audio']);
+  }catch(e){ msg('Suppression impossible.'); }
+  updProjUI();
+}
+// ----- fichier .loopbox : en-tête « LBX1 », longueur JSON, JSON, puis le son de chaque piste en 16 bits
+function encodeProject(){
+  const lens=[], parts=[];
+  tracks.forEach(t=>{ if(t.buf){ const d=t.buf.getChannelData(0), q=new Int16Array(d.length); for(let i=0;i<d.length;i++) q[i]=Math.round(clamp(d[i],-1,1)*32767); parts.push(q); lens.push(d.length); } else lens.push(0); });
+  const json=new TextEncoder().encode(JSON.stringify({format:1,app:'LoopBox',name:projName,main:mainData(),lens}));
+  const head=new Uint8Array(8); head.set([76,66,88,49]); new DataView(head.buffer).setUint32(4,json.length,true);
+  return new Blob([head,json,...parts],{type:'application/octet-stream'});
+}
+function downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+async function importProjectFile(file){
+  try{
+    const ab=await readFile(file), u=new Uint8Array(ab);
+    if(u.length<8||u[0]!==76||u[1]!==66||u[2]!==88||u[3]!==49) throw new Error('format');
+    const jl=new DataView(ab).getUint32(4,true);
+    const meta=JSON.parse(new TextDecoder().decode(u.subarray(8,8+jl)));
+    let off=8+jl;
+    const audio=(meta.lens||[]).map(n=>{ if(!n) return null; const q=new Int16Array(ab.slice(off,off+n*2)); off+=n*2; const f=new Float32Array(n); for(let i=0;i<n;i++) f[i]=q[i]/32767; return f; });
+    await saveProj();
+    resetProject();
+    projId=newId(); projName=uniqueName(meta.name||'Projet importé');
+    const d=meta.main||{}; d.v=2; applyProject(d,audio);
+    audioDirty=true; await saveProj(); updProjUI(); msg('Projet ouvert depuis le fichier : « '+projName+' ».');
+  }catch(e){ msg("Ce fichier n'est pas un projet LoopBox valide."); }
+}
+// ----- menu projet
+function fmtDate(ts){ try{ return new Date(ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+function updProjList(){
+  const box=$('#projlist'); if(!box) return;
+  box.innerHTML='';
+  const list=[...projIndex.list].sort((a,b)=>b.updated-a.updated);
+  list.forEach(p=>{
+    const row=document.createElement('div'); row.className='prow';
+    const info=p.beats?(p.beats+' temps · '+String(p.bpm).replace('.',',')+' BPM · '+p.ntr+' piste'+(p.ntr>1?'s':'')):'vide';
+    row.innerHTML=`<div class="pn"><b></b><small>${info} · ${fmtDate(p.updated)}</small></div>`;
+    $('b',row).textContent=p.name;
+    if(p.id===projId){ const c=document.createElement('span'); c.className='cur'; c.textContent='ouvert'; row.appendChild(c); }
+    else { const o=document.createElement('button'); o.textContent='Ouvrir'; o.onclick=()=>openProject(p.id); row.appendChild(o); }
+    const del=document.createElement('button'); del.textContent='🗑'; del.setAttribute('aria-label','Supprimer '+p.name);
+    del.onclick=()=>{ if(del.dataset.arm!=='1'){ del.dataset.arm='1'; del.textContent='Confirmer ?'; setTimeout(()=>{ del.dataset.arm='0'; del.textContent='🗑'; },3000); return; } deleteProject(p.id); };
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+function updProjUI(){
+  $('#projname').textContent=projName;
+  if(document.activeElement!==$('#projinp')) $('#projinp').value=projName;
+  updProjList();
+}
+$('#projbtn').onclick=()=>{ const m=$('#projmenu'); m.hidden=!m.hidden; $('#projbtn').setAttribute('aria-expanded',String(!m.hidden)); if(!m.hidden) updProjUI(); };
+$('#projren').onclick=()=>{ const n=$('#projinp').value.trim(); if(!n) return; projName=n.slice(0,40); updProjUI(); scheduleSave(true); msg('Projet renommé : « '+projName+' ».'); };
+$('#projsave').onclick=async()=>{ setSaveState('…'); await saveProj(); msg('Projet « '+projName+' » enregistré.'); };
+$('#projcopy').onclick=()=>{ const n=$('#projinp').value.trim(); saveCopy(n&&n!==projName?n:projName+' (copie)'); };
+$('#projnew').onclick=()=>newProject();
+$('#projexp').onclick=()=>{ if(!tracks.some(t=>t.buf)){ msg('Rien à sauvegarder : le projet est vide.'); return; } downloadBlob(encodeProject(),safeName(projName)+'.loopbox'); msg('Fichier « '+safeName(projName)+'.loopbox » créé dans tes téléchargements.'); };
+$('#projimp').onclick=()=>$('#projfile').click();
+$('#projfile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importProjectFile(f); };
 
 // ---------- boucle d'affichage ----------
 const mOut=$('#mOut'), mIn=$('#mIn'), fbuf=new Float32Array(1024);
