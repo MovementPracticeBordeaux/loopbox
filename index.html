@@ -118,7 +118,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
   <ol>
     <li><b>Règle le tempo</b> (la vitesse), puis appuie sur <b>● REC</b> sur la piste 1. Après 4 clics de décompte, joue ta boucle de base.</li>
     <li>Appuie sur <b>■ STOP</b> : l'appli repère ton rythme et crée une boucle parfaitement calée.</li>
-    <li>Appuie sur <b>● REC</b> sur une autre piste et ajoute un son par-dessus : tout se superpose en boucle.</li>
+    <li>Appuie sur <b>+ Ajouter une piste</b> (en bas de la liste), puis <b>● REC</b> sur la nouvelle piste : tout se superpose en boucle.</li>
     <li>Touche le <b>nom d'une piste</b> pour ouvrir ses réglages : <b>volume</b>, <b>Muet / Solo</b>, <b>tonalité</b> et <b>effets</b>.</li>
   </ol>
   <p class="hint">Partout, appuie sur le petit <b>?</b> pour comprendre un réglage. Un casque est conseillé, pour que le micro ne capte pas la musique.</p>
@@ -156,6 +156,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 <div class="row" style="justify-content:space-between;margin-top:20px"><h2 style="margin:0 2px">Tes pistes</h2><button id="foldall" class="eqr">Tout déplier</button></div>
 <p class="hint" style="margin:2px 2px 10px">Touche la forme d'onde d'une piste pour <b>relancer la lecture à cet endroit</b> (calé sur le temps le plus proche). Tu peux aussi toucher la barre de progression en bas.</p>
 <div id="tracks"></div>
+<div class="row wrap" style="margin-top:2px"><button id="addtrk" class="primary">+ Ajouter une piste</button><span id="trkcount" class="lbl"></span></div>
 
 <h2>Mix général</h2>
 <section class="card">
@@ -188,7 +189,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 </div></div>
 <script>
 (()=>{
-const MAXFX=2, N=10, B=1024, MAXMASTER=30, MAXLOOP=40;
+const MAXFX=2, MAXTRACKS=10, B=1024, MAXMASTER=30, MAXLOOP=40;
 const COLORS=['#e8472b','#f08a24','#e6b800','#7cb518','#1f9d55','#16a5a5','#2b7fe0','#6a5acd','#b04fc7','#d6457f'];
 const $=(s,r=document)=>r.querySelector(s);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -238,10 +239,25 @@ chain.out.connect(outAn); chain.out.connect(ctx.destination);
 const metroGain=ctx.createGain(); metroGain.gain.value=0.35; metroGain.connect(ctx.destination);
 
 // ---------- pistes ----------
-for(let i=0;i<N;i++){
+function makeTrackNodes(i){
   const g=ctx.createGain(), inp=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null;
   const eq=makeEq(ctx,[0,0,0]); inp.connect(eq.inp); eq.out.connect(g); g.connect(p||chain.inp); if(p) p.connect(chain.inp);
-  tracks.push({id:i,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',buf:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}});
+  let _buf=null;
+  return {id:i,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',
+    get buf(){ return _buf; }, set buf(v){ if(v!==_buf){ _buf=v; this.sel=null; this.pc=null; } },
+    sel:null,pc:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
+}
+function playBuf(t){
+  const b=t.buf; if(!b||!t.sel) return b;
+  const {s,e}=t.sel, c=t.pc;
+  if(c&&c.b===b&&c.s===s&&c.e===e&&c.n===beats) return c.out;
+  const L=b.length, src=b.getChannelData(0), out=new Float32Array(L);
+  const a=s>0?Math.max(0,Math.round(s/beats*L)-Math.round(0.03*SR)):0, z=e<beats?Math.round(e/beats*L):L;
+  for(let i=a;i<z&&i<L;i++) out[i]=src[i];
+  if(s>0){ const fi=Math.round(0.005*SR); for(let i=0;i<fi&&a+i<L;i++) out[a+i]*=i/fi; }
+  if(e<beats){ const fo=Math.round(0.01*SR); for(let i=1;i<=fo&&z-i>=0&&z-i<L;i++) out[z-i]*=(i-1)/fo; }
+  const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(out,0);
+  t.pc={b,s,e,n:beats,out:nb}; return nb;
 }
 // ---------- égaliseur par piste ----------
 const EQ_PRESETS=[['flat','Plat',[0,0,0]],['punch','Punch',[5,-2,3]],['clair','Clair',[-2,1,6]],['voix','Voix nette',[-6,4,2]],['chaud','Chaud',[4,1,-4]]];
@@ -363,7 +379,7 @@ function startSrc(t){
   const L=t.buf.duration;
   const when=Math.max(ctx.currentTime+0.02,t0);
   const off=when>t0?mod(when-t0,L):0;
-  const s=ctx.createBufferSource(); s.buffer=t.buf; s.loop=true; s.connect(t.inp);
+  const s=ctx.createBufferSource(); s.buffer=playBuf(t); s.loop=true; s.connect(t.inp);
   try{ s.start(when,off); t.src=s; }catch(e){ msg('Lecture impossible : '+e.message); }
 }
 
@@ -790,6 +806,7 @@ const HELP={
   mix:"<b>Prise : remplace / ajoute</b>. <b>Remplace</b> : une nouvelle prise efface la partie de la piste qu'elle recouvre. <b>Ajoute</b> : elle se superpose à ce qui est déjà sur la piste (pratique pour empiler plusieurs sons sur la même piste).",
   editor:"<b>Garder la partie propre</b>. Après ta première prise, la forme d'onde apparaît avec les temps (traits fins). Glisse les repères rouges, ou utilise les boutons, pour ne garder que le passage réussi : il tourne en boucle en direct. Disponible tant que cette piste est la seule enregistrée.",
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
+  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis les temps à conserver sur cette piste, le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
@@ -857,7 +874,7 @@ function syncTrackUI(t){
   el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,k)=>v===t.eqv[k])); });
   renderFx(t);
 }
-tracks.forEach(t=>{
+function buildTrackUI(t){
   const el=document.createElement('div');
   el.className='card trk'; el.style.setProperty('--c',COLORS[t.id]);
   el.innerHTML=`<div class="row th"><button class="tog" aria-expanded="false" data-help="trk"><span class="chev">▸</span><span class="tn">Piste ${t.id+1}</span><span class="flags"></span><span class="fxbadge"></span></button><button class="rec" aria-label="Enregistrer piste ${t.id+1}">● REC</button></div>
@@ -868,6 +885,10 @@ tracks.forEach(t=>{
   <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="vol">Volume</span></div><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}"></div>
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
   <div class="row wrap"><button class="imp" data-help="imp">⬆ Importer un fichier audio</button><input type="file" class="impfile" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac" hidden></div>
+  <div class="field tsel" hidden><div class="row"><span class="lbl" data-help="tsel">Garder la partie propre</span><span class="tsl lbl" style="margin-left:auto"></span></div>
+    <canvas class="tsc" style="width:100%;height:76px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
+    <div class="row wrap"><button class="ts1">◀ début</button><button class="ts2">début ▶</button><button class="ts3" style="margin-left:auto">◀ fin</button><button class="ts4">fin ▶</button></div>
+    <div class="row"><button class="tsall">Tout garder</button></div></div>
   <div class="panel">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
     <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
@@ -879,6 +900,7 @@ tracks.forEach(t=>{
       <div class="fxlist"></div>
       <div class="row"><button class="fxadd">+ Ajouter un effet</button></div></div>
     <div class="row wrap"><button class="u" data-help="undo">↶ Annuler</button><button class="x" data-help="clear">✕ Effacer</button></div>
+    <div class="row"><button class="del" hidden>🗑 Supprimer cette piste</button></div>
   </div>
   </div>`;
   wrap.appendChild(el);
@@ -892,7 +914,7 @@ tracks.forEach(t=>{
   $('.imp',el).onclick=()=>{ try{ ctx.resume(); }catch(e){} $('.impfile',el).click(); };
   $('.impfile',el).onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importFile(t,f); };
   $('.wave',el).onclick=e=>{ const r=e.currentTarget.getBoundingClientRect(); if(!r.width) return; seekTo((e.clientX-r.left)/r.width,t); };
-  $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); };
+  $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); if(!b.hidden) drawTsel(t); };
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(true); };
@@ -905,10 +927,72 @@ tracks.forEach(t=>{
     loopHist=null; const b=t.buf;t.buf=t.prev;t.prev=b; drawWave(t); startSrc(t); if(!t.buf) stopSrc(t); lockUI(); scheduleSave();
   };
   $('.x',el).onclick=()=>{ if(recObj&&recObj.i===t.id) cancelRec(); if(!t.buf) return; loopHist=null; t.prev=t.buf;t.buf=null;stopSrc(t);drawWave(t);lockUI();scheduleSave(); };
+  const tsGet=()=>t.sel||{s:0,e:beats};
+  $('.ts1',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s-1,q.e); };
+  $('.ts2',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s+1,q.e); };
+  $('.ts3',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e-1); };
+  $('.ts4',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e+1); };
+  $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
+  $('.del',el).onclick=()=>removeLastTrack();
+  (()=>{
+    const c=$('.tsc',el); let drag=null;
+    const beatAt=ev=>{ const r=c.getBoundingClientRect(); return Math.round(clamp((ev.clientX-r.left)/(r.width||1),0,1)*beats); };
+    const mv=ev=>{ if(!drag) return; const b=beatAt(ev); if(drag.which==='s') drag.s=clamp(b,0,drag.e-1); else drag.e=clamp(b,drag.s+1,beats); drawTsel(t,drag); };
+    c.addEventListener('pointerdown',ev=>{ if(!t.buf||!loopLen) return; try{ c.setPointerCapture(ev.pointerId); }catch(e){} const q=tsGet(), b=beatAt(ev); drag={s:q.s,e:q.e,which:Math.abs(b-q.s)<=Math.abs(b-q.e)?'s':'e'}; mv(ev); });
+    c.addEventListener('pointermove',mv);
+    const end=()=>{ if(!drag) return; const d=drag; drag=null; setTrackSel(t,d.s,d.e); };
+    c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
+  })();
   syncTrackUI(t);
-});
+}
+function setTrackSel(t,s,e){
+  if(!t.buf||!loopLen) return;
+  s=clamp(s,0,beats-1); e=clamp(e,1,beats);
+  if(e-s<1) return;
+  t.sel=(s===0&&e===beats)?null:{s,e}; t.pc=null;
+  startSrc(t); drawWave(t); drawTsel(t); scheduleSave(true);
+}
+function drawTsel(t,dr){
+  const c=$('.tsc',t.el); if(!c) return;
+  const q=dr||t.sel||{s:0,e:beats};
+  $('.tsl',t.el).textContent=(q.s===0&&q.e===beats)?'Tout est gardé':'Temps '+(q.s+1)+' → '+q.e+' sur '+beats;
+  if($('.tbody',t.el).hidden||$('.tsel',t.el).hidden) return;
+  const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), h=Math.floor(c.clientHeight*dpr); if(!w||!h) return;
+  c.width=w; c.height=h;
+  const g=c.getContext('2d'); g.clearRect(0,0,w,h);
+  if(!t.buf) return;
+  const d=t.buf.getChannelData(0), step=d.length/w; let mx=0.15; const pk=new Float32Array(w);
+  for(let x=0;x<w;x++){ let m=0; const a=Math.floor(x*step), z=Math.min(d.length,Math.floor((x+1)*step)); for(let j=a;j<z;j+=8){ const v=Math.abs(d[j]); if(v>m) m=v; } pk[x]=m; if(m>mx) mx=m; }
+  g.fillStyle='#9b968d';
+  for(let x=0;x<w;x++){ const hh=Math.max(1,pk[x]/mx*h*0.85); g.fillRect(x,(h-hh)/2,1,hh); }
+  for(let k=0;k<=beats;k++){ g.fillStyle=(k%4===0)?'rgba(128,128,128,.6)':'rgba(128,128,128,.25)'; g.fillRect(k/beats*w,0,1,h); }
+  const sx=q.s/beats*w, ex=q.e/beats*w;
+  g.fillStyle='rgba(255,138,0,.20)'; g.fillRect(sx,0,ex-sx,h);
+  g.fillStyle='#FF8A00'; g.fillRect(sx-1.5*dpr,0,3*dpr,h); g.fillRect(ex-1.5*dpr,0,3*dpr,h);
+}
+function updTrackBtns(){
+  $('#trkcount').textContent=tracks.length+' / '+MAXTRACKS;
+  $('#addtrk').disabled=tracks.length>=MAXTRACKS;
+}
+function addTrack(){
+  if(tracks.length>=MAXTRACKS) return null;
+  const t=makeTrackNodes(tracks.length); tracks.push(t); buildTrackUI(t);
+  applyGains(t); updTrackBtns(); updFold(); lockUI();
+  return t;
+}
+function removeLastTrack(){
+  const t=tracks[tracks.length-1];
+  if(!t||tracks.length<=1||t.buf||(recObj&&recObj.i===t.id)) return;
+  stopSrc(t); clearTimeout(t.offT); clearTimeout(t.mkT);
+  (t.fxn||[]).forEach(f=>f.dispose());
+  [t.inp,t.eq.lo,t.eq.mid,t.eq.hi,t.gain,t.pan].forEach(n=>{ try{ if(n) n.disconnect(); }catch(e){} });
+  t.el.remove(); tracks.pop();
+  updTrackBtns(); updFold(); applyGains(); lockUI(); scheduleSave();
+}
 function updFold(){ const any=tracks.some(t=>!$('.tbody',t.el).hidden); $('#foldall').textContent=any?'Tout replier':'Tout déplier'; }
-$('#foldall').onclick=()=>{ const any=tracks.some(t=>!$('.tbody',t.el).hidden); tracks.forEach(t=>{ $('.tbody',t.el).hidden=any; $('.tog',t.el).setAttribute('aria-expanded',String(!any)); }); updFold(); };
+$('#foldall').onclick=()=>{ const any=tracks.some(t=>!$('.tbody',t.el).hidden); tracks.forEach(t=>{ $('.tbody',t.el).hidden=any; $('.tog',t.el).setAttribute('aria-expanded',String(!any)); if(!any) drawTsel(t); }); updFold(); };
+$('#addtrk').onclick=()=>{ const t=addTrack(); if(t){ try{ t.el.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} } };
+addTrack();
 attachHelp(document);
 try{ const how=$('#how'); if(localStorage.getItem('lb_how')==='0') how.open=false; how.addEventListener('toggle',()=>{ try{ localStorage.setItem('lb_how',how.open?'1':'0'); }catch(e){} }); }catch(e){}
 
@@ -923,6 +1007,7 @@ function drawWave(t){
   for(let i=0;i<bins;i++){ let m=0; const a=Math.floor(i*step), z=Math.floor((i+1)*step); for(let j=a;j<z;j+=4){ const v=Math.abs(d[j]); if(v>m)m=v; } pk.push(m); if(m>mx)mx=m; }
   g.fillStyle=COLORS[t.id];
   for(let i=0;i<bins;i++){ const hh=Math.max(1,pk[i]/mx*h*0.9); g.fillRect(i*2,(h-hh)/2,1.5*dpr>2?2:1.5,hh); }
+  if(t.sel&&loopLen){ g.fillStyle='rgba(11,11,13,.7)'; const sx=t.sel.s/beats*w, ex=t.sel.e/beats*w; g.fillRect(0,0,sx,h); g.fillRect(ex,0,w-ex,h); }
 }
 function uiTrack(t,now){
   let st='empty', label=t.buf?'':'vide';
@@ -976,6 +1061,12 @@ function lockUI(){
   }
   updBpm();
   tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
+  tracks.forEach((t,i)=>{
+    const showSel=!!(t.buf&&loopLen&&!(ed&&masterTake&&masterTake.i===t.id));
+    $('.tsel',t.el).hidden=!showSel;
+    if(showSel) drawTsel(t);
+    $('.del',t.el).hidden=!(i===tracks.length-1&&tracks.length>1&&!t.buf&&!(recObj&&recObj.i===t.id));
+  });
 }
 function seekTo(frac,t){
   if(!loopLen){ msg("Enregistre ou importe d'abord une boucle."); return; }
@@ -1098,7 +1189,7 @@ $('#exp').onclick=async()=>{
     tracks.forEach(t=>{
       if(!t.buf) return;
       if(t.mute||(anySolo&&!t.solo)) return;
-      const s=off.createBufferSource(); s.buffer=t.buf; s.loop=true;
+      const s=off.createBufferSource(); s.buffer=playBuf(t); s.loop=true;
       const g=off.createGain(); g.gain.value=t.vol;
       let dest=ch.inp;
       if(off.createStereoPanner){ const p=off.createStereoPanner(); p.pan.value=t.panv; p.connect(ch.inp); dest=p; }
@@ -1128,7 +1219,7 @@ async function saveProj(){
   const withAudio=audioDirty; audioDirty=false;
   try{
     const db=await idb();
-    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,eq:t.eqv}))};
+    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null}))};
     const audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
     await new Promise((res,rej)=>{
       const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
@@ -1145,6 +1236,9 @@ async function loadProj(){
     if(!d) return;
     const audio=d.v===2?(await get('audio')):null;
     const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
+    const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox'); };
+    let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&used(s,i)) need=i+1; });
+    while(tracks.length<need&&tracks.length<MAXTRACKS) addTrack();
     normOn=d.normOn!==false; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
     const firstLen=((d.tracks||[]).map(pcmOf).find(p=>p&&p.length)||{length:0}).length;
     loopLen=d.loopLen||firstLen||0; beats=d.beats||((d.bars||1)*4);
@@ -1158,6 +1252,7 @@ async function loadProj(){
       t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
       const pcm=pcmOf(s,i);
       if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
+      if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats&&s.sel[1]-s.sel[0]>=1) t.sel={s:s.sel[0],e:s.sel[1]};
       setFx(t); syncTrackUI(t); drawWave(t);
     });
     if(!tracks.some(t=>t.buf)){ loopLen=0; beats=4; baseLen=0; baseBeats=4; rep=1; }
