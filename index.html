@@ -97,7 +97,9 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 [hidden]{display:none!important;}
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:50;pointer-events:none;}
 .dockin{pointer-events:auto;max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:rgba(11,11,13,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid var(--line);}
-.dockplay{width:56px;height:56px;border-radius:50%;font-size:24px;padding:0;flex:none;background:var(--grad);border:none;color:#fff;}
+.dbtn{width:48px;height:48px;min-height:0;border-radius:50%;font-size:18px;line-height:1;padding:0;flex:none;background:var(--surf2);border:1px solid var(--line);color:var(--ink);}
+.dbtn.on{background:var(--grad);border-color:transparent;color:#fff;}
+.dockin{gap:10px!important;}
 .dockinfo{flex:1;min-width:0;}
 #dtxt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .dprog{position:relative;cursor:pointer;height:6px;border-radius:3px;background:var(--surf2);margin-top:7px;overflow:hidden;}
@@ -184,7 +186,9 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 <p class="foot">LoopBox · Movement Practice Bordeaux</p>
 
 <div class="dock"><div class="dockin">
-  <button class="dockplay" id="play2" aria-label="Lecture / arrêt de toutes les pistes">▶</button>
+  <button class="dbtn" id="dplay" aria-label="Lecture">▶︎</button>
+  <button class="dbtn" id="dpause" aria-label="Pause">❚❚</button>
+  <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
 <script>
@@ -199,6 +203,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // ---------- état ----------
 let bpm=90, metroOn=true, fin=0, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
 let baseLen=0, baseBeats=4, rep=1, loopHist=null;
+let paused=false, pausePos=0;
 let normOn=true, curProf=null, hpNode=null, gEnv=0, gGain=1;
 let loopLen=0, beats=4, lastLoop=null, dotsN=0, masterTake=null;
 let running=false, t0=0, nextBeat=0, schedTimer=null;
@@ -398,7 +403,11 @@ function sched(){
     nextBeat++;
   }
 }
-function setPlayIcon(on){ $('#play').textContent=on?'■':'▶'; $('#play2').textContent=on?'■':'▶'; }
+function setPlayIcon(){
+  $('#play').textContent=running?'❚❚':'▶\uFE0E';
+  $('#dplay').classList.toggle('on',running);
+  $('#dpause').classList.toggle('on',paused);
+}
 function startTransport(countIn){
   if(running) return;
   const bd=beatDur(), now=ctx.currentTime+0.12;
@@ -407,14 +416,15 @@ function startTransport(countIn){
   running=true;
   tracks.forEach(startSrc);
   schedTimer=setInterval(sched,25); sched();
-  setPlayIcon(true);
+  paused=false;
+  setPlayIcon();
 }
 function stopTransport(){
   if(recObj) cancelRec();
   clearInterval(schedTimer); schedTimer=null;
   tracks.forEach(stopSrc);
-  running=false;
-  setPlayIcon(false);
+  running=false; paused=false;
+  setPlayIcon();
 }
 
 // ---------- micro ----------
@@ -1068,27 +1078,47 @@ function lockUI(){
     $('.del',t.el).hidden=!(i===tracks.length-1&&tracks.length>1&&!t.buf&&!(recObj&&recObj.i===t.id));
   });
 }
-function seekTo(frac,t){
-  if(!loopLen){ msg("Enregistre ou importe d'abord une boucle."); return; }
-  if(recObj){ msg("Impossible de changer de position pendant un enregistrement."); return; }
-  msg('');
+function playFrom(p){
   try{ ctx.resume(); }catch(e){}
-  const L=loopSec();
-  let k=Math.round(clamp(frac,0,1)*beats); if(k>=beats) k=0;
-  const p=k/beats*L;
   if(!running) startTransport(false);
   t0=ctx.currentTime+0.06-p;
   nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
   tracks.forEach(startSrc);
-  const tt=t||null;
-  (tt?[tt]:tracks).forEach(x=>{ const mk=$('.mk',x.el); mk.style.left=(k/beats*100)+'%'; mk.style.opacity=1; clearTimeout(x.mkT); x.mkT=setTimeout(()=>{ mk.style.opacity=0; },700); });
+}
+function seekTo(frac,t){
+  if(!loopLen){ msg("Enregistre ou importe d'abord une boucle."); return; }
+  if(recObj){ msg("Impossible de changer de position pendant un enregistrement."); return; }
+  msg('');
+  const L=loopSec();
+  let k=Math.round(clamp(frac,0,1)*beats); if(k>=beats) k=0;
+  playFrom(k/beats*L);
+  (t?[t]:tracks).forEach(x=>{ const mk=$('.mk',x.el); mk.style.left=(k/beats*100)+'%'; mk.style.opacity=1; clearTimeout(x.mkT); x.mkT=setTimeout(()=>{ mk.style.opacity=0; },700); });
+}
+function pauseTransport(){
+  if(!running||recObj) return;
+  const now=ctx.currentTime;
+  const p=(loopLen&&now>=t0)?mod(now-t0,loopSec()):0;
+  stopTransport();
+  paused=true; pausePos=p; setPlayIcon();
+}
+function resumeTransport(){
+  if(recObj||running) return;
+  if(paused&&loopLen){ const p=mod(pausePos,loopSec()); paused=false; playFrom(p); }
+  else { paused=false; startTransport(false); }
+}
+function stopAll(){
+  if(recObj){ if(ctx.currentTime<recObj.tp) cancelRec(); else stopRec(); return; }
+  stopTransport();
 }
 const onPlay=async()=>{
   try{ await ctx.resume(); }catch(e){}
-  if(recObj){ if(ctx.currentTime<recObj.tp) cancelRec(); else stopRec(); return; }
-  if(running) stopTransport(); else startTransport(false);
+  if(recObj){ stopAll(); return; }
+  if(running) pauseTransport(); else resumeTransport();
 };
-$('#play').onclick=onPlay; $('#play2').onclick=onPlay;
+$('#play').onclick=onPlay;
+$('#dplay').onclick=async()=>{ try{ await ctx.resume(); }catch(e){} if(!recObj&&!running) resumeTransport(); };
+$('#dpause').onclick=async()=>{ try{ await ctx.resume(); }catch(e){} if(recObj) return; if(running) pauseTransport(); else if(paused) resumeTransport(); };
+$('#dstop').onclick=()=>stopAll();
 $('.dprog').onclick=e=>{ const r=e.currentTarget.getBoundingClientRect(); if(!r.width) return; seekTo((e.clientX-r.left)/r.width,null); };
 $('#bpm').oninput=e=>{
   bpm=+e.target.value; $('#bpmv').textContent=bpm;
@@ -1276,22 +1306,25 @@ function frame(){
   const now=ctx.currentTime, L=loopSec(), bd=beatDur();
   let pos=0, inCount=false;
   if(running){ if(now<t0) inCount=true; else if(loopLen) pos=((now-t0)%L)/L; }
+  else if(paused&&loopLen) pos=pausePos/L;
   if(dotsN!==(loopLen?beats:4)) buildDots();
   let cur=-1;
   if(running&&!inCount) cur=loopLen?Math.floor(pos*beats):mod(Math.floor((now-t0)/bd),4);
+  else if(paused&&loopLen) cur=Math.floor(pos*beats);
   let dtxt;
   if(recObj) dtxt=now<recObj.tp?'Décompte…':'● Enregistrement en cours';
+  else if(paused) dtxt='En pause'+(loopLen?' · temps '+(Math.floor(pos*beats)+1)+' / '+beats:'');
   else if(!running) dtxt=loopLen?"À l'arrêt · "+beats+' temps':"À l'arrêt";
   else if(inCount&&t0-now>0.25) dtxt='Décompte…';
   else dtxt=loopLen?'En lecture · '+beats+' temps · '+(beats*60/loopSec()).toFixed(1).replace('.',',')+' BPM':'Métronome en marche';
   if(dtxt!==dockTxt){ dockTxt=dtxt; $('#dtxt').textContent=dtxt; }
-  $('#dbar').style.width=(running&&!inCount&&loopLen?pos*100:0)+'%';
+  $('#dbar').style.width=((running&&!inCount||paused)&&loopLen?pos*100:0)+'%';
   const dots=$('#dots').children;
   for(let i=0;i<dots.length;i++) dots[i].classList.toggle('on',i===cur);
   $('#cd').textContent=inCount?'Décompte '+Math.ceil((t0-now)/bd):'';
   tracks.forEach(t=>{
     uiTrack(t,now);
-    const show=running&&!inCount&&loopLen;
+    const show=(running||paused)&&!inCount&&loopLen;
     t.ph.style.opacity=show?1:0;
     if(show) t.ph.style.left=(pos*100)+'%';
   });
