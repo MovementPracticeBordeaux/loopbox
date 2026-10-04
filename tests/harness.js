@@ -32,6 +32,11 @@ async function boot(opt={}){
     AC.prototype.decodeAudioData=function(){ return P.nextDecode?Promise.resolve(P.nextDecode):Promise.reject(new Error('illisible')); };
     if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(){ this.port={onmessage:null}; P.wnode=this; } connect(){} disconnect(){} }; }
     w.AudioContext=AC;
+    w.OfflineAudioContext=class{ constructor(c,l,sr){ this.length=l; this.sampleRate=sr; this.destination={}; }
+      createBuffer(c,l,sr){ return {length:l,sampleRate:sr}; }
+      startRendering(){ const d=new Float32Array(this.length); for(let i=0;i<this.length;i+=4800) d[i]=0.5; return Promise.resolve({length:this.length,sampleRate:this.sampleRate,numberOfChannels:1,getChannelData:()=>d}); } };
+    for(const m of ['createGain','createBiquadFilter','createDynamicsCompressor','createBufferSource','createStereoPanner','createDelay','createConvolver','createWaveShaper','createOscillator']) w.OfflineAudioContext.prototype[m]=function(){ return mk(); };
+    if(opt.share){ w.navigator.canShare=()=>true; w.navigator.share=async d=>{ P.shared=d; }; }
     w.indexedDB=idb;
     w.navigator.mediaDevices={getUserMedia:()=>Promise.resolve({})};
     w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},fillRect(){},set fillStyle(v){}});
