@@ -107,3 +107,26 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 .dprog::after{content:"";position:absolute;inset:-14px 0;}
 .dprog i{display:block;height:100%;width:0;background:var(--grad);}
 .foot{color:var(--faint);text-align:center;font-size:15px;margin-top:24px;}
+
+/* mode live */
+.pads{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px;}
+.pad{min-height:88px;border-radius:16px;border:2px solid var(--c);background:var(--surf);display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:10px 12px;text-align:left;}
+.pad .pn{font-family:'Bebas Neue',Impact,sans-serif;font-size:24px;letter-spacing:.05em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pad .ps{font-size:15px;color:var(--mut);}
+.pad.on{background:linear-gradient(135deg,var(--c),rgba(0,0,0,.35));}
+.pad.on .ps{color:#fff;}
+.pad.off{opacity:.55;}
+.pad.wait{animation:p .45s infinite alternate;}
+.pad:disabled{opacity:.25;}
+.scrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);}
+.scrow b{font-family:'Bebas Neue',Impact,sans-serif;font-size:22px;letter-spacing:.05em;width:28px;}
+.scrow .scd{flex:1;min-width:0;font-size:15px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.scrow button{min-height:40px;padding:4px 12px;font-size:16px;}
+
+/* tablette et grands écrans */
+@media (min-width:720px){
+  body{max-width:880px;}
+  .pads{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));}
+  .pad{min-height:110px;}
+  .dockin{max-width:880px;}
+}
