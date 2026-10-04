@@ -32,24 +32,5 @@ npm install
 npm test
 ```
 
-Pour qu'ils tournent automatiquement sur GitHub à chaque modification, ajoute le fichier
-`.github/workflows/tests.yml` suivant (bouton *Add file* → *Create new file* sur GitHub) :
-
-```yaml
-name: Tests
-on:
-  push:
-  pull_request:
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm test
-```
-
+Ils tournent aussi automatiquement sur GitHub à chaque modification (onglet *Actions*).
 Ils ne remplacent pas un essai sur un vrai téléphone : le menu « Diagnostic de l'appareil » de l'appli sert à ça.
