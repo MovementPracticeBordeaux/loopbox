@@ -8,7 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=18">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
 <header>
@@ -27,6 +30,8 @@
       <div class="row" style="margin-top:6px"><input id="projinp" type="text" maxlength="40" style="flex:1" aria-label="Nom du projet"><button id="projren">Renommer</button></div></div>
     <div class="row wrap"><button id="projsave" class="primary">💾 Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl">Mes projets</span></div><div id="projlist"></div></div>
+    <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="install">Installer l'appli</span></div>
+      <div class="row wrap" style="margin-top:6px"><button id="installbtn" class="primary" hidden>📲 Installer LoopBox</button><span id="installhint" class="hint" style="margin:0"></span></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="projfile">Fichier (sauvegarde de sécurité)</span></div>
       <div class="row wrap" style="margin-top:6px"><button id="projexp">⬇ Sauvegarder dans un fichier</button><button id="projimp">⬆ Ouvrir un fichier</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div></div>
   </div>
@@ -57,9 +62,16 @@
     <button id="metro" class="on" data-help="metro">🔔 Métronome</button>
     <button id="snap" class="on" data-help="snap">🎯 Auto-caler</button>
     <button id="mix" data-help="mix">Prise : remplace</button>
+    <button id="livebtn" aria-expanded="false">🎛 Mode live</button>
   </div>
+  <details class="msub" style="margin-top:12px"><summary style="font-size:17px">Réglages du métronome</summary>
+    <div class="row"><span class="lbl w">Volume</span><input type="range" id="mvolume" min="0" max="1" step="0.05" value="0.6" aria-label="Volume du métronome"></div>
+    <div class="row wrap"><span class="lbl w" data-help="msub">Clics</span><div class="seg" id="msubseg"><button data-v="1" class="on">Temps</button><button data-v="2">Croches</button><button data-v="4">Doubles</button></div></div>
+    <div class="row wrap"><span class="lbl w" data-help="meter">Mesure</span><div class="seg" id="meterseg"><button data-v="4" class="on">4 temps</button><button data-v="3">3 temps</button></div></div>
+  </details>
   <div class="dots" id="dots"></div>
   <p class="hint" id="lockhint" style="display:none"></p>
+  <div class="row wrap" id="tempoRow" hidden><span class="lbl" data-help="tempochg">Changer le tempo</span><button class="tstep" data-d="-5">−5</button><button class="tstep" data-d="-1">−1</button><span class="val" id="tnew" style="min-width:64px;text-align:center">96</span><button class="tstep" data-d="1">+1</button><button class="tstep" data-d="5">+5</button><button id="tapply" class="primary">Appliquer</button></div>
 </section>
 
 <section class="card" id="editor" style="display:none">
@@ -73,6 +85,12 @@
   <div class="seg" id="growb" style="margin-top:10px"><button data-k="1">×1</button><button data-k="2">×2</button><button data-k="3">×3</button><button data-k="4">×4</button><button data-k="8">×8</button></div>
 </section>
 
+<section class="card" id="live" hidden>
+  <div class="row wrap" style="margin-top:0"><b class="tn" data-help="live">Mode live</b><div class="seg" id="lq" style="margin-left:auto"><button data-q="bar" class="on">À la mesure</button><button data-q="loop">À la boucle</button><button data-q="now">Tout de suite</button></div></div>
+  <div class="pads" id="pads"></div>
+  <div class="row" style="margin-top:14px"><span class="lbl" data-help="scenes">Scènes</span></div>
+  <div id="scenes"></div>
+</section>
 <div class="row" style="justify-content:space-between;margin-top:20px"><h2 style="margin:0 2px">Tes pistes</h2><button id="foldall" class="eqr">Tout déplier</button></div>
 <p class="hint" style="margin:2px 2px 10px">Touche la forme d'onde d'une piste pour <b>relancer la lecture à cet endroit</b> (calé sur le temps le plus proche). Tu peux aussi toucher la barre de progression en bas.</p>
 <div id="tracks"></div>
@@ -87,7 +105,9 @@
   <div class="row wrap">
     <select id="reps" aria-label="Nombre de répétitions à exporter" style="width:auto"><option value="1">1 boucle</option><option value="2">2 boucles</option><option value="4" selected>4 boucles</option><option value="8">8 boucles</option></select>
     <button id="exp" class="primary" data-help="exp">⬇ Exporter (WAV)</button>
+    <label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="expfade" style="width:22px;height:22px"> Fondu de fin</label>
   </div>
+  <div class="row wrap"><button id="share" data-help="share">📤 Partager le mix</button><button id="stems" data-help="stems">🎚 Pistes séparées (.zip)</button></div>
   <div class="row"><button id="clearAll">Tout effacer</button></div>
 </section>
 
@@ -117,6 +137,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
