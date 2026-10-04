@@ -250,10 +250,105 @@ function makeTrackNodes(i){
   let _buf=null;
   return {id:i,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',
     get buf(){ return _buf; }, set buf(v){ if(v!==_buf){ _buf=v; this.sel=null; this.pc=null; } },
-    sel:null,pc:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
+    sel:null,pc:null,pitch:0,pp:null,pjob:null,prev:null,gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
 }
+// ---------- hauteur du son (sans changer la durée) ----------
+function* pitchShiftGen(x,semis,SR){
+  const N=x.length;
+  if(Math.abs(semis)<0.01) return x;
+  const r=Math.pow(2,semis/12);
+  const K=Math.min(N,8192);
+  const xp=new Float32Array(N+2*K);
+  xp.set(x.subarray(N-K),0); xp.set(x,K); xp.set(x.subarray(0,K),K+N);
+  const L=xp.length;
+  let W=Math.round(SR*0.032/2)*2; const Hs=W/2;
+  const D=Math.round(SR*0.006), S=6;
+  const M=Math.floor(L*r);
+  const y=new Float32Array(M+W);
+  const win=new Float32Array(W); for(let i=0;i<W;i++) win[i]=0.5-0.5*Math.cos(2*Math.PI*i/W);
+  const idealOf=m=>Math.max(0,Math.min(L-W,Math.round((m*Hs+W/2)/r-W/2)));
+  let prev=idealOf(0);
+  for(let i=0;i<W;i++) y[i]=xp[prev+i]*win[i];
+  const frames=Math.ceil(M/Hs);
+  for(let m=1;m*Hs<M;m++){
+    const nat=prev+Hs, ideal=idealOf(m);
+    const maxC=L-W;
+    let lo=Math.max(0,ideal-D), hi=Math.min(maxC,ideal+D);
+    if(lo>hi){ lo=hi=maxC; }
+    let best=lo, bs=-Infinity;
+    for(let c=lo;c<=hi;c+=2){
+      let num=0, den=1e-9;
+      for(let i=0;i<Hs;i+=S){ const a=xp[nat+i], b=xp[c+i]; num+=a*b; den+=b*b; }
+      const sc=num/Math.sqrt(den);
+      if(sc>bs){ bs=sc; best=c; }
+    }
+    const o=m*Hs;
+    for(let i=0;i<W&&o+i<y.length;i++) y[o+i]+=xp[best+i]*win[i];
+    prev=best;
+    if(m%150===0) yield m/frames;
+  }
+  const out=new Float32Array(N);
+  for(let j=0;j<N;j++){
+    const p=(j+K)*r, i0=Math.floor(p), f=p-i0;
+    const a=y[i0-1]||0, b=y[i0]||0, c=y[i0+1]||0, d=y[i0+2]||0;
+    const v=b+0.5*f*(c-a+f*(2*a-5*b+4*c-d+f*(3*(b-c)+d-a)));
+    out[j]=v>1?1:(v<-1?-1:v);
+  }
+  return out;
+}
+function pitchShiftSync(x,semis,SR){ const g=pitchShiftGen(x,semis,SR); let r; while(!(r=g.next()).done){} return r.value; }
+
+function pitchFinish(data,sr){
+  const F=Math.min(72,data.length>>1);
+  for(let i=0;i<F;i++){ const g=i/F; data[i]*=g; data[data.length-1-i]*=g; }
+  const nb=ctx.createBuffer(1,data.length,sr); nb.copyToChannel(data,0); return nb;
+}
+function setPitchStatus(t,txt){ const e=$('.pst',t.el); if(e) e.textContent=txt; }
+function pitchedBuf(t){
+  const b=t.buf; if(!b||!t.pitch) return b;
+  const c=t.pp;
+  if(c&&c.b===b&&c.semi===t.pitch) return c.out;
+  schedulePitch(t);
+  return (c&&c.b===b)?c.out:b;
+}
+function schedulePitch(t){
+  const b=t.buf, semi=t.pitch;
+  if(!b||!semi) return;
+  if(t.pjob&&t.pjob.b===b&&t.pjob.semi===semi) return;
+  if(t.pjob) t.pjob.cancel=true;
+  const job={b,semi,cancel:false}; t.pjob=job;
+  setPitchStatus(t,'Calcul…');
+  const gen=pitchShiftGen(b.getChannelData(0),semi,b.sampleRate);
+  const step=()=>{
+    if(job.cancel) return;
+    const t1=performance.now(); let r;
+    try{ do{ r=gen.next(); }while(!r.done&&performance.now()-t1<12); }
+    catch(e){ t.pjob=null; setPitchStatus(t,''); msg('Calcul de la hauteur impossible : '+e.message); return; }
+    if(!r.done){ setTimeout(step,0); return; }
+    if(t.pjob===job) t.pjob=null;
+    if(job.cancel||t.buf!==b||t.pitch!==semi){ return; }
+    t.pp={b,semi,out:pitchFinish(r.value,b.sampleRate)}; t.pc=null;
+    setPitchStatus(t,'');
+    startSrc(t);
+  };
+  setTimeout(step,0);
+}
+function ensurePitchSync(t){
+  if(!t.buf||!t.pitch) return;
+  if(t.pp&&t.pp.b===t.buf&&t.pp.semi===t.pitch) return;
+  t.pp={b:t.buf,semi:t.pitch,out:pitchFinish(pitchShiftSync(t.buf.getChannelData(0),t.pitch,t.buf.sampleRate),t.buf.sampleRate)}; t.pc=null;
+}
+function setPitch(t,v){
+  v=clamp(Math.round(+v||0),-12,12);
+  t.pitch=v; t.pc=null;
+  if(t.pjob){ t.pjob.cancel=true; t.pjob=null; }
+  if(!v){ t.pp=null; setPitchStatus(t,''); startSrc(t); }
+  else { pitchedBuf(t); }
+  syncTrackUI(t); scheduleSave(true);
+}
+function pitchText(v){ return v===0?'0 (son d\'origine)':((v>0?'+':'')+v+(Math.abs(v)===1?' demi-ton':' demi-tons')+(Math.abs(v)===12?' (1 octave)':'')); }
 function playBuf(t){
-  const b=t.buf; if(!b||!t.sel) return b;
+  const b=pitchedBuf(t); if(!b||!t.sel) return b;
   const {s,e}=t.sel, c=t.pc;
   if(c&&c.b===b&&c.s===s&&c.e===e&&c.n===beats) return c.out;
   const L=b.length, src=b.getChannelData(0), out=new Float32Array(L);
@@ -355,7 +450,7 @@ function setFx(t){
   });
   prev.connect(t.gain);
 }
-function fxNames(t){ return t.fxs.filter(sl=>sl.type!=='none').map(sl=>((FX_LIST.find(f=>f[0]===sl.type)||[0,''])[1]).split(' (')[0]).join(' + '); }
+function fxNames(t){ const l=t.fxs.filter(sl=>sl.type!=='none').map(sl=>((FX_LIST.find(f=>f[0]===sl.type)||[0,''])[1]).split(' (')[0]); if(t.pitch) l.unshift('Ton '+(t.pitch>0?'+':'')+t.pitch); return l.join(' + '); }
 function setLive(t,on){
   if(on&&!t.live){ try{ t.inp.connect(t.eq.inp); t.live=true; }catch(e){} }
   else if(!on&&t.live){ try{ t.inp.disconnect(t.eq.inp); t.live=false; }catch(e){} }
@@ -816,6 +911,7 @@ const HELP={
   mix:"<b>Prise : remplace / ajoute</b>. <b>Remplace</b> : une nouvelle prise efface la partie de la piste qu'elle recouvre. <b>Ajoute</b> : elle se superpose à ce qui est déjà sur la piste (pratique pour empiler plusieurs sons sur la même piste).",
   editor:"<b>Garder la partie propre</b>. Après ta première prise, la forme d'onde apparaît avec les temps (traits fins). Glisse les repères rouges, ou utilise les boutons, pour ne garder que le passage réussi : il tourne en boucle en direct. Disponible tant que cette piste est la seule enregistrée.",
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
+  pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
   tsel:"<b>Garder la partie propre (cette piste)</b> : choisis les temps à conserver sur cette piste, le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
@@ -880,6 +976,7 @@ function syncTrackUI(t){
   const el=t.el;
   $('.vol',el).value=t.vol; $('.pan',el).value=t.panv; $('.pv',el).textContent=panText(t.panv);
   $('.srcsel',el).value=t.srcType;
+  $('.pitch',el).value=t.pitch; $('.ptv',el).textContent=pitchText(t.pitch);
   el.querySelectorAll('.eq').forEach((r,k)=>{ r.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); });
   el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,k)=>v===t.eqv[k])); });
   renderFx(t);
@@ -901,6 +998,9 @@ function buildTrackUI(t){
     <div class="row"><button class="tsall">Tout garder</button></div></div>
   <div class="panel">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="pitch">Hauteur du son (la note)</span><span class="ptv val" style="margin-left:auto">0 (son d'origine)</span></div>
+      <input type="range" class="pitch" min="-12" max="12" step="1" value="0" aria-label="Hauteur piste ${t.id+1}">
+      <div class="row wrap"><button class="p1">−1 octave</button><button class="p0">0</button><button class="p2">+1 octave</button><span class="pst lbl" style="margin-left:auto"></span></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
       <div class="seg eqp" style="margin-top:8px">${EQ_PRESETS.map(p=>`<button data-p="${p[0]}">${p[1]}</button>`).join('')}</div>
       <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
@@ -927,6 +1027,11 @@ function buildTrackUI(t){
   $('.tog',el).onclick=()=>{ const b=$('.tbody',el); b.hidden=!b.hidden; $('.tog',el).setAttribute('aria-expanded',String(!b.hidden)); updFold(); if(!b.hidden) drawTsel(t); };
   el.querySelectorAll('.eq').forEach(r=>{ r.oninput=e=>{ const k=+r.dataset.b; t.eqv[k]=+r.value; const nd=[t.eq.lo,t.eq.mid,t.eq.hi][k]; nd.gain.value=t.eqv[k]; r.parentElement.querySelector('.ev').textContent=dbText(t.eqv[k]); el.querySelectorAll('.eqp button').forEach(b=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); b.classList.toggle('on',p[2].every((v,j)=>v===t.eqv[j])); }); scheduleSave(true); }; });
   el.querySelectorAll('.eqp button').forEach(b=>{ b.onclick=()=>{ const p=EQ_PRESETS.find(x=>x[0]===b.dataset.p); t.eqv=p[2].slice(); t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2]; syncTrackUI(t); scheduleSave(true); }; });
+  $('.pitch',el).oninput=e=>{ $('.ptv',el).textContent=pitchText(+e.target.value); };
+  $('.pitch',el).onchange=e=>setPitch(t,+e.target.value);
+  $('.p1',el).onclick=()=>setPitch(t,-12);
+  $('.p0',el).onclick=()=>setPitch(t,0);
+  $('.p2',el).onclick=()=>setPitch(t,12);
   $('.srcsel',el).onchange=e=>{ t.srcType=e.target.value; if(micStream&&!recObj) applyProfile(profOf(t.srcType)); scheduleSave(true); };
   $('.fxadd',el).onclick=()=>{ if(t.fxs.length>=MAXFX) return; t.fxs.push({type:'none',amt:0.5}); renderFx(t); };
   $('.u',el).onclick=()=>{
@@ -1212,6 +1317,8 @@ $('#exp').onclick=async()=>{
   if(!tracks.some(t=>t.buf)){ msg("Rien à exporter : enregistre au moins une piste."); return; }
   btn.disabled=true; const old=btn.textContent; btn.textContent='Rendu en cours…'; msg('');
   try{
+    await new Promise(r=>setTimeout(r,30));
+    tracks.forEach(t=>ensurePitchSync(t));
     const reps=+$('#reps').value, LS=loopLen;
     const off=new OfflineAudioContext(2,LS*reps,SR);
     const ch=makeChain(off); ch.vol.gain.value=mvol; ch.setFin(fin); ch.out.connect(off.destination);
@@ -1249,7 +1356,7 @@ async function saveProj(){
   const withAudio=audioDirty; audioDirty=false;
   try{
     const db=await idb();
-    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null}))};
+    const main={v:2,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,normOn,comp,ingain,mvol,fin,tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null}))};
     const audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
     await new Promise((res,rej)=>{
       const tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
@@ -1266,7 +1373,7 @@ async function loadProj(){
     if(!d) return;
     const audio=d.v===2?(await get('audio')):null;
     const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
-    const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox'); };
+    const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||!!s.pt||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox'); };
     let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&used(s,i)) need=i+1; });
     while(tracks.length<need&&tracks.length<MAXTRACKS) addTrack();
     normOn=d.normOn!==false; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; comp=d.comp??0.1; ingain=d.ingain||2; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
@@ -1279,6 +1386,7 @@ async function loadProj(){
       t.vol=s.vol??0.8; t.panv=s.pan??0; t.mute=!!s.mute; t.solo=!!s.solo; const okT=x=>FX_LIST.some(f=>f[0]===x);
       t.fxs=(Array.isArray(s.fxs)&&s.fxs.length)?s.fxs.slice(0,MAXFX).map(f=>({type:okT(f.t)?f.t:'none',amt:clamp(+f.a,0,1)||0})):[{type:okT(s.fx)?s.fx:'none',amt:s.fa??0.5}];
       t.srcType=SRC_LIST.some(p=>p.id===s.st)?s.st:'beatbox';
+      t.pitch=clamp(Math.round(+s.pt||0),-12,12);
       t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
       const pcm=pcmOf(s,i);
       if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
