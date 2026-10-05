@@ -18,14 +18,14 @@ Application web de [Movement Practice Bordeaux](https://www.movementpracticebord
 Boucle calée automatiquement sur le jeu, pistes à la demande (nom, couleur, ordre, duplication), partie propre par piste,
 recalage sur le rythme, jeu à l'envers, fondus, hauteur du son, changement de tempo du projet sans changer la note,
 effets empilables, tonalité, mode live avec scènes, annuler / rétablir (réglages compris), projets et fichier `.loopbox`,
-export WAV, partage direct, pistes séparées en `.zip`, diagnostic de l'appareil.
+export WAV, partage direct, pistes séparées en `.zip`, diagnostic de l'appareil, nettoyage du bruit, générateur de ligne de basse.
 
 ## Tests
 
 Les tests chargent l'appli dans un navigateur simulé, avec un faux micro et un faux moteur audio, et vérifient notamment :
 le calage de la boucle, la place des sons ajoutés, la durée ×N, annuler / rétablir, la partie propre, la hauteur,
 la pause, l'import, les projets, le recalage, l'envers, les fondus, le changement de tempo, le mode live, le partage,
-les pistes séparées, l'installation et le mode casque (26 tests).
+les pistes séparées, l'installation et le mode casque (28 tests).
 
 ```
 npm install

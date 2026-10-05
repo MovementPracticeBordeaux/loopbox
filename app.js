@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='22';
+const APPVER='23';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -985,6 +985,8 @@ const HELP={
   share:"<b>Partager le mix</b> : prépare le fichier WAV et ouvre le menu de partage du téléphone (WhatsApp, mail, Drive…). Si le navigateur ne sait pas partager un fichier, il est simplement téléchargé.",
   stems:"<b>Pistes séparées</b> : exporte chaque piste dans son propre fichier WAV, tous rangés dans un .zip, pour les retravailler dans une autre appli. Chaque piste garde son volume, sa tonalité, ses effets et sa hauteur, mais pas le « Son final ». Toutes les pistes ont la même longueur et démarrent en même temps : elles se superposent parfaitement.",
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
+  denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
+  bass:"<b>Ligne de basse</b> : l'appli fabrique une basse calée sur ta boucle. <b>Note</b> = la tonalité (Do, Ré…), <b>mineur / majeur</b> = l'ambiance. <b>Motif</b> = le rythme de la basse. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée, nerveuse), 808 (grave qui chute, hip-hop). <b>Accords</b> : la basse peut rester sur la même note ou suivre une suite d'accords classique qui change à chaque mesure. Si aucune boucle n'existe, elle crée la boucle avec la longueur choisie au tempo du curseur. Ensuite, c'est une piste comme les autres : effets, tonalité, hauteur, volume, recalage… ↶ annule.",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
@@ -1060,6 +1062,164 @@ function syncTrackUI(t){
   renderFx(t);
 }
 const FADE_OPTS=[[0,'aucun'],[0.5,'½ temps'],[1,'1 temps'],[2,'2 temps'],[4,'4 temps']].map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('');
+// ---------- nettoyage du bruit ----------
+function fftIn(re,im){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit; if(i<j){ let t=re[i]; re[i]=re[j]; re[j]=t; t=im[i]; im[i]=im[j]; im[j]=t; } }
+  for(let len=2;len<=n;len<<=1){
+    const ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang), h2=len>>1;
+    for(let i=0;i<n;i+=len){ let cr=1,ci=0; for(let j=0;j<h2;j++){ const p=i+j, q=p+h2, br=re[q]*cr-im[q]*ci, bi=re[q]*ci+im[q]*cr; re[q]=re[p]-br; im[q]=im[p]-bi; re[p]+=br; im[p]+=bi; const t=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=t; } }
+  }
+}
+function noiseFloorRms(d){
+  const fr=Math.round(0.02*SR), n=Math.floor(d.length/fr), r=[];
+  for(let k=0;k<n;k++){ let a=0; for(let i=k*fr;i<(k+1)*fr;i++) a+=d[i]*d[i]; r.push(Math.sqrt(a/fr)); }
+  r.sort((a,b)=>a-b); return r.length?r[Math.floor(r.length*0.1)]:0;
+}
+// porte de bruit : coupe le souffle quand rien ne joue, sans couper les attaques (anticipation de 5 ms)
+function gateClean(d,floor,depthDb){
+  const N=d.length, out=new Float32Array(N), thr=Math.max(floor*3.2,2e-4), gmin=Math.pow(10,-depthDb/20);
+  const rel=Math.exp(-1/(SR*0.06)), la=Math.round(0.005*SR), hold=Math.round(0.03*SR), down=1/(SR*0.05);
+  const env=new Float32Array(N); let e=0;
+  for(let i=0;i<N;i++){ const v=Math.abs(d[i]); e=v>e?v:e*rel; env[i]=e; }
+  let g=gmin, h=0;
+  for(let i=0;i<N;i++){
+    const open=env[Math.min(N-1,i+la)]>thr;
+    if(open){ h=hold; g+=(1-g)*0.25; } else if(h>0){ h--; } else { g=Math.max(gmin,g-down); }
+    out[i]=d[i]*g;
+  }
+  return out;
+}
+// réduction spectrale : apprend le « profil » du souffle dans les passages calmes, puis le retire partout
+function spectralClean(x){
+  const N=1024, H=256, L=x.length, P=N, half=N/2;
+  if(L<4*N) return x;
+  const xp=new Float32Array(L+2*P); xp.set(x.subarray(L-P),0); xp.set(x,P); xp.set(x.subarray(0,P),P+L);
+  const win=new Float64Array(N); for(let i=0;i<N;i++) win[i]=Math.sqrt(0.5-0.5*Math.cos(2*Math.PI*i/N));
+  const frames=Math.floor((xp.length-N)/H)+1, re=new Float64Array(N), im=new Float64Array(N);
+  const mags=new Array(frames), en=new Float64Array(frames);
+  for(let f=0;f<frames;f++){
+    for(let i=0;i<N;i++){ re[i]=xp[f*H+i]*win[i]; im[i]=0; } fftIn(re,im);
+    const m=new Float32Array(half+1); let s=0; for(let k=0;k<=half;k++){ m[k]=Math.hypot(re[k],im[k]); s+=m[k]*m[k]; } mags[f]=m; en[f]=s;
+  }
+  const sorted=Array.from(en).sort((a,b)=>a-b), lim=sorted[Math.max(0,Math.floor(frames*0.15))];
+  const noise=new Float64Array(half+1); let cnt=0;
+  for(let f=0;f<frames;f++) if(en[f]<=lim){ cnt++; for(let k=0;k<=half;k++) noise[k]+=mags[f][k]; }
+  if(!cnt) return x;
+  for(let k=0;k<=half;k++) noise[k]/=cnt;
+  const out=new Float64Array(xp.length), gp=new Float64Array(half+1).fill(1), alpha=2.0, flo=0.08;
+  for(let f=0;f<frames;f++){
+    for(let i=0;i<N;i++){ re[i]=xp[f*H+i]*win[i]; im[i]=0; } fftIn(re,im);
+    for(let k=0;k<=half;k++){
+      const m=mags[f][k]+1e-12; let g=Math.max(flo,1-alpha*noise[k]/m); if(g<gp[k]) g=0.6*gp[k]+0.4*g; gp[k]=g;
+      re[k]*=g; im[k]*=g; if(k>0&&k<half){ re[N-k]*=g; im[N-k]*=g; }
+    }
+    for(let i=0;i<N;i++) im[i]=-im[i];
+    fftIn(re,im);
+    for(let i=0;i<N;i++) out[f*H+i]+=(re[i]/N)*win[i]/2;
+  }
+  const y=new Float32Array(L); for(let i=0;i<L;i++) y[i]=out[P+i];
+  return y;
+}
+function denoiseData(d,level){
+  const floor=noiseFloorRms(d);
+  const y=level==='strong'?spectralClean(d):d;
+  return gateClean(y,floor,level==='strong'?36:28);
+}
+function denoiseTracks(list,level){
+  list=list.filter(t=>t.buf); if(!list.length||recObj) return;
+  pushHist();
+  let gain=[];
+  list.forEach(t=>{
+    const d=t.buf.getChannelData(0), before=noiseFloorRms(d);
+    const y=denoiseData(d,level), after=noiseFloorRms(y);
+    const keep=t.sel?{...t.sel}:null, nb=ctx.createBuffer(1,y.length,t.buf.sampleRate); nb.copyToChannel(y,0);
+    t.buf=nb; t.sel=keep; if(masterTake&&masterTake.i===t.id) masterTake=null;
+    drawWave(t); startSrc(t);
+    if(before>0) gain.push(20*Math.log10(Math.max(after,1e-7)/before));
+  });
+  lockUI(); scheduleSave();
+  const avg=gain.length?Math.round(-gain.reduce((a,b)=>a+b,0)/gain.length):0;
+  msg('Bruit nettoyé sur '+list.length+' piste'+(list.length>1?'s':'')+' (souffle réduit d\'environ '+avg+' dB dans les silences). ↶ pour revenir.');
+}
+
+// ---------- générateur de ligne de basse ----------
+const NOTE_FR=['Do','Do♯','Ré','Ré♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'];
+const BASS_PATTERNS={
+  tonique:['Tonique (un coup par temps)',[[0,0,.9,1],[1,0,.9,.8],[2,0,.9,.85],[3,0,.9,.8]]],
+  octaves:['Octaves (disco)',[[0,0,.45,1],[.5,12,.45,.7],[1,0,.45,.85],[1.5,12,.45,.7],[2,0,.45,.9],[2.5,12,.45,.7],[3,0,.45,.85],[3.5,12,.45,.7]]],
+  marche:['Marche (walking)',[[0,0,.9,1],[1,7,.9,.8],[2,12,.9,.85],[3,'app',.9,.8]]],
+  funk:['Funk (syncopé)',[[0,0,.4,1],[.75,12,.2,.7],[1.5,0,.3,.85],[2,7,.4,.9],[2.75,12,.2,.7],[3.5,10,.4,.8]]],
+  hiphop:['Hip-hop (notes longues)',[[0,0,1.3,1],[1.75,0,.5,.8],[2.5,7,1.2,.85]]],
+  pulse:['Pulsation (doubles-croches)',Array.from({length:16},(_,i)=>[i/4,0,.2,i%4===0?1:(i%2?.55:.75)])]
+};
+const BASS_TYPES={sub:'Sub (rond, très grave)',elec:'Électrique (pincée)',acid:'Acid (filtrée, nerveuse)',b808:'808 (grave qui chute)'};
+function synthNote(out,st,dur,f,vel,type){
+  const L=out.length, rel=0.03, n=Math.round((dur+rel)*SR);
+  let ph=0, x1=0,x2=0,y1=0,y2=0, b0=0,b1=0,b2=0,a1=0,a2=0;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    const fr=type==='b808'?f*(1+1.2*Math.exp(-t/0.025)):f;
+    ph+=fr/SR; ph-=Math.floor(ph);
+    let v;
+    if(type==='sub') v=Math.sin(2*Math.PI*ph)+0.15*Math.sin(4*Math.PI*ph);
+    else if(type==='b808') v=Math.tanh(1.8*Math.sin(2*Math.PI*ph))*0.85;
+    else v=2*ph-1;
+    if(type==='elec'||type==='acid'){
+      if(i%32===0){
+        const fc=type==='acid'?300+2600*Math.exp(-t/0.12):450+1400*Math.exp(-t/0.08), Q=type==='acid'?7:0.9;
+        const w0=2*Math.PI*Math.min(fc,SR*0.45)/SR, al=Math.sin(w0)/(2*Q), cs=Math.cos(w0), a0=1+al;
+        b0=(1-cs)/2/a0; b1=(1-cs)/a0; b2=b0; a1=-2*cs/a0; a2=(1-al)/a0;
+      }
+      const y=b0*v+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1; x1=v; y2=y1; y1=y; v=y*(type==='acid'?0.6:1);
+    }
+    const A=type==='elec'?0.003:0.006;
+    let env=t<A?t/A:1;
+    if(type==='elec') env*=Math.exp(-t/0.5);
+    if(type==='b808') env*=Math.exp(-t/0.7);
+    if(t>dur) env*=Math.max(0,1-(t-dur)/rel);
+    out[(st+i)%L]+=v*env*vel*0.6;
+  }
+}
+function makeBass(o){
+  const L=loopLen, bl=L/beats, out=new Float32Array(L);
+  const pat=BASS_PATTERNS[o.pat][1], bars=Math.ceil(beats/meter);
+  const prog=o.prog?(o.scale==='min'?[0,8,3,10]:[0,7,9,5]):[0];
+  const root=o.note<=4?36+o.note:24+o.note, lenMul=o.len, notes=[];
+  for(let b=0;b<bars;b++){
+    const ch=prog[b%prog.length];
+    for(const ev of pat){
+      if(ev[0]>=meter) continue;
+      const pos=b*meter+ev[0]; if(pos>=beats) continue;
+      let iv=ev[1];
+      if(iv==='app'){ const nx=prog[(b+1)%prog.length]; let d=nx-ch-1; while(d>6) d-=12; while(d<-6) d+=12; iv=d; }
+      if(o.scale==='maj'&&iv===10) iv=11;
+      let m=root+ch+iv; while(m>55) m-=12; while(m<28) m+=12;
+      const f=440*Math.pow(2,(m-69)/12), dur=Math.max(0.05,ev[2]*lenMul*bl/SR);
+      synthNote(out,Math.round(pos*bl),dur,f,ev[3],o.type); notes.push(m);
+    }
+  }
+  let pk=0; for(let i=0;i<L;i++) pk=Math.max(pk,Math.abs(out[i]));
+  if(pk>0){ const g=0.8/pk; for(let i=0;i<L;i++) out[i]*=g; }
+  return {data:out,count:notes.length};
+}
+function genBass(t){
+  if(recObj) return;
+  const el=t.el, o={note:+$('.bnote',el).value,scale:$('.bscale',el).value,pat:$('.bpat',el).value,type:$('.btype',el).value,len:+$('.blen',el).value,prog:$('.bprog',el).value==='1'};
+  pushHist();
+  if(!loopLen){
+    const nb=+$('.bbeats',el).value;
+    loopLen=Math.round(nb*60/bpm*SR); beats=nb; baseLen=loopLen; baseBeats=beats; rep=1; gridOff=0; masterTake=null;
+    if(!running) t0=ctx.currentTime;
+  }
+  const r=makeBass(o);
+  const b=ctx.createBuffer(1,loopLen,SR); b.copyToChannel(r.data,0);
+  t.buf=b; t.sel=null;
+  if(masterTake&&masterTake.i===t.id) masterTake=null;
+  if(/^Piste \d+$/.test(t.name)){ t.name=uniqueTrackName('Basse'); $('.tn',el).textContent=t.name; }
+  syncTrackUI(t); drawWave(t); startSrc(t); buildDots(); lockUI(); updLive(); scheduleSave();
+  msg('Ligne de basse créée : '+NOTE_FR[o.note]+' '+(o.scale==='min'?'mineur':'majeur')+', '+BASS_PATTERNS[o.pat][0].split(' (')[0]+', son '+BASS_TYPES[o.type].split(' (')[0]+' ('+r.count+' notes). Ajoute des effets ou change la hauteur comme sur n\'importe quelle piste.');
+}
 function quantizeTrack(t,q,strength){
   if(!t.buf||!loopLen||recObj) return;
   const src=t.buf.getChannelData(0), L=src.length;
@@ -1137,6 +1297,16 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="fx">Effets (tu peux en empiler)</span></div>
       <div class="fxlist"></div>
       <div class="row"><button class="fxadd">+ Ajouter un effet</button></div></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="denoise">Nettoyer le bruit</span></div>
+      <div class="row wrap" style="margin-top:6px"><select class="dnl" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button class="dnb">🧹 Nettoyer</button></div></div>
+    <details class="field bassd"><summary class="lbl" style="font-size:18px">🎸 Créer une ligne de basse</summary>
+      <div class="row wrap"><span class="lbl w2" data-help="bass">Note</span><select class="bnote" style="width:auto">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select><select class="bscale" style="width:auto"><option value="min">mineur</option><option value="maj">majeur</option></select></div>
+      <div class="row wrap"><span class="lbl w2">Motif</span><select class="bpat" style="width:auto">${Object.keys(BASS_PATTERNS).map(k=>`<option value="${k}">${BASS_PATTERNS[k][0]}</option>`).join('')}</select></div>
+      <div class="row wrap"><span class="lbl w2">Son</span><select class="btype" style="width:auto">${Object.keys(BASS_TYPES).map(k=>`<option value="${k}">${BASS_TYPES[k]}</option>`).join('')}</select></div>
+      <div class="row wrap"><span class="lbl w2">Notes</span><select class="blen" style="width:auto"><option value="0.5">courtes</option><option value="1" selected>normales</option><option value="1.6">longues</option></select><select class="bprog" style="width:auto"><option value="0">même accord tout du long</option><option value="1">accord qui change à chaque mesure</option></select></div>
+      <div class="row wrap bbrow"><span class="lbl w2">Longueur</span><select class="bbeats" style="width:auto"><option value="4">4 temps</option><option value="8" selected>8 temps</option><option value="16">16 temps</option></select><span class="hint" style="margin:0">(si aucune boucle n'existe encore)</span></div>
+      <div class="row"><button class="bgo primary">🎸 Créer la basse sur cette piste</button></div>
+    </details>
     <div class="field"><div class="row"><span class="lbl" data-help="tname">Nom et place de la piste</span></div>
       <div class="row" style="margin-top:6px"><input type="text" class="tnin" maxlength="24" style="flex:1" aria-label="Nom de la piste"><button class="tnok">Renommer</button></div>
       <div class="row wrap"><button class="tup">▲ Monter</button><button class="tdown">▼ Descendre</button><button class="tdup">⧉ Dupliquer</button></div></div>
@@ -1177,6 +1347,8 @@ function buildTrackUI(t){
   $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
   el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>repeatPart(t,b.dataset.n));
   $('.del',el).onclick=()=>removeLastTrack();
+  $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
+  $('.bgo',el).onclick=()=>genBass(t);
   $('.qbtn',el).onclick=()=>quantizeTrack(t,+$('.qgrid',el).value,+$('.qstr',el).value);
   $('.revb',el).onclick=()=>reverseTrack(t);
   $('.fdi',el).onchange=e=>{ touchSettings(); t.fadeIn=+e.target.value; commitSettings(); t.pc=null; startSrc(t); scheduleSave(true); };
@@ -1452,6 +1624,7 @@ function lockUI(){
   updBpm();
   tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
   checkMem();
+  tracks.forEach(t=>{ const r=$('.bbrow',t.el); if(r) r.hidden=!!loopLen; });
   updTempoRow();
   updLive();
   tracks.forEach((t,i)=>{
@@ -1520,6 +1693,7 @@ $('#msubseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; me
 $('#meterseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; meter=+b.dataset.v; showMetroUI(); buildDots(); lockUI(); scheduleSave(true); };
 document.querySelectorAll('.tstep').forEach(b=>b.onclick=()=>{ if(tempoTarget==null) tempoTarget=Math.round(curBpm()); tempoTarget=clamp(tempoTarget+(+b.dataset.d),40,240); updTempoRow(); });
 $('#tapply').onclick=()=>changeTempo(tempoTarget);
+$('#dnallb').onclick=()=>{ if(!tracks.some(t=>t.buf)){ msg('Aucune piste à nettoyer.'); return; } denoiseTracks(tracks,$('#dnall').value); };
 $('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
 $('#mvol').onchange=commitSettings;
 $('#mvol').oninput=e=>{ touchSettings(); mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(true); };

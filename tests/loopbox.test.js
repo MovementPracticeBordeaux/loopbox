@@ -305,6 +305,49 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(20);
     ok(P.hits(P.lastPlayed()).length===2,'annulation : '+P.hits(P.lastPlayed()).length+' coups');
   });
+
+  // ---------------- nettoyage du bruit et ligne de basse (v23) ----------------
+  await test('nettoyer le bruit (léger) : le souffle disparaît des silences, les sons restent',async()=>{
+    const P=await boot();
+    const n=SR*4, d=new Float32Array(n); let sd=5;
+    for(let i=0;i<n;i++){ sd=(sd*16807)%2147483647; d[i]=0.01*(sd/2147483647*2-1); }
+    for(let k=0;k<8;k++){ const p=Math.round(k*0.5*SR)+2000; for(let i=0;i<5000;i++) d[p+i]+=0.7*Math.exp(-i/900)*Math.sin(2*Math.PI*90*i/SR); }
+    await P.importFile(0,{numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>d});
+    const t1=P.$('.trk'); t1.querySelector('.tog').click();
+    const before=P.lastPlayed().getChannelData(0);
+    const rms=(x,a,b)=>{ let s=0; for(let i=a;i<b;i++) s+=x[i]*x[i]; return Math.sqrt(s/(b-a)); };
+    const gapStart=Math.round(0.5*SR)-3000, gapEnd=Math.round(0.5*SR)-500;
+    t1.querySelector('.dnl').value='light'; t1.querySelector('.dnb').click(); await sleep(40);
+    const after=P.lastPlayed().getChannelData(0);
+    const red=20*Math.log10(rms(after,gapStart,gapEnd)/rms(before,gapStart,gapEnd));
+    ok(red<-20,'réduction du souffle seulement '+red.toFixed(1)+' dB');
+    let pk=0; for(const v of after) pk=Math.max(pk,Math.abs(v)); ok(pk>0.6,'sons écrasés : crête '+pk.toFixed(2));
+    ok(/Bruit nettoyé/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    P.$('#undo').click(); await sleep(20);
+    ok(Math.abs(rms(P.lastPlayed().getChannelData(0),gapStart,gapEnd)-rms(before,gapStart,gapEnd))<1e-4,'annulation');
+  });
+  await test('ligne de basse : crée la boucle, nomme la piste, bonnes notes, et suit les accords',async()=>{
+    const P=await boot();
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.bassd').open=true;
+    const set=(c,v)=>{ const e=t1.querySelector(c); e.value=v; };
+    set('.bnote','0'); set('.bscale','min'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','1'); set('.bbeats','8');
+    t1.querySelector('.bgo').click(); await sleep(40);
+    const b=P.lastBuf(), L=b.length, bl=L/8;
+    ok(near(L,Math.round(8*60/90*SR),2),'longueur de boucle '+L);
+    ok(t1.querySelector('.tn').textContent==='Basse','nom : '+t1.querySelector('.tn').textContent);
+    ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(0.1*bl),Math.round(0.9*bl))}),65.4,3),'1re note pas en Do');
+    ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(4.1*bl),Math.round(4.9*bl))}),103.8,4),'2e mesure pas en La♭');
+    ok(/Ligne de basse créée : Do mineur/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    ok(P.$('#lockhint').style.display!=='none','la boucle doit être définie');
+    // 2e basse sur une autre piste : même longueur que la boucle
+    P.$('#addtrk').click(); await sleep(10);
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click();
+    t2.querySelector('.btype').value='b808'; t2.querySelector('.bpat').value='funk'; t2.querySelector('.bgo').click(); await sleep(40);
+    ok(P.lastBuf().length===L,'2e basse de longueur différente');
+    ok(t2.querySelector('.tn').textContent==='Basse 2','nom de la 2e : '+t2.querySelector('.tn').textContent);
+    P.$('#undo').click(); P.$('#undo').click(); await sleep(30);
+    ok(P.$('#lockhint').style.display==='none','annuler deux fois doit retirer la boucle');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
