@@ -326,27 +326,65 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(20);
     ok(Math.abs(rms(P.lastPlayed().getChannelData(0),gapStart,gapEnd)-rms(before,gapStart,gapEnd))<1e-4,'annulation');
   });
-  await test('ligne de basse : crée la boucle, nomme la piste, bonnes notes, et suit les accords',async()=>{
+  await test('menus de piste en onglets : une seule partie affichée à la fois',async()=>{
     const P=await boot();
-    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.bassd').open=true;
-    const set=(c,v)=>{ const e=t1.querySelector(c); e.value=v; };
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); await sleep(10);
+    const vis=()=>[...t1.querySelectorAll('.pane')].filter(x=>!x.hidden).map(x=>x.dataset.pane).join(',');
+    ok(vis()==='son','onglet par défaut : '+vis());
+    ok(t1.querySelector('.ttabs button[data-tab="bass"]').hidden,'l\'onglet Basse ne doit pas exister sur une piste enregistrée');
+    for(const tab of ['cut','fx','trk','son']){ t1.querySelector('.ttabs button[data-tab="'+tab+'"]').click(); ok(vis()===tab,'onglet '+tab+' → '+vis()); }
+    ok(!t1.querySelector('.vol').closest('.pane'),'le volume doit rester visible hors onglets');
+  });
+  await test('piste de basse dédiée : aperçu sans enregistrer, puis création calée sur la boucle',async()=>{
+    const P=await boot();
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[1];
+    ok(tb.classList.contains('kbass')||/kbass/.test(tb.className),'type de piste');
+    ok(tb.querySelector('.tn').textContent==='Basse','nom : '+tb.querySelector('.tn').textContent);
+    ok(!tb.querySelector('.pane[data-pane="bass"]').hidden,'onglet Basse ouvert');
+    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
     set('.bnote','0'); set('.bscale','min'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','1'); set('.bbeats','8');
-    t1.querySelector('.bgo').click(); await sleep(40);
+    P.starts.length=0; tb.querySelector('.bprev').click(); await sleep(30);
+    const pv=P.starts.filter(x=>x.buf).slice(-1)[0];
+    ok(pv&&near(pv.buf.length,Math.round(8*60/90*SR),2),'aperçu non lancé ou mauvaise longueur');
+    ok(/Arrêter/.test(tb.querySelector('.bprev').textContent),'bouton d\'aperçu');
+    ok(P.$('#lockhint').style.display==='none','l\'aperçu ne doit pas créer la boucle');
+    tb.querySelector('.bgo').click(); await sleep(40);
     const b=P.lastBuf(), L=b.length, bl=L/8;
-    ok(near(L,Math.round(8*60/90*SR),2),'longueur de boucle '+L);
-    ok(t1.querySelector('.tn').textContent==='Basse','nom : '+t1.querySelector('.tn').textContent);
+    ok(P.$('#lockhint').style.display!=='none','la boucle doit être créée en validant');
     ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(0.1*bl),Math.round(0.9*bl))}),65.4,3),'1re note pas en Do');
     ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(4.1*bl),Math.round(4.9*bl))}),103.8,4),'2e mesure pas en La♭');
-    ok(/Ligne de basse créée : Do mineur/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
-    ok(P.$('#lockhint').style.display!=='none','la boucle doit être définie');
-    // 2e basse sur une autre piste : même longueur que la boucle
-    P.$('#addtrk').click(); await sleep(10);
-    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click();
-    t2.querySelector('.btype').value='b808'; t2.querySelector('.bpat').value='funk'; t2.querySelector('.bgo').click(); await sleep(40);
-    ok(P.lastBuf().length===L,'2e basse de longueur différente');
-    ok(t2.querySelector('.tn').textContent==='Basse 2','nom de la 2e : '+t2.querySelector('.tn').textContent);
-    P.$('#undo').click(); P.$('#undo').click(); await sleep(30);
-    ok(P.$('#lockhint').style.display==='none','annuler deux fois doit retirer la boucle');
+    ok(/Appliquer/.test(tb.querySelector('.bgo').textContent),'le bouton devrait proposer d\'appliquer les changements');
+    ok(P.$$('.trk')[0].querySelector('.pane[data-pane="bass"]').hidden&&P.$$('.trk')[0].querySelector('.ttabs button[data-tab="bass"]').hidden,'la piste 1 ne doit pas avoir de basse');
+  });
+  await test('basse : évolution vers une autre note (mi-boucle et glissé)',async()=>{
+    const P=await boot();
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[1];
+    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
+    set('.bnote','0'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','0'); set('.bbeats','8'); set('.bevo','half'); set('.bevon','5');
+    ok(!tb.querySelector('.bevon').hidden,'choix de la note visée caché');
+    tb.querySelector('.bgo').click(); await sleep(40);
+    let b=P.lastBuf(), bl=b.length/8;
+    const f=(a,z)=>freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(a*bl),Math.round(z*bl))});
+    ok(near(f(1.1,1.9),65.4,3),'1re moitié : '+f(1.1,1.9).toFixed(1));
+    ok(near(f(5.1,5.9),87.3,3),'2e moitié pas en Fa : '+f(5.1,5.9).toFixed(1));
+    set('.bevo','glide'); set('.bevon','7'); tb.querySelector('.bgo').click(); await sleep(40);
+    b=P.lastBuf(); bl=b.length/8;
+    ok(near(f(0.1,0.9),65.4,3),'début de boucle : '+f(0.1,0.9).toFixed(1));
+    ok(f(7.3,7.9)<f(4.1,4.6)-8&&near(f(7.6,7.95),49,4),'pas de glissé vers le Sol grave (chemin le plus court) : '+f(4.1,4.6).toFixed(1)+' → '+f(7.6,7.95).toFixed(1));
+    P.$('#undo').click(); await sleep(20);
+    ok(/Action annulée/.test(P.$('#msg').textContent),'annulation');
+  });
+  await test('piste de basse retrouvée au rechargement (type et réglages)',async()=>{
+    const idb=new FI.IDBFactory();
+    const P=await boot({idb});
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[1]; tb.querySelector('.bpat').value='funk'; tb.querySelector('.btype').value='acid';
+    tb.querySelector('.bgo').click(); await sleep(900);
+    const Q=await boot({idb}); await sleep(400);
+    const qb=Q.$$('.trk')[1];
+    ok(qb&&/kbass/.test(qb.className)&&qb.querySelector('.bpat').value==='funk'&&qb.querySelector('.btype').value==='acid','rechargement : '+(qb?qb.className+' '+qb.querySelector('.bpat').value:'pas de piste'));
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));

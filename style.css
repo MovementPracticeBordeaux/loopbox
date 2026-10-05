@@ -133,3 +133,11 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 
 /* menu projet ouvert : la barre n'est plus collée en haut, elle défile avec la page */
 .projbar.open{position:relative;top:auto;}
+
+/* onglets du menu de piste */
+.ttabs{flex-wrap:nowrap;overflow-x:auto;}
+.ttabs button{flex:1 0 auto;padding:6px 12px;}
+.pane{margin-top:6px;}
+.pane>.field:first-child{margin-top:12px;}
+.trk.kbass .rec{display:none;}
+.trk.kbass .tog::after{content:"🎸";margin-left:4px;}
