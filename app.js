@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='26';
+const APPVER='27';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1004,7 +1004,7 @@ const HELP={
   stems:"<b>Pistes séparées</b> : exporte chaque piste dans son propre fichier WAV, tous rangés dans un .zip, pour les retravailler dans une autre appli. Chaque piste garde son volume, sa tonalité, ses effets et sa hauteur, mais pas le « Son final ». Toutes les pistes ont la même longueur et démarrent en même temps : elles se superposent parfaitement.",
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
-  btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. Touche un bloc pour le choisir, puis change sa note. « Couper le bloc en deux » crée un nouveau bloc ; <b>fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
+  btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. Touche un bloc pour le choisir (ou passe d'un bloc à l'autre avec ◀ ▶, pratique pour les tout petits blocs), puis change sa note. « Couper le bloc en deux » crée un nouveau bloc ; <b>fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
@@ -1286,6 +1286,7 @@ function drawBassTimeline(t){
   $('.btlinfo',t.el).textContent=segs.map(x=>NOTE_FR[x.n]+(x.glide?' ↝':'')).join(' → ')+' · '+segs.length+' bloc'+(segs.length>1?'s':'');
   $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
   $('.bsplit',t.el).disabled=cur.e-cur.s<2; $('.bdel',t.el).disabled=segs.length<2;
+  $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
   $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+(cur.s+1)+' → '+cur.e;
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':'✓ Créer la basse';
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr); if(!w||!hh) return;
@@ -1307,15 +1308,28 @@ function bassChanged(t,live){ drawBassTimeline(t); drawBassViz(t); if(live!==fal
 function initBassTimeline(t){
   const c=$('.btl',t.el); let drag=null;
   const posAt=ev=>{ const r=c.getBoundingClientRect(); return clamp((ev.clientX-r.left)/(r.width||1),0,1)*nbOf(t); };
+  const pick=p=>{ const segs=ensureDraft(t).segs, k=segs.findIndex(x=>p>=x.s&&p<x.e); t.bsel=k<0?segs.length-1:k; drawBassTimeline(t); };
+  // un toucher sélectionne le bloc ; la limite orange ne bouge que si le doigt glisse vraiment
   c.addEventListener('pointerdown',ev=>{
-    const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), p=posAt(ev), r=c.getBoundingClientRect(), tol=Math.max(0.3,nb/(r.width||1)*18);
-    let bi=-1, best=1e9; for(let i=0;i<segs.length-1;i++){ const dd=Math.abs(p-segs[i].e); if(dd<=tol&&dd<best){ best=dd; bi=i; } }
-    if(bi>=0){ drag={i:bi}; try{ c.setPointerCapture(ev.pointerId); }catch(e){} }
-    else { const k=segs.findIndex(x=>p>=x.s&&p<x.e); t.bsel=k<0?segs.length-1:k; drawBassTimeline(t); }
+    const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), p=posAt(ev), r=c.getBoundingClientRect(), px=nb/(r.width||1);
+    let bi=-1, best=1e9;
+    for(let i=0;i<segs.length-1;i++){
+      const tol=Math.min(Math.max(0.3,px*18),0.3*(segs[i].e-segs[i].s),0.3*(segs[i+1].e-segs[i+1].s));
+      const dd=Math.abs(p-segs[i].e); if(dd<=tol&&dd<best){ best=dd; bi=i; }
+    }
+    drag={i:bi,x0:ev.clientX,p0:p,moved:false};
+    try{ c.setPointerCapture(ev.pointerId); }catch(e){}
   });
-  c.addEventListener('pointermove',ev=>{ if(!drag) return; const segs=t.bdraft.segs, i=drag.i, v=clamp(Math.round(posAt(ev)),segs[i].s+1,segs[i+1].e-1); if(v!==segs[i].e){ segs[i].e=v; segs[i+1].s=v; bassChanged(t,false); } });
-  const end=()=>{ if(!drag) return; drag=null; bassChanged(t); };
-  c.addEventListener('pointerup',end); c.addEventListener('pointercancel',end);
+  c.addEventListener('pointermove',ev=>{
+    if(!drag) return;
+    if(!drag.moved){ if(Math.abs(ev.clientX-drag.x0)<8||drag.i<0) return; drag.moved=true; }
+    const segs=t.bdraft.segs, i=drag.i, v=clamp(Math.round(posAt(ev)),segs[i].s+1,segs[i+1].e-1);
+    if(v!==segs[i].e){ segs[i].e=v; segs[i+1].s=v; bassChanged(t,false); }
+  });
+  const end=ev=>{ if(!drag) return; const d=drag; drag=null; if(d.moved) bassChanged(t); else pick(d.p0); };
+  c.addEventListener('pointerup',end); c.addEventListener('pointercancel',()=>{ drag=null; });
+  $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); drawBassTimeline(t); };
+  $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); drawBassTimeline(t); };
   $('.bsn',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].n=+e.target.value; bassChanged(t); };
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
   $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
@@ -1457,7 +1471,7 @@ function buildTrackUI(t){
   <div class="pane" data-pane="bass" hidden>
     <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
     <canvas class="btl" style="width:100%;height:64px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
-    <div class="row wrap"><span class="bselinfo lbl"></span><select class="bsn" style="width:auto" aria-label="Note du bloc choisi">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label></div>
+    <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button><select class="bsn" style="width:auto" aria-label="Note du bloc choisi">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label></div>
     <div class="row wrap"><button class="bsplit">✂ Couper le bloc en deux</button><button class="bdel">🗑 Retirer le bloc</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl">Notes jouées</span></div>
     <canvas class="bviz" style="width:100%;height:84px;display:block;margin-top:6px;border-radius:10px;background:rgba(255,255,255,.05)"></canvas>

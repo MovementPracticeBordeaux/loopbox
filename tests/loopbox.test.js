@@ -365,12 +365,12 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(tb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'note : '+tb.querySelector('.btlinfo').textContent);
     const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,width:400});
     const pe=(type,x)=>{ const e=new P.w.MouseEvent(type,{clientX:x,bubbles:true}); c.dispatchEvent(e); };
-    pe('pointerdown',200); pe('pointermove',300); pe('pointerup',300); await sleep(10);
+    pe('pointerdown',200); pe('pointermove',215); pe('pointermove',300); pe('pointerup',300); await sleep(10);
     ok(/temps 7 → 8/.test(tb.querySelector('.bselinfo').textContent)||/Do → Fa/.test(tb.querySelector('.btlinfo').textContent),'');
     tb.querySelector('.bgo').click(); await sleep(30);
     let b=P.lastBuf();
     ok(near(fz(b,5.1,5.8),65.4,3)&&near(fz(b,6.1,6.8),87.3,3),'limite déplacée au temps 7 : '+fz(b,5.1,5.8).toFixed(1)+' / '+fz(b,6.1,6.8).toFixed(1));
-    pe('pointerdown',50); await sleep(5);
+    pe('pointerdown',50); pe('pointerup',50); await sleep(5);
     const gl=tb.querySelector('.bgl'); gl.checked=true; gl.dispatchEvent(new P.w.Event('change'));
     tb.querySelector('.bgo').click(); await sleep(30);
     b=P.lastBuf();
@@ -404,6 +404,25 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const Q=await boot({idb}); await sleep(400);
     const qb=Q.$$('.trk')[1]; qb.querySelector('.tog').click(); await sleep(20);
     ok(qb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'rechargement : '+qb.querySelector('.btlinfo').textContent);
+  });
+
+  await test('basse : un tout petit bloc (1 temps) se sélectionne d\'un simple toucher, même près des limites',async()=>{
+    const {P,tb}=await bassBoot();
+    const nb=8, c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,width:800});
+    const pe=(type,x)=>c.dispatchEvent(new P.w.MouseEvent(type,{clientX:x,bubbles:true}));
+    // blocs : [0,4) [4,6) [6,7) [7,8)
+    tb.querySelector('.bsplit').click();                         // [0,4) [4,8), bloc 2 choisi
+    tb.querySelector('.bsplit').click();                         // [4,6) [6,8), bloc 3 choisi
+    tb.querySelector('.bsplit').click(); await sleep(5);         // [6,7) [7,8), bloc 4 choisi
+    ok(tb.querySelector('.btlinfo').textContent.includes('4 blocs'),'préparation : '+tb.querySelector('.btlinfo').textContent);
+    const at=b=>b/nb*800;
+    for(const [x,exp] of [[at(6.5),'temps 7 → 7'],[at(6.12),'temps 7 → 7'],[at(6.88),'temps 7 → 7'],[at(4.1),'temps 5 → 6'],[at(7.5),'temps 8 → 8']]){
+      pe('pointerdown',x); pe('pointerup',x); await sleep(5);
+      ok(tb.querySelector('.bselinfo').textContent.includes(exp),'toucher à '+Math.round(x)+' px → '+tb.querySelector('.bselinfo').textContent+' (attendu '+exp+')');
+    }
+    ok(tb.querySelector('.btlinfo').textContent.includes('4 blocs'),'un toucher ne doit pas déplacer de limite : '+tb.querySelector('.btlinfo').textContent);
+    tb.querySelector('.bprevb').click(); ok(tb.querySelector('.bselinfo').textContent.includes('temps 7 → 7'),'◀ : '+tb.querySelector('.bselinfo').textContent);
+    tb.querySelector('.bnextb').click(); ok(tb.querySelector('.bselinfo').textContent.includes('temps 8 → 8'),'▶ : '+tb.querySelector('.bselinfo').textContent);
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
