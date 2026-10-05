@@ -282,6 +282,29 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(!P.$('.trk .tbody').hidden,'la piste 1 devrait être dépliée');
     ok(/LoopBox v\d+/.test(P.$('.foot').textContent),'version non affichée');
   });
+
+  await test('répéter une partie courte d\'une piste sur la durée de la boucle de base',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length/SR, t0e=r.tp+r.first-0.003, cur=P.ctx.currentTime;
+    const tgt0=t0e+Math.ceil((cur+1.2-t0e)/L)*L+0.003, press=tgt0-0.3;
+    P.impulses=[Math.round((tgt0+r.lat)*SR),Math.round((tgt0+r.T+r.lat)*SR)];
+    const stopAt=tgt0+2*r.T-0.05;
+    await P.runUntil(press,[{t:press,fn:()=>P.rec(1).click()}]);
+    await P.runUntil(stopAt,[{t:stopAt,fn:()=>P.rec(1).click()}]); await P.runUntil(stopAt+1);
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); await sleep(20);
+    ok(/temps 1 → 2 \(2 temps, détectés\)/.test(t2.querySelector('.trl').textContent),'partie détectée : '+t2.querySelector('.trl').textContent);
+    ok(!t2.querySelector('.trep button[data-n="fill"]').disabled&&t2.querySelector('.trep button[data-n="4"]').disabled===false,'boutons');
+    t2.querySelector('.trep button[data-n="fill"]').click(); await sleep(30);
+    const h=P.hits(P.lastBuf()), beat=r.buf.length/8;
+    ok(h.length===8,'coups après « Remplir » : '+h.length);
+    const inner=P.hits(P.starts.filter(x=>x.buf).length?P.buffers[P.buffers.length-2]:P.lastBuf());
+    const exp=[]; for(let k=0;k<4;k++) [144,144+Math.round(r.T*SR)].forEach(o=>exp.push(Math.round(o+k*2*beat)));
+    h.forEach((x,k)=>ok(Math.abs(x-exp[k])<=3,'coup '+k+' à '+x+' au lieu de '+exp[k]));
+    ok(P.hits(r.buf).length===16,'piste de base modifiée');
+    P.$('#undo').click(); await sleep(20);
+    ok(P.hits(P.lastPlayed()).length===2,'annulation : '+P.hits(P.lastPlayed()).length+' coups');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

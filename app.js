@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='21';
+const APPVER='22';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -970,6 +970,7 @@ const HELP={
   proj:"<b>Projets</b> : chaque projet garde ses pistes, sa boucle et tous ses réglages. Ton travail est <b>enregistré automatiquement</b> dans ce navigateur (indication en haut à droite) ; « Enregistrer » force l'enregistrement tout de suite. « Enregistrer une copie » crée un nouveau projet à partir de celui-ci (avec le nom écrit dans la case). Dans « Mes projets », tu ouvres ou supprimes un projet. La latence et le gain du micro sont communs à tous les projets.",
   projfile:"<b>Fichier de sauvegarde</b> : crée un fichier « .loopbox » avec tout le projet (sons et réglages), à garder dans tes téléchargements ou à envoyer ailleurs. <b>Important</b> : les projets du navigateur disparaissent si tu effaces les données du site ou du navigateur ; le fichier, lui, reste. « Ouvrir un fichier » le recharge comme un nouveau projet. Le son y est stocké en qualité CD (16 bits).",
   pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
+  trep:"<b>Répéter cette partie</b> : recopie la partie de la piste plusieurs fois à la suite, sur la durée de la boucle de base. Par exemple, un motif de 2 temps sur une boucle de 8 temps : ×4 ou « Remplir la boucle » le joue 4 fois. La partie répétée est celle choisie avec les repères orange ; sans sélection, l'appli prend automatiquement les temps qui contiennent du son. Le reste de la piste devient silencieux. ↶ annule.",
   tsel:"<b>Garder la partie propre (cette piste)</b> : choisis les temps à conserver sur cette piste, le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
   undo:"<b>Annuler / Rétablir</b> (↶ ↷ en haut) : reviennent en arrière ou en avant sur les prises, imports, effacements, découpes, durées de boucle et hauteurs, jusqu'à 30 étapes. Les réglages de volume, d'effets et de tonalité ne sont pas concernés.",
@@ -1115,7 +1116,9 @@ function buildTrackUI(t){
   <div class="field tsel" hidden><div class="row"><span class="lbl" data-help="tsel">Garder la partie propre</span><span class="tsl lbl" style="margin-left:auto"></span></div>
     <canvas class="tsc" style="width:100%;height:76px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
     <div class="row wrap"><button class="ts1">◀ début</button><button class="ts2">début ▶</button><button class="ts3" style="margin-left:auto">◀ fin</button><button class="ts4">fin ▶</button></div>
-    <div class="row"><button class="tsall">Tout garder</button></div></div>
+    <div class="row"><button class="tsall">Tout garder</button></div>
+    <div class="row" style="margin-top:14px"><span class="lbl" data-help="trep">Répéter cette partie dans la boucle</span><span class="trl lbl" style="margin-left:auto"></span></div>
+    <div class="seg trep" style="margin-top:8px"><button data-n="2">×2</button><button data-n="3">×3</button><button data-n="4">×4</button><button data-n="fill">Remplir la boucle</button></div></div>
   <div class="panel">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
     <div class="field"><div class="row"><span class="lbl" data-help="pitch">Hauteur du son (la note)</span><span class="ptv val" style="margin-left:auto">0 (son d'origine)</span></div>
@@ -1172,6 +1175,7 @@ function buildTrackUI(t){
   $('.ts3',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e-1); };
   $('.ts4',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e+1); };
   $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
+  el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>repeatPart(t,b.dataset.n));
   $('.del',el).onclick=()=>removeLastTrack();
   $('.qbtn',el).onclick=()=>quantizeTrack(t,+$('.qgrid',el).value,+$('.qstr',el).value);
   $('.revb',el).onclick=()=>reverseTrack(t);
@@ -1193,6 +1197,42 @@ function buildTrackUI(t){
   })();
   syncTrackUI(t);
 }
+// partie à répéter : la sélection « Garder la partie propre », sinon les temps qui contiennent du son
+function partOf(t){
+  if(!t.buf||!loopLen) return null;
+  if(t.sel) return {s:t.sel.s,e:t.sel.e,auto:false};
+  const d=t.buf.getChannelData(0), L=d.length, bl=L/beats, rms=[];
+  for(let k=0;k<beats;k++){ let a=0; const i0=Math.round(k*bl), i1=Math.round((k+1)*bl); let pk=0; for(let i=i0;i<i1;i++){ a+=d[i]*d[i]; const v=Math.abs(d[i]); if(v>pk) pk=v; } rms.push(Math.max(Math.sqrt(a/Math.max(1,i1-i0)),pk*0.5)); }
+  const mx=Math.max(...rms); if(mx<1e-4) return null;
+  let s0=rms.findIndex(v=>v>mx*0.03), e0=beats-[...rms].reverse().findIndex(v=>v>mx*0.03);
+  return {s:s0,e:e0,auto:true};
+}
+function updRepUI(t){
+  const p=partOf(t), lab=$('.trl',t.el); if(!lab) return;
+  const n=p?p.e-p.s:0;
+  lab.textContent=p?('temps '+(p.s+1)+' → '+p.e+' ('+n+' temps'+(p.auto?', détectés':'')+')'):'';
+  t.el.querySelectorAll('.trep button').forEach(b=>{ const k=b.dataset.n==='fill'?Math.floor(beats/Math.max(1,n)):+b.dataset.n; b.disabled=!p||n<1||k<2||k*n>beats; });
+}
+function repeatPart(t,nv){
+  if(recObj) return;
+  const p=partOf(t); if(!p){ msg('Rien à répéter sur cette piste.'); return; }
+  const P=p.e-p.s, n=nv==='fill'?Math.floor(beats/P):+nv;
+  if(n<2||n*P>beats){ msg('Pas assez de place dans la boucle pour répéter '+n+' fois une partie de '+P+' temps.'); return; }
+  const src=t.buf.getChannelData(0), L=src.length, bl=L/beats, pre=Math.round(0.01*SR), fo=Math.round(0.004*SR);
+  const a=Math.max(0,Math.round(p.s*bl)-pre), z=Math.round(p.e*bl)-pre, len=z-a;
+  const seg=new Float32Array(len);
+  for(let i=0;i<len;i++) seg[i]=src[(a+i)%L];
+  for(let i=0;i<Math.min(fo,len);i++){ seg[len-1-i]*=i/fo; }
+  for(let i=0;i<Math.min(32,len);i++){ seg[i]*=a>0?i/32:1; }
+  pushHist();
+  const out=new Float32Array(L);
+  for(let k=0;k<n;k++){ const st=Math.round(a+k*P*bl); for(let i=0;i<len;i++){ const j=(st+i)%L; out[j]=clamp(out[j]+seg[i],-1,1); } }
+  const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(out,0);
+  t.buf=nb; t.sel=null;
+  if(masterTake&&masterTake.i===t.id) masterTake=null;
+  drawWave(t); drawTsel(t); startSrc(t); lockUI(); scheduleSave();
+  msg('Partie de '+P+' temps répétée '+n+' fois sur « '+t.name+' » (↶ pour revenir).');
+}
 function setTrackSel(t,s,e){
   if(!t.buf||!loopLen) return;
   s=clamp(s,0,beats-1); e=clamp(e,1,beats);
@@ -1205,6 +1245,7 @@ function setTrackSel(t,s,e){
 }
 function drawTsel(t,dr){
   const c=$('.tsc',t.el); if(!c) return;
+  updRepUI(t);
   const q=dr||t.sel||{s:0,e:beats};
   $('.tsl',t.el).textContent=(q.s===0&&q.e===beats)?'Tout est gardé':'Temps '+(q.s+1)+' → '+q.e+' sur '+beats;
   if($('.tbody',t.el).hidden||$('.tsel',t.el).hidden) return;
