@@ -13,6 +13,8 @@ let bpm=90, metroOn=true, fin=0, snap=true, mixMode=false, mvol=0.9, ingain=2, c
 let baseLen=0, baseBeats=4, rep=1, loopHist=null;
 const H={past:[],future:[],pend:null}, HMAX=200, HISTMB=120;
 let gridOff=0, liveQ='bar'; const scenes=[null,null,null,null];
+const SETUPS={speaker:'Sans casque',wired:'Casque filaire',bt:'Casque Bluetooth',ext:'Micro externe'};
+let setup='speaker', micId=''; const lats={speaker:null,wired:null,bt:null,ext:null}, latAt={};
 let paused=false, pausePos=0, metroVol=0.6, metroSub=1, meter=4;
 let normOn=true, curProf=null, hpNode=null, gEnv=0, gGain=1;
 let loopLen=0, beats=4, lastLoop=null, dotsN=0, masterTake=null;
@@ -427,25 +429,51 @@ function stopTransport(){
 }
 
 // ---------- micro ----------
+async function openStream(){
+  const base={echoCancellation:false,noiseSuppression:false,autoGainControl:false};
+  if(micId){
+    try{ return await navigator.mediaDevices.getUserMedia({audio:{...base,deviceId:{exact:micId}}}); }
+    catch(e){ micId=''; msg("Le micro choisi n'est plus disponible : retour au micro par défaut."); }
+  }
+  return await navigator.mediaDevices.getUserMedia({audio:base});
+}
 async function ensureMic(){
   try{ await ctx.resume(); }catch(e){}
   if(micStream) return true;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ msg("Micro indisponible dans cette vue."); return false; }
-  try{
-    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-  }catch(e){ micStream=null; msg("Micro refusé ou bloqué ("+(e.name||'erreur')+"). Autorise-le dans les réglages du navigateur."); return false; }
+  try{ micStream=await openStream(); }
+  catch(e){ micStream=null; msg("Micro refusé ou bloqué ("+(e.name||'erreur')+"). Autorise-le dans les réglages du navigateur."); return false; }
   micSrc=ctx.createMediaStreamSource(micStream);
-  inGainNode=ctx.createGain(); inGainNode.gain.value=ingain;
-  hpNode=ctx.createBiquadFilter(); hpNode.type='highpass'; hpNode.Q.value=0.707;
-  micSrc.connect(inGainNode); inGainNode.connect(hpNode);
-  inAn=ctx.createAnalyser(); inAn.fftSize=1024; hpNode.connect(inAn);
-  applyProfile(curProf||profOf('beatbox'));
-  await setupCapture(hpNode);
-  const engNotice=captureEngine==='AudioWorklet'&&devEng!=='w';
-  if(engNotice){ devEng='w'; scheduleSave(true); }
+  let engNotice=false;
+  if(!inGainNode){
+    inGainNode=ctx.createGain(); inGainNode.gain.value=ingain;
+    hpNode=ctx.createBiquadFilter(); hpNode.type='highpass'; hpNode.Q.value=0.707;
+    inGainNode.connect(hpNode);
+    inAn=ctx.createAnalyser(); inAn.fftSize=1024; hpNode.connect(inAn);
+    applyProfile(curProf||profOf('beatbox'));
+    await setupCapture(hpNode);
+    engNotice=captureEngine==='AudioWorklet'&&devEng!=='w';
+    if(engNotice){ devEng='w'; scheduleSave(true); }
+  }
+  micSrc.connect(inGainNode);
   try{ navigator.audioSession.type='play-and-record'; }catch(e){}
-  msg(engNotice?"Moteur d'enregistrement amélioré : refais « Calibrer » dans Réglages micro et latence pour un calage précis.":'');
+  if(engNotice) msg("Moteur d'enregistrement amélioré : refais la calibration dans Réglages micro et latence pour un calage précis.");
+  listMics();
   return true;
+}
+async function reopenMic(){
+  if(recObj){ msg("Termine l'enregistrement avant de changer de micro."); return; }
+  if(micStream){ try{ (micStream.getTracks?micStream.getTracks():[]).forEach(tr=>tr.stop()); }catch(e){} try{ micSrc.disconnect(); }catch(e){} micStream=null; micSrc=null; }
+  if(await ensureMic()) msg('Micro activé : '+($('#micsel').selectedOptions[0]||{}).textContent+'.');
+}
+async function listMics(){
+  const sel=$('#micsel'); if(!sel||!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices) return;
+  try{
+    const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'&&d.deviceId&&d.deviceId!=='default'&&d.deviceId!=='communications');
+    sel.innerHTML='<option value="">Micro par défaut</option>'+devs.map((d,k)=>`<option value="${d.deviceId.replace(/"/g,'')}"></option>`).join('');
+    devs.forEach((d,k)=>{ sel.options[k+1].textContent=d.label||('Micro '+(k+1)); });
+    sel.value=devs.some(d=>d.deviceId===micId)?micId:'';
+  }catch(e){}
 }
 // Le processeur reçoit le son du micro par blocs de 128 échantillons, chacun avec son numéro exact
 // dans la ligne de temps du moteur audio (currentFrame) : plus besoin d'estimer le temps.
@@ -965,6 +993,9 @@ const HELP={
   comp:"<b>Latence</b> : le petit retard entre le moment où tu joues et celui où ton téléphone l'enregistre. Si tes sons arrivent trop tard dans la boucle, augmente cette valeur. Le bouton « Calibrer » la règle tout seul.",
   src:"<b>Type de son</b> : dis à l'appli ce que tu vas enregistrer sur cette piste. Elle adapte le <b>filtre des graves</b> (plus fort pour la voix, pour éviter les « pop » et le bruit de manipulation ; très léger pour le beatbox et les percussions, pour garder les « boum »), la <b>sensibilité</b> (plus élevée pour les sons faibles et proches de l'environnement) et, pour la <b>voix</b>, un filtre qui atténue le bruit de fond entre les phrases. Cela ne change pas le micro du téléphone lui-même : le plus important reste la distance entre ta bouche et le micro.",
   lvl:"<b>Niveau auto des prises</b> : après chaque prise, si elle est trop faible, l'appli la remonte automatiquement à un bon volume. Pratique si tu t'éloignes du micro ou si tu fais des sons doux. Désactive-le si tu préfères régler le volume toi-même.",
+  setup:"<b>Je joue avec</b> : choisis ce que tu utilises pour écouter et enregistrer. L'appli garde une latence pour chaque configuration et passe de l'une à l'autre quand tu changes. <b>Sans casque</b> : calibration automatique. <b>Casque filaire</b> et <b>Casque Bluetooth</b> : calibration en tapant (le Bluetooth ajoute souvent 150 à 300 ms). <b>Micro externe</b> : choisis-le dans la liste « Micro » et calibre-le.",
+  micsel:"<b>Micro</b> : le micro utilisé pour enregistrer. « Par défaut » = celui choisi par la tablette. Avec un micro externe branché, choisis-le ici. Avec un casque Bluetooth, garde de préférence le micro de la tablette : utiliser le micro du casque fait souvent passer Android en « mode appel », avec un son de bien moins bonne qualité.",
+  caltap:"<b>Calibrer en tapant</b> : à faire <b>avec le casque sur les oreilles</b>. Tu entends 12 clics : les 4 premiers servent de décompte, puis tape sur la table (ou fais « pa » au micro) pile sur chacun des 8 suivants. L'appli mesure le retard total, casque compris, et le range dans la configuration choisie.",
   cal:"<b>Calibrer</b> : le téléphone joue des clics et mesure le retard avec son propre micro. Il faut être <b>sans casque</b>, volume moyen, dans un endroit calme. À refaire si tu changes de casque ou d'appareil."
 };
 function attachHelp(root){
@@ -1446,7 +1477,25 @@ function showFin(){ $('#finseg').querySelectorAll('button').forEach(b=>b.classLi
 $('#finseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; touchSettings(); fin=+b.dataset.l; commitSettings(); chain.setFin(fin); showFin(); scheduleSave(true); };
 $('#ingain').oninput=e=>{ ingain=+e.target.value; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1); scheduleSave(true); };
 $('#norm').onclick=e=>{ normOn=!normOn; e.target.classList.toggle('on',normOn); scheduleSave(true); };
-$('#comp').oninput=e=>{ comp=(+e.target.value)/1000; $('#compv').textContent=e.target.value+'ms'; scheduleSave(true); };
+function showComp(){ $('#comp').value=Math.round(comp*1000); $('#compv').textContent=Math.round(comp*1000)+'ms'; }
+function setupDefault(id){ const sp=lats.speaker!=null?lats.speaker:comp; return id==='bt'?Math.min(0.8,sp+0.2):sp; }
+function showSetupUI(){
+  $('#setupseg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===setup));
+  const v=lats[setup], d=latAt[setup];
+  $('#setuphint').textContent=SETUPS[setup]+' : latence '+Math.round(comp*1000)+' ms '+(v!=null&&d?'(mesurée le '+new Date(d).toLocaleDateString('fr-FR')+')':'(estimation, pas encore mesurée)')+'. '+
+    (setup==='speaker'?'Utilise « Calibrer automatiquement ».':setup==='ext'?'Choisis ton micro dans la liste, puis « Calibrer en tapant » (avec casque) ou « Calibrer automatiquement » (sans casque).':'Branche ton casque puis « Calibrer en tapant ».');
+  $('#cal').hidden=setup==='wired'||setup==='bt';
+  $('#caltap').hidden=setup==='speaker';
+}
+function selectSetup(id){
+  if(!SETUPS[id]) return;
+  setup=id; comp=lats[id]!=null?lats[id]:setupDefault(id);
+  showComp(); showSetupUI(); scheduleSave(true);
+  msg('Configuration « '+SETUPS[id]+' » : latence '+Math.round(comp*1000)+' ms'+(lats[id]==null?' (estimation, pense à calibrer).':'.'));
+}
+$('#setupseg').onclick=e=>{ const b=e.target.closest('button'); if(b) selectSetup(b.dataset.s); };
+$('#micsel').onchange=e=>{ micId=e.target.value; scheduleSave(true); reopenMic(); };
+$('#comp').oninput=e=>{ comp=(+e.target.value)/1000; lats[setup]=comp; $('#compv').textContent=e.target.value+'ms'; showSetupUI(); scheduleSave(true); };
 let clearTimer=null;
 $('#clearAll').onclick=e=>{
   const b=e.target;
@@ -1473,7 +1522,7 @@ $('#cal').onclick=async()=>{
     o.connect(g); g.connect(ctx.destination); o.start(tt); o.stop(tt+0.05);
   });
   cap={blocks:[],check:null};
-  await sleep((times[5]+0.6-ctx.currentTime)*1000);
+  await waitCtx(times[5]+0.6);
   const blocks=cap?cap.blocks:[]; cap=null;
   const offs=[];
   for(const ts of times){
@@ -1488,9 +1537,44 @@ $('#cal').onclick=async()=>{
   if(offs.length<3){ out.textContent='Pas assez de signal capté. Monte le volume, retire le casque, rapproche le téléphone de toi, puis réessaie. Sinon règle à la main.'; return; }
   offs.sort((a,b)=>a-b);
   const med=offs[Math.floor(offs.length/2)];
-  comp=clamp(med,0,0.4);
-  $('#comp').value=Math.round(comp*1000); $('#compv').textContent=Math.round(comp*1000)+'ms';
-  out.textContent='Latence mesurée : '+Math.round(med*1000)+' ms ('+offs.length+'/6 clics exploitables). Fais un test d\'enregistrement pour vérifier à l\'oreille.';
+  const v=clamp(med,0,0.8), target=setup==='ext'?'ext':'speaker';
+  lats[target]=v; latAt[target]=Date.now();
+  if(setup===target){ comp=v; showComp(); }
+  showSetupUI();
+  out.textContent='Latence mesurée ('+SETUPS[target]+') : '+Math.round(med*1000)+' ms ('+offs.length+'/6 clics exploitables). Fais un test d\'enregistrement pour vérifier à l\'oreille.';
+  scheduleSave(true);
+};
+async function waitCtx(t){ const lim=Date.now()+20000; while(ctx.currentTime<t&&Date.now()<lim) await sleep(40); }
+// Calibration en tapant : tu entends des clics dans le casque et tu tapes dessus ; le micro enregistre tes frappes.
+// Le retard mesuré comprend tout : casque (Bluetooth compris), micro, et ta façon de jouer sur le temps.
+$('#caltap').onclick=async()=>{
+  const out=$('#calmsg');
+  if(recObj) cancelRec();
+  if(running) stopTransport();
+  if(!(await ensureMic())) return;
+  applyProfile(profOf('perc'));
+  const iv=0.75, n=12, c0=ctx.currentTime+0.8, times=[];
+  for(let j=0;j<n;j++) times.push(c0+j*iv);
+  times.forEach((tt,j)=>{
+    const o=ctx.createOscillator(), g=ctx.createGain(); o.type='square'; o.frequency.value=j%4===0?1500:1000;
+    g.gain.setValueAtTime(0.0001,tt); g.gain.exponentialRampToValueAtTime(0.6,tt+0.002); g.gain.exponentialRampToValueAtTime(0.0001,tt+0.05);
+    o.connect(g); g.connect(ctx.destination); o.start(tt); o.stop(tt+0.07);
+  });
+  out.textContent='Écoute les clics dans ton casque : les 4 premiers sont un décompte, puis tape sur la table (ou fais « pa ») pile sur les 8 suivants…';
+  cap={blocks:[],check:null};
+  await waitCtx(times[n-1]+0.9);
+  const blocks=cap?cap.blocks:[]; cap=null;
+  const t0w=c0-0.2, s0=Math.round((t0w-base)*SR), e0=Math.round((times[n-1]+0.9-base)*SR);
+  const x=gather(blocks,s0,e0);
+  const on=detectOnsets(x,x.length).map(o=>t0w+o.n/SR);
+  const offs=[];
+  for(let j=4;j<n;j++){ const tt=times[j]; const hit=on.find(t=>t-tt>-0.12&&t-tt<0.65); if(hit!=null) offs.push(hit-tt); }
+  if(offs.length<5){ out.textContent='Seulement '+offs.length+' frappe'+(offs.length>1?'s':'')+' sur 8 détectée'+(offs.length>1?'s':'')+'. Tape plus fort, rapproche la tablette ou monte le gain micro, puis réessaie.'; return; }
+  offs.sort((a,b)=>a-b);
+  const med=offs[Math.floor(offs.length/2)], spread=(offs[offs.length-1]-offs[0])/2;
+  const v=clamp(med,0,0.8);
+  lats[setup]=v; latAt[setup]=Date.now(); comp=v; showComp(); showSetupUI();
+  out.textContent='Latence mesurée ('+SETUPS[setup]+') : '+Math.round(med*1000)+' ms ('+offs.length+'/8 frappes, régularité ±'+Math.round(spread*1000)+' ms)'+(spread>0.08?'. Tes frappes étaient assez irrégulières : refais-la pour plus de précision.':'. Fais un test d\'enregistrement pour vérifier à l\'oreille.');
   scheduleSave(true);
 };
 
@@ -1635,7 +1719,7 @@ async function saveProj(){
     const sm=summary(), i=projIndex.list.findIndex(p=>p.id===projId);
     if(i>=0) projIndex.list[i]=sm; else projIndex.list.push(sm);
     projIndex.cur=projId;
-    const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn,eng:devEng,mv:metroVol,ms:metroSub}]];
+    const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn,eng:devEng,mv:metroVol,ms:metroSub,setup,lats,latAt,micId}]];
     if(audio) pairs.push(['p:'+projId+':audio',audio]);
     await idbPut(db,pairs);
     setSaveState('ok'); updProjList();
@@ -1643,7 +1727,7 @@ async function saveProj(){
   }catch(e){ if(withAudio) audioDirty=true; setSaveState('err'); }
 }
 function refreshGlobalUI(){
-  showMetroUI();
+  showMetroUI(); showSetupUI();
   $('#norm').classList.toggle('on',normOn);
   $('#snap').classList.toggle('on',snap);
   $('#mix').textContent='Prise : '+(mixMode?'ajoute':'remplace'); $('#mix').classList.toggle('on',mixMode);
@@ -1697,7 +1781,7 @@ async function loadProj(){
   try{
     const db=await idb();
     const dev=await idbGet(db,'device');
-    if(dev){ devLoaded=true; if(dev.comp!=null) comp=dev.comp; if(dev.ingain) ingain=dev.ingain; normOn=dev.normOn!==false; devEng=dev.eng||''; if(dev.mv!=null) metroVol=dev.mv; if(dev.ms) metroSub=dev.ms; }
+    if(dev){ devLoaded=true; if(dev.comp!=null) comp=dev.comp; if(dev.ingain) ingain=dev.ingain; normOn=dev.normOn!==false; devEng=dev.eng||''; if(dev.mv!=null) metroVol=dev.mv; if(dev.ms) metroSub=dev.ms; if(dev.lats){ Object.assign(lats,dev.lats); Object.assign(latAt,dev.latAt||{}); } else if(dev.comp!=null){ lats.speaker=dev.comp; } if(SETUPS[dev.setup]) setup=dev.setup; micId=dev.micId||''; }
     let idx=await idbGet(db,'index');
     if(!idx){
       // première ouverture avec les projets : on reprend l'ancien projet unique s'il existe
@@ -1820,9 +1904,10 @@ async function diagText(){
   L.push('Fréquence audio : '+SR+' Hz');
   const bl=ctx.baseLatency, ol=ctx.outputLatency;
   L.push('Latence annoncée par le navigateur : '+(bl!=null?Math.round(bl*1000)+' ms':'?')+' (moteur) / '+(ol!=null&&ol>0?Math.round(ol*1000)+' ms':'?')+' (sortie)');
-  L.push('Latence réglée dans l\'appli : '+Math.round(comp*1000)+' ms');
+  L.push('Configuration : '+SETUPS[setup]+' — latence '+Math.round(comp*1000)+' ms'+(lats[setup]!=null&&latAt[setup]?' (mesurée)':' (estimation)'));
+  L.push('Latences enregistrées : '+Object.keys(SETUPS).map(k=>SETUPS[k]+' '+(lats[k]!=null?Math.round(lats[k]*1000)+' ms':'—')).join(' · '));
   L.push('Moteur d\'enregistrement : '+(captureEngine||'pas encore démarré (fais une première prise)')+(typeof AudioWorkletNode!=='undefined'&&ctx.audioWorklet?' — AudioWorklet disponible':' — AudioWorklet indisponible'));
-  L.push('Micro : '+(micStream?'autorisé':'pas encore utilisé'));
+  L.push('Micro : '+(micStream?'autorisé — '+(($('#micsel').selectedOptions[0]||{}).textContent||'par défaut'):'pas encore utilisé'));
   L.push('Mémoire audio utilisée : '+memMB().toFixed(1)+' Mo (historique : '+histMB().toFixed(1)+' Mo, '+H.past.length+' annulation(s) possible(s))');
   try{ if(navigator.storage&&navigator.storage.persisted){ L.push('Stockage protégé : '+((await navigator.storage.persisted())?'oui':'non (le navigateur peut l\'effacer s\'il manque de place)')); } }catch(e){}
   try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); L.push('Stockage : '+(e.usage/1048576).toFixed(1)+' Mo utilisés sur '+Math.round(e.quota/1048576)+' Mo disponibles'); } }catch(e){}
