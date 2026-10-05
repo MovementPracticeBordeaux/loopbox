@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='28';
+const APPVER='29';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1144,11 +1144,28 @@ function denoiseData(d,level){
   const y=level==='strong'?spectralClean(d):d;
   return gateClean(y,floor,level==='strong'?36:28);
 }
+// écart entre les passages calmes et les passages forts : sans vrai silence, impossible de distinguer le bruit du son
+function quietContrast(d){
+  const fr=Math.round(0.02*SR), n=Math.floor(d.length/fr), r=[];
+  for(let k=0;k<n;k++){ let a=0; for(let i=k*fr;i<(k+1)*fr;i++) a+=d[i]*d[i]; r.push(Math.sqrt(a/fr)); }
+  r.sort((x,y)=>x-y); if(!r.length) return 0;
+  const p10=r[Math.floor(r.length*0.1)], p95=r[Math.floor(r.length*0.95)];
+  return p10>0?p95/p10:1e9;
+}
 function denoiseTracks(list,level){
-  list=list.filter(t=>t.buf); if(!list.length||recObj) return;
+  if(recObj) return;
+  const withSound=list.filter(t=>t.buf);
+  const bass=withSound.filter(t=>t.kind==='bass');
+  const cand=withSound.filter(t=>t.kind!=='bass');
+  const ok=[], noQuiet=[];
+  cand.forEach(t=>{ if(quietContrast(t.buf.getChannelData(0))<10) noQuiet.push(t); else ok.push(t); });
+  const skipTxt=[];
+  if(bass.length) skipTxt.push(bass.map(t=>'« '+t.name+' »').join(', ')+' (son généré, sans souffle)');
+  if(noQuiet.length) skipTxt.push(noQuiet.map(t=>'« '+t.name+' »').join(', ')+' (pas de passage calme pour repérer le bruit)');
+  if(!ok.length){ msg('Rien à nettoyer'+(skipTxt.length?' : '+skipTxt.join(' ; ')+'.':'.')); return; }
   pushHist();
   let gain=[];
-  list.forEach(t=>{
+  ok.forEach(t=>{
     const d=t.buf.getChannelData(0), before=noiseFloorRms(d);
     const y=denoiseData(d,level), after=noiseFloorRms(y);
     const keep=t.sel?{...t.sel}:null, nb=ctx.createBuffer(1,y.length,t.buf.sampleRate); nb.copyToChannel(y,0);
@@ -1158,7 +1175,7 @@ function denoiseTracks(list,level){
   });
   lockUI(); scheduleSave();
   const avg=gain.length?Math.round(-gain.reduce((a,b)=>a+b,0)/gain.length):0;
-  msg('Bruit nettoyé sur '+list.length+' piste'+(list.length>1?'s':'')+' (souffle réduit d\'environ '+avg+' dB dans les silences). ↶ pour revenir.');
+  msg('Bruit nettoyé sur '+ok.length+' piste'+(ok.length>1?'s':'')+' (souffle réduit d\'environ '+avg+' dB dans les silences)'+(skipTxt.length?'. Laissées intactes : '+skipTxt.join(' ; '):'')+'. ↶ pour revenir.');
 }
 
 // ---------- générateur de ligne de basse ----------

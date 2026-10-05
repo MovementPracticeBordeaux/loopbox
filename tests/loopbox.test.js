@@ -446,6 +446,32 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const b=P.lastBuf();
     ok(near(fz(b,1.1,1.8),55,3)&&near(fz(b,5.1,5.8),49,3),'notes jouées : '+fz(b,1.1,1.8).toFixed(1)+' / '+fz(b,5.1,5.8).toFixed(1));
   });
+
+  await test('nettoyer toutes les pistes : la basse et les sons continus ne sont jamais écrasés',async()=>{
+    const P=await boot();
+    const n=SR*4, d=new Float32Array(n); let sd=5;
+    for(let i=0;i<n;i++){ sd=(sd*16807)%2147483647; d[i]=0.01*(sd/2147483647*2-1); }
+    for(let k=0;k<8;k++){ const p=Math.round(k*0.5*SR)+2000; for(let i=0;i<5000;i++) d[p+i]+=0.7*Math.exp(-i/900)*Math.sin(2*Math.PI*90*i/SR); }
+    await P.importFile(0,{numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>d});
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[1]; tb.querySelector('.bgo').click(); await sleep(40);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=P.$$('.trk')[0]&&n, tone=new Float32Array(n); for(let i=0;i<n;i++) tone[i]=0.4*Math.sin(2*Math.PI*220*i/SR);
+    await P.importFile(2,{numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>tone});
+    const bufs=()=>[0,1,2].map(i=>P.$$('.trk')[i]);
+    const rmsAll=b=>{ const x=b.getChannelData(0); let s=0; for(const v of x) s+=v*v; return Math.sqrt(s/x.length); };
+    // on récupère les sons via la lecture
+    P.$('#dplay').click(); await sleep(40);
+    const before=new Map(); P.starts.filter(x=>x.buf).forEach(x=>before.set(x.buf.length+':'+rmsAll(x.buf).toFixed(4),true));
+    const bassBefore=P.buffers.find(b=>b.length===Math.round(n)&&false);
+    P.$('#dnall').value='light'; P.$('#dnallb').click(); await sleep(60);
+    const m=P.$('#msg').textContent;
+    ok(/Bruit nettoyé sur 1 piste/.test(m),'message : '+m);
+    ok(/Basse/.test(m)&&/son généré/.test(m),'la basse devrait être signalée comme laissée intacte : '+m);
+    ok(/pas de passage calme/.test(m),'le son continu devrait être laissé intact : '+m);
+    const played=P.starts.filter(x=>x.buf).slice(-6).map(x=>rmsAll(x.buf));
+    ok(played.every(v=>v>0.05),'une piste a été écrasée : niveaux '+played.map(v=>v.toFixed(3)).join(','));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
