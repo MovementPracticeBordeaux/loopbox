@@ -283,30 +283,6 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/LoopBox v\d+/.test(P.$('.foot').textContent),'version non affichée');
   });
 
-  await test('répéter une partie courte d\'une piste sur la durée de la boucle de base',async()=>{
-    const P=await boot(); const r=await recordBase(P);
-    P.$('#addtrk').click(); await sleep(10);
-    const L=r.buf.length/SR, t0e=r.tp+r.first-0.003, cur=P.ctx.currentTime;
-    const tgt0=t0e+Math.ceil((cur+1.2-t0e)/L)*L+0.003, press=tgt0-0.3;
-    P.impulses=[Math.round((tgt0+r.lat)*SR),Math.round((tgt0+r.T+r.lat)*SR)];
-    const stopAt=tgt0+2*r.T-0.05;
-    await P.runUntil(press,[{t:press,fn:()=>P.rec(1).click()}]);
-    await P.runUntil(stopAt,[{t:stopAt,fn:()=>P.rec(1).click()}]); await P.runUntil(stopAt+1);
-    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); await sleep(20);
-    ok(/temps 1 → 2 \(2 temps, détectés\)/.test(t2.querySelector('.trl').textContent),'partie détectée : '+t2.querySelector('.trl').textContent);
-    ok(!t2.querySelector('.trep button[data-n="fill"]').disabled&&t2.querySelector('.trep button[data-n="4"]').disabled===false,'boutons');
-    t2.querySelector('.trep button[data-n="fill"]').click(); await sleep(30);
-    const h=P.hits(P.lastBuf()), beat=r.buf.length/8;
-    ok(h.length===8,'coups après « Remplir » : '+h.length);
-    const inner=P.hits(P.starts.filter(x=>x.buf).length?P.buffers[P.buffers.length-2]:P.lastBuf());
-    const exp=[]; for(let k=0;k<4;k++) [144,144+Math.round(r.T*SR)].forEach(o=>exp.push(Math.round(o+k*2*beat)));
-    h.forEach((x,k)=>ok(Math.abs(x-exp[k])<=3,'coup '+k+' à '+x+' au lieu de '+exp[k]));
-    ok(P.hits(r.buf).length===16,'piste de base modifiée');
-    P.$('#undo').click(); await sleep(20);
-    ok(P.hits(P.lastPlayed()).length===2,'annulation : '+P.hits(P.lastPlayed()).length+' coups');
-  });
-
-  // ---------------- nettoyage du bruit et ligne de basse (v23) ----------------
   await test('nettoyer le bruit (léger) : le souffle disparaît des silences, les sons restent',async()=>{
     const P=await boot();
     const n=SR*4, d=new Float32Array(n); let sd=5;
@@ -335,77 +311,99 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     for(const tab of ['cut','fx','trk','son']){ t1.querySelector('.ttabs button[data-tab="'+tab+'"]').click(); ok(vis()===tab,'onglet '+tab+' → '+vis()); }
     ok(!t1.querySelector('.vol').closest('.pane'),'le volume doit rester visible hors onglets');
   });
-  await test('piste de basse dédiée : aperçu sans enregistrer, puis création calée sur la boucle',async()=>{
-    const P=await boot();
-    P.$('#addbass').click(); await sleep(20);
-    const tb=P.$$('.trk')[1];
-    ok(tb.classList.contains('kbass')||/kbass/.test(tb.className),'type de piste');
-    ok(tb.querySelector('.tn').textContent==='Basse','nom : '+tb.querySelector('.tn').textContent);
-    ok(!tb.querySelector('.pane[data-pane="bass"]').hidden,'onglet Basse ouvert');
-    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
-    set('.bnote','0'); set('.bscale','min'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','1'); set('.bbeats','8');
+
+  // ---------------- répétition non destructive (v26) ----------------
+  await test('répéter une partie sans rien effacer : silence, en boucle, ×2 — boucle de base inchangée',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length/SR, t0e=r.tp+r.first-0.003, cur=P.ctx.currentTime;
+    const tgt0=t0e+Math.ceil((cur+1.2-t0e)/L)*L+0.003, press=tgt0-0.3;
+    P.impulses=[Math.round((tgt0+r.lat)*SR),Math.round((tgt0+r.T+r.lat)*SR)];
+    const stopAt=tgt0+2*r.T-0.05;
+    await P.runUntil(press,[{t:press,fn:()=>P.rec(1).click()}]);
+    await P.runUntil(stopAt,[{t:stopAt,fn:()=>P.rec(1).click()}]); await P.runUntil(stopAt+1);
+    const orig=P.lastBuf();
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(20);
+    ok(/partie détectée : temps 1 → 2/.test(t2.querySelector('.trl').textContent),'partie : '+t2.querySelector('.trl').textContent);
+    t2.querySelector('.trep button[data-m="loop"]').click(); await sleep(30);
+    const beat=r.buf.length/8, inner=[144,144+Math.round(r.T*SR)];
+    let h=P.hits(P.lastPlayed());
+    ok(h.length===8,'en boucle : '+h.length+' coups joués');
+    const exp=[]; for(let k=0;k<4;k++) inner.forEach(o=>exp.push(Math.round(o+k*2*beat)));
+    h.forEach((x,k)=>ok(Math.abs(x-exp[k])<=3,'coup '+k+' à '+x+' au lieu de '+exp[k]));
+    ok(P.hits(orig).length===2&&P.lastPlayed().length===r.buf.length,'le son d\'origine ou la durée a changé');
+    ok(/temps 1 → 2/.test(t2.querySelector('.trl').textContent)&&t2.querySelector('.trep button[data-m="loop"]').classList.contains('on'),'affichage du mode');
+    t2.querySelector('.trep button[data-m="2"]').click(); await sleep(30);
+    ok(P.hits(P.lastPlayed()).length===4,'×2 : '+P.hits(P.lastPlayed()).length+' coups');
+    t2.querySelector('.trep button[data-m="mute"]').click(); await sleep(30);
+    ok(P.hits(P.lastPlayed()).length===2,'silence : '+P.hits(P.lastPlayed()).length+' coups');
+    P.$('#undo').click(); await sleep(30);
+    ok(P.hits(P.lastPlayed()).length===4,'annuler doit revenir à ×2 : '+P.hits(P.lastPlayed()).length);
+    ok(P.hits(r.buf).length===16,'piste de base modifiée');
+  });
+  // ---------------- basse sur ligne de temps (v26) ----------------
+  const bassBoot=async(idb)=>{ const P=await boot(idb?{idb}:undefined); P.$('#addbass').click(); await sleep(20); const tb=P.$$('.trk')[1]; return {P,tb}; };
+  const fz=(b,a,z)=>{ const bl=b.length/8; return freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(a*bl),Math.round(z*bl))}); };
+  await test('basse : réglages par défaut = une seule note partout (plus de notes qui changent toutes seules)',async()=>{
+    const {P,tb}=await bassBoot();
+    ok(/kbass/.test(tb.className)&&tb.querySelector('.tn').textContent==='Basse','piste de basse');
+    ok(tb.querySelector('.bmel').value==='same'&&tb.querySelector('.btlinfo').textContent.startsWith('Do · 1 bloc'),'défauts : '+tb.querySelector('.bmel').value+' / '+tb.querySelector('.btlinfo').textContent);
+    const POS={noire:[0,1,2,3],croches:[0,.5,1,1.5,2,2.5,3,3.5],funk:[0,.75,1.5,2,2.75,3.5],hiphop:[0,1.75,2.5]};
+    for(const rh of ['noire','croches','funk','hiphop']){
+      tb.querySelector('.brhy').value=rh; tb.querySelector('.brhy').dispatchEvent(new P.w.Event('change'));
+      tb.querySelector('.bgo').click(); await sleep(30);
+      const b=P.lastBuf(), ev=[];
+      for(const bar of [0,4]) for(const p0 of POS[rh]) ev.push(fz(b,bar+p0+0.02,bar+p0+0.18));
+      ok(ev.every(f=>near(f,65.4,3)),'rythme '+rh+' : fréquences '+ev.map(f=>f.toFixed(0)).join(','));
+    }
+  });
+  await test('basse : ligne de temps — couper, choisir la note, faire glisser la limite, glissé',async()=>{
+    const {P,tb}=await bassBoot();
+    tb.querySelector('.bsplit').click(); await sleep(10);
+    ok(tb.querySelector('.btlinfo').textContent.startsWith('Do → Do · 2 blocs'),'après coupe : '+tb.querySelector('.btlinfo').textContent);
+    const bsn=tb.querySelector('.bsn'); bsn.value='5'; bsn.dispatchEvent(new P.w.Event('change'));
+    ok(tb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'note : '+tb.querySelector('.btlinfo').textContent);
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,width:400});
+    const pe=(type,x)=>{ const e=new P.w.MouseEvent(type,{clientX:x,bubbles:true}); c.dispatchEvent(e); };
+    pe('pointerdown',200); pe('pointermove',300); pe('pointerup',300); await sleep(10);
+    ok(/temps 7 → 8/.test(tb.querySelector('.bselinfo').textContent)||/Do → Fa/.test(tb.querySelector('.btlinfo').textContent),'');
+    tb.querySelector('.bgo').click(); await sleep(30);
+    let b=P.lastBuf();
+    ok(near(fz(b,5.1,5.8),65.4,3)&&near(fz(b,6.1,6.8),87.3,3),'limite déplacée au temps 7 : '+fz(b,5.1,5.8).toFixed(1)+' / '+fz(b,6.1,6.8).toFixed(1));
+    pe('pointerdown',50); await sleep(5);
+    const gl=tb.querySelector('.bgl'); gl.checked=true; gl.dispatchEvent(new P.w.Event('change'));
+    tb.querySelector('.bgo').click(); await sleep(30);
+    b=P.lastBuf();
+    ok(fz(b,5.5,5.95)>fz(b,5.05,5.3)+5,'glissé vers Fa absent : '+fz(b,5.05,5.3).toFixed(1)+' → '+fz(b,5.5,5.95).toFixed(1));
+    ok(/Do ↝ → Fa/.test(tb.querySelector('.btlinfo').textContent),'affichage du glissé : '+tb.querySelector('.btlinfo').textContent);
+    tb.querySelector('.bdel').click(); await sleep(5);
+    ok(tb.querySelector('.btlinfo').textContent.includes('1 bloc'),'retirer un bloc : '+tb.querySelector('.btlinfo').textContent);
+  });
+  await test('basse : aperçu sans enregistrer, mélodie avec octave',async()=>{
+    const {P,tb}=await bassBoot();
     P.starts.length=0; tb.querySelector('.bprev').click(); await sleep(30);
     const pv=P.starts.filter(x=>x.buf).slice(-1)[0];
-    ok(pv&&near(pv.buf.length,Math.round(8*60/90*SR),2),'aperçu non lancé ou mauvaise longueur');
-    ok(/Arrêter/.test(tb.querySelector('.bprev').textContent),'bouton d\'aperçu');
-    ok(P.$('#lockhint').style.display==='none','l\'aperçu ne doit pas créer la boucle');
-    tb.querySelector('.bgo').click(); await sleep(40);
-    const b=P.lastBuf(), L=b.length, bl=L/8;
-    ok(P.$('#lockhint').style.display!=='none','la boucle doit être créée en validant');
-    ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(0.1*bl),Math.round(0.9*bl))}),65.4,3),'1re note pas en Do');
-    ok(near(freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(4.1*bl),Math.round(4.9*bl))}),103.8,4),'2e mesure pas en La♭');
-    ok(/Appliquer/.test(tb.querySelector('.bgo').textContent),'le bouton devrait proposer d\'appliquer les changements');
-    ok(P.$$('.trk')[0].querySelector('.pane[data-pane="bass"]').hidden&&P.$$('.trk')[0].querySelector('.ttabs button[data-tab="bass"]').hidden,'la piste 1 ne doit pas avoir de basse');
+    ok(pv&&near(pv.buf.length,Math.round(8*60/90*SR),2)&&P.$('#lockhint').style.display==='none','aperçu');
+    const sel=tb.querySelector('.bmel'); sel.value='oct'; sel.dispatchEvent(new P.w.Event('change'));
+    const r2=tb.querySelector('.brhy'); r2.value='croches'; r2.dispatchEvent(new P.w.Event('change'));
+    tb.querySelector('.bgo').click(); await sleep(30);
+    const b=P.lastBuf();
+    ok(near(fz(b,0.05,0.4),65.4,3)&&near(fz(b,0.55,0.9),130.8,4),'octave en alternance : '+fz(b,0.05,0.4).toFixed(0)+' / '+fz(b,0.55,0.9).toFixed(0));
   });
-  await test('basse : évolution vers une autre note (mi-boucle et glissé)',async()=>{
-    const P=await boot();
-    P.$('#addbass').click(); await sleep(20);
-    const tb=P.$$('.trk')[1];
-    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
-    set('.bnote','0'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','0'); set('.bbeats','8'); set('.bevo','half'); set('.bevon','5');
-    ok(!tb.querySelector('.bevon').hidden,'choix de la note visée caché');
-    tb.querySelector('.bgo').click(); await sleep(40);
-    let b=P.lastBuf(), bl=b.length/8;
-    const f=(a,z)=>freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(a*bl),Math.round(z*bl))});
-    ok(near(f(1.1,1.9),65.4,3),'1re moitié : '+f(1.1,1.9).toFixed(1));
-    ok(near(f(5.1,5.9),87.3,3),'2e moitié pas en Fa : '+f(5.1,5.9).toFixed(1));
-    set('.bevo','glide'); set('.bevon','7'); tb.querySelector('.bgo').click(); await sleep(40);
-    b=P.lastBuf(); bl=b.length/8;
-    ok(near(f(0.1,0.9),65.4,3),'début de boucle : '+f(0.1,0.9).toFixed(1));
-    ok(f(7.3,7.9)<f(4.1,4.6)-8&&near(f(7.6,7.95),49,4),'pas de glissé vers le Sol grave (chemin le plus court) : '+f(4.1,4.6).toFixed(1)+' → '+f(7.6,7.95).toFixed(1));
-    P.$('#undo').click(); await sleep(20);
-    ok(/Action annulée/.test(P.$('#msg').textContent),'annulation');
-  });
-  await test('piste de basse retrouvée au rechargement (type et réglages)',async()=>{
+  await test('basse : anciens réglages convertis en blocs, et blocs retrouvés au rechargement',async()=>{
     const idb=new FI.IDBFactory();
-    const P=await boot({idb});
-    P.$('#addbass').click(); await sleep(20);
-    const tb=P.$$('.trk')[1]; tb.querySelector('.bpat').value='funk'; tb.querySelector('.btype').value='acid';
+    await new Promise(res=>{ const r=idb.open('loopbox',1); r.onupgradeneeded=()=>r.result.createObjectStore('proj'); r.onsuccess=()=>{ const db=r.result, tx=db.transaction('proj','readwrite'), st=tx.objectStore('proj');
+      st.put({cur:'p1',list:[{id:'p1',name:'Ancien',updated:1}]},'index');
+      st.put({v:2,name:'Ancien',bpm:90,loopLen:0,beats:4,tracks:[{vol:0.8},{vol:0.8,k:'bass',bs:{note:0,scale:'min',pat:'marche',type:'sub',len:1,prog:false,evo:'half',evoNote:5,evoAt:2,beats:8}}]},'p:p1:main');
+      tx.oncomplete=()=>{ db.close(); res(); }; }; });
+    const P=await boot({idb}); await sleep(400);
+    const tb=P.$$('.trk')[1]; tb.querySelector('.tog').click(); await sleep(20);
+    ok(tb&&tb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'conversion : '+(tb?tb.querySelector('.btlinfo').textContent:'pas de piste'));
+    ok(tb.querySelector('.brhy').value==='noire'&&tb.querySelector('.bmel').value==='walk','motif « marche » converti : '+tb.querySelector('.brhy').value+'/'+tb.querySelector('.bmel').value);
     tb.querySelector('.bgo').click(); await sleep(900);
     const Q=await boot({idb}); await sleep(400);
-    const qb=Q.$$('.trk')[1];
-    ok(qb&&/kbass/.test(qb.className)&&qb.querySelector('.bpat').value==='funk'&&qb.querySelector('.btype').value==='acid','rechargement : '+(qb?qb.className+' '+qb.querySelector('.bpat').value:'pas de piste'));
-  });
-
-  await test('basse : choisir le temps où la note change (menu et toucher du dessin)',async()=>{
-    const P=await boot();
-    P.$('#addbass').click(); await sleep(20);
-    const tb=P.$$('.trk')[1];
-    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
-    set('.bnote','0'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','0'); set('.bbeats','8'); set('.bevo','half'); set('.bevon','5');
-    ok(!tb.querySelector('.bevat').hidden&&tb.querySelector('.bevat').options.length===8,'menu du temps : '+tb.querySelector('.bevat').options.length+' choix');
-    set('.bevat','2');
-    tb.querySelector('.bgo').click(); await sleep(40);
-    let b=P.lastBuf(), bl=b.length/8;
-    const f=(a,z)=>freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(a*bl),Math.round(z*bl))});
-    ok(near(f(1.1,1.9),65.4,3),'temps 2 devrait rester en Do : '+f(1.1,1.9).toFixed(1));
-    ok(near(f(2.1,2.9),87.3,3),'temps 3 devrait passer en Fa : '+f(2.1,2.9).toFixed(1));
-    const cv=tb.querySelector('.bviz'); cv.getBoundingClientRect=()=>({left:0,width:400});
-    cv.dispatchEvent(new P.w.MouseEvent('click',{clientX:300,bubbles:true})); await sleep(20);
-    ok(tb.querySelector('.bevat').value==='6','toucher le dessin aux 3/4 → temps 7 : valeur '+tb.querySelector('.bevat').value);
-    tb.querySelector('.bgo').click(); await sleep(40);
-    b=P.lastBuf(); bl=b.length/8;
-    ok(near(f(5.1,5.9),65.4,3)&&near(f(6.1,6.9),87.3,3),'changement au temps 7 : '+f(5.1,5.9).toFixed(1)+' / '+f(6.1,6.9).toFixed(1));
+    const qb=Q.$$('.trk')[1]; qb.querySelector('.tog').click(); await sleep(20);
+    ok(qb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'rechargement : '+qb.querySelector('.btlinfo').textContent);
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
