@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='24';
+const APPVER='25';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -988,7 +988,7 @@ const HELP={
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   bass:"<b>Piste de basse</b> : l'appli fabrique une basse calée sur ta boucle. Le dessin montre les notes (une ligne par note, plus haut = plus aigu). « ▶ Aperçu » la fait entendre sans l'enregistrer ; change les réglages pendant l'aperçu pour comparer, puis « Créer la basse ». <b>Note</b> = la tonalité (Do, Ré…), <b>mineur / majeur</b> = l'ambiance. <b>Motif</b> = le rythme de la basse. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée, nerveuse), 808 (grave qui chute, hip-hop). <b>Accords</b> : la basse peut rester sur la même note ou suivre une suite d'accords classique qui change à chaque mesure. Si aucune boucle n'existe, elle crée la boucle avec la longueur choisie au tempo du curseur. Ensuite, c'est une piste comme les autres : effets, tonalité, hauteur, volume, recalage… ↶ annule.",
-  bevo:"<b>Évolution</b> : fait bouger la basse vers une autre note pendant la boucle. <b>Mi-boucle</b> : la seconde moitié est jouée sur la note choisie. <b>Alterne</b> : une mesure sur deux. <b>Glisse</b> : pendant la dernière mesure, la basse monte ou descend en continu jusqu'à la note choisie, puis la boucle repart. Le dessin montre le résultat ; écoute-le avec « Aperçu ».",
+  bevo:"<b>Évolution</b> : fait bouger la basse vers une autre note pendant la boucle. <b>Change de note</b> : à partir du temps choisi, la basse passe sur l'autre note jusqu'à la fin de la boucle. <b>Alterne</b> : une mesure sur deux. <b>Glisse</b> : à partir du temps choisi, la basse monte ou descend en continu jusqu'à l'autre note, puis la boucle repart. Pour choisir le temps, utilise le menu « à partir du temps… » ou <b>touche directement le dessin</b> à l'endroit voulu (repère orange). Le dessin montre le résultat ; écoute-le avec « Aperçu ».",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
@@ -1184,14 +1184,16 @@ function synthNote(out,st,dur,f,vel,type,f2){
     out[(st+i)%L]+=v*env*vel*0.6;
   }
 }
-function defaultBass(){ return {note:0,scale:'min',pat:'tonique',type:'sub',len:1,prog:false,evo:'none',evoNote:5,beats:8}; }
+function defaultBass(){ return {note:0,scale:'min',pat:'tonique',type:'sub',len:1,prog:false,evo:'none',evoNote:5,evoAt:null,beats:8}; }
 // liste des notes : position (en temps), note MIDI de départ et d'arrivée (glissé), durée (en temps), force
 function bassEvents(o,nb){
   const pat=BASS_PATTERNS[o.pat][1], bars=Math.max(1,Math.ceil(nb/meter));
   const prog=o.prog?(o.scale==='min'?[0,8,3,10]:[0,7,9,5]):[0];
   const root=o.note<=4?36+o.note:24+o.note;
   let d=((o.evoNote-o.note)%12+12)%12; if(d>6) d-=12;
-  const half=nb/2, lastStart=bars>1?(bars-1)*meter:half, ev=[];
+  const defAt=o.evo==='glide'?(bars>1?(bars-1)*meter:nb/2):nb/2;
+  const at=(o.evoAt!=null&&o.evoAt>0&&o.evoAt<nb)?o.evoAt:defAt;
+  const half=at, lastStart=at, ev=[];
   const fold=m=>{ while(m>55) m-=12; while(m<28) m+=12; return m; };
   for(let b=0;b<bars;b++){
     const ch=prog[b%prog.length];
@@ -1222,18 +1224,29 @@ function renderBass(o,L,nb){
 function makeBass(o){ return renderBass(o,loopLen,beats); }
 function readBassOpts(t){
   const el=t.el;
-  return {note:+$('.bnote',el).value,scale:$('.bscale',el).value,pat:$('.bpat',el).value,type:$('.btype',el).value,len:+$('.blen',el).value,prog:$('.bprog',el).value==='1',evo:$('.bevo',el).value,evoNote:+$('.bevon',el).value,beats:+$('.bbeats',el).value};
+  return {note:+$('.bnote',el).value,scale:$('.bscale',el).value,pat:$('.bpat',el).value,type:$('.btype',el).value,len:+$('.blen',el).value,prog:$('.bprog',el).value==='1',evo:$('.bevo',el).value,evoNote:+$('.bevon',el).value,evoAt:$('.bevat',el).value===''?null:+$('.bevat',el).value,beats:+$('.bbeats',el).value};
 }
 function showBassOpts(t){
   const el=t.el, o=t.bass||defaultBass();
   $('.bnote',el).value=o.note; $('.bscale',el).value=o.scale; $('.bpat',el).value=o.pat; $('.btype',el).value=o.type;
   $('.blen',el).value=String(o.len); $('.bprog',el).value=o.prog?'1':'0'; $('.bevo',el).value=o.evo||'none'; $('.bevon',el).value=o.evoNote??5; $('.bbeats',el).value=String(o.beats||8);
+  fillEvoAt(t,o.evoAt);
+}
+// menu « à partir du temps… » : un choix par temps de la boucle (le 1er temps exclu)
+function fillEvoAt(t,want){
+  const sel=$('.bevat',t.el); if(!sel) return;
+  const nb=loopLen?beats:(+$('.bbeats',t.el).value||8), cur=want!==undefined?want:(sel.value===''?null:+sel.value);
+  let html='<option value="">'+($('.bevo',t.el).value==='glide'?'dernière mesure':'à mi-boucle')+'</option>';
+  for(let k=1;k<nb;k++) html+='<option value="'+k+'">à partir du temps '+(k+1)+'</option>';
+  sel.innerHTML=html;
+  sel.value=(cur!=null&&cur>0&&cur<nb)?String(cur):'';
 }
 function drawBassViz(t){
   const c=$('.bviz',t.el); if(!c) return;
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr);
   const o=readBassOpts(t), nb=loopLen?beats:o.beats, ev=bassEvents(o,nb);
   $('.bevon',t.el).hidden=o.evo==='none';
+  $('.bevat',t.el).hidden=!(o.evo==='half'||o.evo==='glide');
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':'✓ Créer la basse';
   if(!w||!hh) return;
   c.width=w; c.height=hh;
@@ -1242,6 +1255,12 @@ function drawBassViz(t){
   const X=p=>p/nb*w, Y=m=>hh-(m-lo)/(hi-lo)*hh;
   for(let k=0;k<=nb;k++){ g.fillStyle=k%meter===0?'rgba(128,128,128,.55)':'rgba(128,128,128,.2)'; g.fillRect(X(k),0,1,hh); }
   g.strokeStyle=t.color; g.fillStyle=t.color; g.lineWidth=Math.max(4,hh/16); g.lineCap='round';
+  if(o.evo==='half'||o.evo==='glide'){
+    const bars=Math.max(1,Math.ceil(nb/meter)), at=(o.evoAt!=null&&o.evoAt>0&&o.evoAt<nb)?o.evoAt:(o.evo==='glide'?(bars>1?(bars-1)*meter:nb/2):nb/2);
+    g.fillStyle='rgba(255,138,0,.18)'; g.fillRect(X(at),0,w-X(at),hh);
+    g.fillStyle='#FF8A00'; g.fillRect(X(at)-1.5*dpr,0,3*dpr,hh);
+    g.fillStyle=t.color;
+  }
   ev.forEach(e=>{ g.beginPath(); g.moveTo(X(e.pos)+3,Y(e.m)); g.lineTo(Math.max(X(e.pos)+4,X(Math.min(nb,e.pos+e.len))-3),Y(e.m2)); g.stroke(); });
 }
 // ----- aperçu : on écoute le motif sans rien enregistrer
@@ -1291,7 +1310,7 @@ function addBassTrack(){
   $('.tn',t.el).textContent=t.name;
   setKindUI(t); showBassOpts(t);
   const b=$('.tbody',t.el); b.hidden=false; $('.tog',t.el).setAttribute('aria-expanded','true'); updFold();
-  setTab(t,'bass');
+  setTab(t,'bass'); fillEvoAt(t,null); drawBassViz(t);
   try{ t.el.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
   updLive(); scheduleSave(true);
   msg('Piste de basse créée : choisis le motif, écoute l\'aperçu, puis « Créer la basse ».');
@@ -1304,7 +1323,7 @@ function setTab(t,tab){
   t.el.querySelectorAll('.ttabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   t.el.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==tab);
   if(tab==='cut') drawTsel(t);
-  if(tab==='bass') drawBassViz(t);
+  if(tab==='bass'){ fillEvoAt(t); drawBassViz(t); }
 }
 function setKindUI(t){
   const bass=t.kind==='bass';
@@ -1371,7 +1390,7 @@ function buildTrackUI(t){
     <div class="row wrap"><span class="lbl w2">Motif</span><select class="bpat bopt" style="width:auto">${Object.keys(BASS_PATTERNS).map(k=>`<option value="${k}">${BASS_PATTERNS[k][0]}</option>`).join('')}</select></div>
     <div class="row wrap"><span class="lbl w2">Son</span><select class="btype bopt" style="width:auto">${Object.keys(BASS_TYPES).map(k=>`<option value="${k}">${BASS_TYPES[k]}</option>`).join('')}</select></div>
     <div class="row wrap"><span class="lbl w2">Notes</span><select class="blen bopt" style="width:auto"><option value="0.5">courtes</option><option value="1" selected>normales</option><option value="1.6">longues</option></select><select class="bprog bopt" style="width:auto"><option value="0">même accord tout du long</option><option value="1">accord qui change à chaque mesure</option></select></div>
-    <div class="row wrap"><span class="lbl w2" data-help="bevo">Évolution</span><select class="bevo bopt" style="width:auto"><option value="none">aucune</option><option value="half">passe à une autre note à mi-boucle</option><option value="alt">alterne avec une autre note à chaque mesure</option><option value="glide">glisse vers une autre note en fin de boucle</option></select><select class="bevon bopt" style="width:auto" aria-label="Note visée">${NOTE_FR.map((n,i)=>`<option value="${i}">vers ${n}</option>`).join('')}</select></div>
+    <div class="row wrap"><span class="lbl w2" data-help="bevo">Évolution</span><select class="bevo bopt" style="width:auto"><option value="none">aucune</option><option value="half">change de note à un temps choisi</option><option value="alt">alterne avec une autre note à chaque mesure</option><option value="glide">glisse vers une autre note à partir d'un temps choisi</option></select><select class="bevon bopt" style="width:auto" aria-label="Note visée">${NOTE_FR.map((n,i)=>`<option value="${i}">vers ${n}</option>`).join('')}</select><select class="bevat bopt" style="width:auto" aria-label="Temps du changement"></select></div>
     <div class="row wrap bbrow"><span class="lbl w2">Longueur</span><select class="bbeats bopt" style="width:auto"><option value="4">4 temps</option><option value="8" selected>8 temps</option><option value="16">16 temps</option></select><span class="hint" style="margin:0">(si aucune boucle n'existe encore)</span></div>
     <div class="row wrap"><button class="bprev">▶ Aperçu</button><button class="bgo primary">✓ Créer la basse</button></div>
     <p class="hint bst"></p>
@@ -1453,7 +1472,15 @@ function buildTrackUI(t){
   $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
   $('.bgo',el).onclick=()=>genBass(t);
   $('.bprev',el).onclick=()=>{ if(preview&&preview.t===t) stopPreview(); else startPreview(t); };
-  el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>{ drawBassViz(t); if(preview&&preview.t===t) startPreview(t); });
+  el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>{ if(x.classList.contains('bevo')||x.classList.contains('bbeats')) fillEvoAt(t); drawBassViz(t); if(preview&&preview.t===t) startPreview(t); });
+  $('.bviz',el).onclick=e=>{
+    const r=e.currentTarget.getBoundingClientRect(); if(!r.width) return;
+    const nb=loopLen?beats:(+$('.bbeats',el).value||8), k=Math.round((e.clientX-r.left)/r.width*nb);
+    if(k<1||k>=nb) return;
+    if(!['half','glide'].includes($('.bevo',el).value)){ $('.bevo',el).value='half'; }
+    fillEvoAt(t,k); drawBassViz(t); if(preview&&preview.t===t) startPreview(t);
+    $('.bst',el).textContent='Changement de note à partir du temps '+(k+1)+'.';
+  };
   el.querySelectorAll('.ttabs button').forEach(b=>b.onclick=()=>setTab(t,b.dataset.tab));
   $('.qbtn',el).onclick=()=>quantizeTrack(t,+$('.qgrid',el).value,+$('.qstr',el).value);
   $('.revb',el).onclick=()=>reverseTrack(t);

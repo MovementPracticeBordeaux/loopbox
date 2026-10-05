@@ -386,6 +386,27 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const qb=Q.$$('.trk')[1];
     ok(qb&&/kbass/.test(qb.className)&&qb.querySelector('.bpat').value==='funk'&&qb.querySelector('.btype').value==='acid','rechargement : '+(qb?qb.className+' '+qb.querySelector('.bpat').value:'pas de piste'));
   });
+
+  await test('basse : choisir le temps où la note change (menu et toucher du dessin)',async()=>{
+    const P=await boot();
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[1];
+    const set=(c,v)=>{ const e=tb.querySelector(c); e.value=v; e.dispatchEvent(new P.w.Event('change')); };
+    set('.bnote','0'); set('.bpat','tonique'); set('.btype','sub'); set('.bprog','0'); set('.bbeats','8'); set('.bevo','half'); set('.bevon','5');
+    ok(!tb.querySelector('.bevat').hidden&&tb.querySelector('.bevat').options.length===8,'menu du temps : '+tb.querySelector('.bevat').options.length+' choix');
+    set('.bevat','2');
+    tb.querySelector('.bgo').click(); await sleep(40);
+    let b=P.lastBuf(), bl=b.length/8;
+    const f=(a,z)=>freqOf({getChannelData:()=>b.getChannelData(0).subarray(Math.round(a*bl),Math.round(z*bl))});
+    ok(near(f(1.1,1.9),65.4,3),'temps 2 devrait rester en Do : '+f(1.1,1.9).toFixed(1));
+    ok(near(f(2.1,2.9),87.3,3),'temps 3 devrait passer en Fa : '+f(2.1,2.9).toFixed(1));
+    const cv=tb.querySelector('.bviz'); cv.getBoundingClientRect=()=>({left:0,width:400});
+    cv.dispatchEvent(new P.w.MouseEvent('click',{clientX:300,bubbles:true})); await sleep(20);
+    ok(tb.querySelector('.bevat').value==='6','toucher le dessin aux 3/4 → temps 7 : valeur '+tb.querySelector('.bevat').value);
+    tb.querySelector('.bgo').click(); await sleep(40);
+    b=P.lastBuf(); bl=b.length/8;
+    ok(near(f(5.1,5.9),65.4,3)&&near(f(6.1,6.9),87.3,3),'changement au temps 7 : '+f(5.1,5.9).toFixed(1)+' / '+f(6.1,6.9).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
