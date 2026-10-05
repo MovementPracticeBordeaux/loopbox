@@ -271,6 +271,17 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(last&&last.audio&&last.audio.deviceId&&last.audio.deviceId.exact==='usb1','micro demandé : '+JSON.stringify(last));
     ok(last.audio.echoCancellation===false&&last.audio.noiseSuppression===false,'traitements du téléphone non désactivés');
   });
+
+  await test('menu projet : se referme en touchant ailleurs, et les pistes se déplient',async()=>{
+    const P=await boot();
+    P.$('#projbtn').click(); await sleep(10);
+    ok(!P.$('#projmenu').hidden&&P.$('.projbar').classList.contains('open'),'menu non ouvert');
+    const tog=P.$('.trk .tog');
+    tog.dispatchEvent(new P.w.Event('pointerdown',{bubbles:true})); tog.click(); await sleep(20);
+    ok(P.$('#projmenu').hidden,'le menu devrait se refermer');
+    ok(!P.$('.trk .tbody').hidden,'la piste 1 devrait être dépliée');
+    ok(/LoopBox v\d+/.test(P.$('.foot').textContent),'version non affichée');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

@@ -130,3 +130,6 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
   .pad{min-height:110px;}
   .dockin{max-width:880px;}
 }
+
+/* menu projet ouvert : la barre n'est plus collée en haut, elle défile avec la page */
+.projbar.open{position:relative;top:auto;}

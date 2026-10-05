@@ -1,5 +1,13 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
+const APPVER='21';
+// Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
+window.__lbErrors=[];
+(()=>{
+  const show=m=>{ window.__lbErrors.push(m); if(window.__lbErrors.length>5) window.__lbErrors.shift(); const el=document.getElementById('msg'); if(el) el.textContent='⚠ Erreur interne : '+m+' — envoie-moi ce message.'; };
+  window.addEventListener('error',e=>show((e.message||'erreur')+(e.lineno?' (ligne '+e.lineno+')':'')));
+  window.addEventListener('unhandledrejection',e=>{ const r=e.reason; show('promesse : '+((r&&(r.message||r.name))||String(r))); });
+})();
 (()=>{
 const MAXFX=2, MAXTRACKS=10, B=1024, MAXMASTER=30, MAXLOOP=40;
 const COLORS=['#e8472b','#f08a24','#e6b800','#7cb518','#1f9d55','#16a5a5','#2b7fe0','#6a5acd','#b04fc7','#d6457f'];
@@ -1336,6 +1344,7 @@ $('#foldall').onclick=()=>{ const any=tracks.some(t=>!$('.tbody',t.el).hidden); 
 $('#addtrk').onclick=()=>{ const t=addTrack(); if(t){ try{ t.el.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} } };
 addTrack();
 attachHelp(document);
+{ const f=document.querySelector('.foot'); if(f) f.textContent='LoopBox v'+APPVER+' · Movement Practice Bordeaux'; }
 try{ const how=$('#how'); if(localStorage.getItem('lb_how')==='0') how.open=false; how.addEventListener('toggle',()=>{ try{ localStorage.setItem('lb_how',how.open?'1':'0'); }catch(e){} }); }catch(e){}
 
 function drawWave(t){
@@ -1882,7 +1891,7 @@ function updProjList(){
     row.innerHTML=`<div class="pn"><b></b><small>${info} · ${fmtDate(p.updated)}</small></div>`;
     $('b',row).textContent=p.name;
     if(p.id===projId){ const c=document.createElement('span'); c.className='cur'; c.textContent='ouvert'; row.appendChild(c); }
-    else { const o=document.createElement('button'); o.textContent='Ouvrir'; o.onclick=()=>openProject(p.id); row.appendChild(o); }
+    else { const o=document.createElement('button'); o.textContent='Ouvrir'; o.onclick=()=>{ setProjMenu(false); openProject(p.id); }; row.appendChild(o); }
     const del=document.createElement('button'); del.textContent='🗑'; del.setAttribute('aria-label','Supprimer '+p.name);
     del.onclick=()=>{ if(del.dataset.arm!=='1'){ del.dataset.arm='1'; del.textContent='Confirmer ?'; setTimeout(()=>{ del.dataset.arm='0'; del.textContent='🗑'; },3000); return; } deleteProject(p.id); };
     row.appendChild(del);
@@ -1900,7 +1909,8 @@ async function diagText(){
   const ua=navigator.userAgent||'';
   const br=/Edg\//.test(ua)?'Edge':/SamsungBrowser/.test(ua)?'Samsung Internet':/Firefox\//.test(ua)?'Firefox':/CriOS|Chrome\//.test(ua)?'Chrome':/Safari\//.test(ua)?'Safari':'autre';
   const os=/Android/.test(ua)?'Android':/iPhone|iPad|iPod/.test(ua)?'iOS':/Windows/.test(ua)?'Windows':/Mac OS/.test(ua)?'macOS':'autre';
-  L.push('Navigateur : '+br+' sur '+os);
+  L.push('Version de LoopBox : '+APPVER);
+  L.push('Navigateur : '+br+' sur '+os+' — '+(window.innerWidth||0)+'×'+(window.innerHeight||0)+' px');
   L.push('Fréquence audio : '+SR+' Hz');
   const bl=ctx.baseLatency, ol=ctx.outputLatency;
   L.push('Latence annoncée par le navigateur : '+(bl!=null?Math.round(bl*1000)+' ms':'?')+' (moteur) / '+(ol!=null&&ol>0?Math.round(ol*1000)+' ms':'?')+' (sortie)');
@@ -1913,6 +1923,7 @@ async function diagText(){
   try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); L.push('Stockage : '+(e.usage/1048576).toFixed(1)+' Mo utilisés sur '+Math.round(e.quota/1048576)+' Mo disponibles'); } }catch(e){}
   L.push('Projets enregistrés : '+projIndex.list.length);
   L.push('Test de vitesse : '+diagSpeed);
+  L.push('Erreurs internes : '+(window.__lbErrors.length?window.__lbErrors.join(' | '):'aucune'));
   return L.join('\n');
 }
 async function showDiag(){ $('#diagout').textContent=await diagText(); }
@@ -1953,11 +1964,19 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!hadCtl||reloading) return; reloading=true; location.reload(); });
 }
 $('#undo').onclick=undo; $('#redo').onclick=redo;
-$('#projbtn').onclick=()=>{ const m=$('#projmenu'); m.hidden=!m.hidden; $('#projbtn').setAttribute('aria-expanded',String(!m.hidden)); if(!m.hidden) updProjUI(); };
+function setProjMenu(open){
+  const m=$('#projmenu'); m.hidden=!open;
+  $('#projbtn').setAttribute('aria-expanded',String(open));
+  document.querySelector('.projbar').classList.toggle('open',open);
+  if(open) updProjUI();
+}
+$('#projbtn').onclick=()=>setProjMenu($('#projmenu').hidden);
+// le menu se referme dès qu'on touche ailleurs : il ne recouvre plus les pistes
+document.addEventListener('pointerdown',e=>{ if(!$('#projmenu').hidden&&!e.target.closest('.projbar')) setProjMenu(false); },true);
 $('#projren').onclick=()=>{ const n=$('#projinp').value.trim(); if(!n) return; projName=n.slice(0,40); updProjUI(); scheduleSave(true); msg('Projet renommé : « '+projName+' ».'); };
 $('#projsave').onclick=async()=>{ setSaveState('…'); await saveProj(); msg('Projet « '+projName+' » enregistré.'); };
 $('#projcopy').onclick=()=>{ const n=$('#projinp').value.trim(); saveCopy(n&&n!==projName?n:projName+' (copie)'); };
-$('#projnew').onclick=()=>newProject();
+$('#projnew').onclick=()=>{ setProjMenu(false); newProject(); };
 $('#projexp').onclick=()=>{ if(!tracks.some(t=>t.buf)){ msg('Rien à sauvegarder : le projet est vide.'); return; } downloadBlob(encodeProject(),safeName(projName)+'.loopbox'); msg('Fichier « '+safeName(projName)+'.loopbox » créé dans tes téléchargements.'); };
 $('#projimp').onclick=()=>$('#projfile').click();
 $('#projfile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importProjectFile(f); };
