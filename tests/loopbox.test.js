@@ -229,6 +229,48 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/rel="manifest"/.test(html),'lien vers le manifeste absent');
     new Function(sw.replace(/self\./g,'({addEventListener(){},skipWaiting(){},clients:{claim(){}}}).'));
   });
+
+  // ---------------- mode casque (v20) ----------------
+  await test('mode casque : calibration en tapant avec un casque Bluetooth (retard simulé de 312 ms)',async()=>{
+    const P=await boot();
+    P.$('#setupseg button[data-s="bt"]').click(); await sleep(10);
+    ok(P.$('#cal').hidden&&!P.$('#caltap').hidden,'boutons de calibration mal affichés');
+    P.$('#caltap').click(); await sleep(80);
+    const c0=P.ctx.currentTime+0.8, lat=0.312;
+    P.impulses=[]; for(let j=0;j<12;j++) P.impulses.push(Math.round((c0+j*0.75+lat+(j%2?0.012:-0.009))*SR));
+    await P.runUntil(c0+12*0.75+1.0); await sleep(250);
+    ok(near(+P.$('#comp').value,312,15),'latence mesurée '+P.$('#comp').value+' ms (312 attendus) | '+P.$('#calmsg').textContent);
+    ok(/Casque Bluetooth/.test(P.$('#calmsg').textContent)&&/8\/8/.test(P.$('#calmsg').textContent),'message : '+P.$('#calmsg').textContent);
+    ok(/mesurée le/.test(P.$('#setuphint').textContent),'indication : '+P.$('#setuphint').textContent);
+  });
+  await test('mode casque : chaque configuration garde sa latence, et tout est retrouvé au rechargement',async()=>{
+    const idb=new FI.IDBFactory();
+    const P=await boot({idb});
+    const setC=v=>{ const c=P.$('#comp'); c.value=v; c.dispatchEvent(new P.w.Event('input')); };
+    P.$('#setupseg button[data-s="speaker"]').click(); setC(337);
+    P.$('#setupseg button[data-s="wired"]').click();
+    ok(+P.$('#comp').value===337,'filaire par défaut = sans casque : '+P.$('#comp').value);
+    setC(150);
+    P.$('#setupseg button[data-s="bt"]').click();
+    ok(+P.$('#comp').value===537,'Bluetooth par défaut = sans casque + 200 ms : '+P.$('#comp').value);
+    setC(420);
+    P.$('#setupseg button[data-s="speaker"]').click(); ok(+P.$('#comp').value===337,'retour sans casque : '+P.$('#comp').value);
+    P.$('#setupseg button[data-s="wired"]').click(); ok(+P.$('#comp').value===150,'retour filaire : '+P.$('#comp').value);
+    P.$('#setupseg button[data-s="bt"]').click(); await sleep(600);
+    const Q=await boot({idb}); await sleep(300);
+    ok(Q.$('#setupseg button.on').dataset.s==='bt'&&+Q.$('#comp').value===420,'rechargement : '+Q.$('#setupseg button.on').dataset.s+' '+Q.$('#comp').value);
+    ok(+Q.$('#comp').max===800,'limite du curseur '+Q.$('#comp').max);
+  });
+  await test('choix du micro : liste des micros et ouverture du micro choisi',async()=>{
+    const P=await boot();
+    P.rec(0).click(); await sleep(80); P.rec(0).click(); await sleep(40);
+    const opts=[...P.$('#micsel').options].map(o=>o.textContent);
+    ok(opts.join('|')==='Micro par défaut|Micro intégré|Micro USB','liste : '+opts.join('|'));
+    P.$('#micsel').value='usb1'; P.$('#micsel').dispatchEvent(new P.w.Event('change')); await sleep(80);
+    const last=P.gum[P.gum.length-1];
+    ok(last&&last.audio&&last.audio.deviceId&&last.audio.deviceId.exact==='usb1','micro demandé : '+JSON.stringify(last));
+    ok(last.audio.echoCancellation===false&&last.audio.noiseSuppression===false,'traitements du téléphone non désactivés');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
