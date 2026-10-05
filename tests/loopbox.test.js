@@ -424,6 +424,28 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     tb.querySelector('.bprevb').click(); ok(tb.querySelector('.bselinfo').textContent.includes('temps 7 → 7'),'◀ : '+tb.querySelector('.bselinfo').textContent);
     tb.querySelector('.bnextb').click(); ok(tb.querySelector('.bselinfo').textContent.includes('temps 8 → 8'),'▶ : '+tb.querySelector('.bselinfo').textContent);
   });
+
+  await test('basse : couper au doigt sur la règle des temps, puis choisir les notes avec la palette',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    const at=b=>b/8*800, info=()=>tb.querySelector('.btlinfo').textContent;
+    tap(at(4),15); await sleep(5);
+    ok(info().startsWith('Do → Do · 2 blocs')&&/temps 5 → 8/.test(tb.querySelector('.bselinfo').textContent),'coupe au temps 5 : '+info()+' / '+tb.querySelector('.bselinfo').textContent);
+    tb.querySelector('.bpal button[data-n="7"]').click();
+    ok(info().startsWith('Do → Sol'),'palette : '+info());
+    ok(tb.querySelector('.bpal button[data-n="7"]').classList.contains('on'),'note active non marquée');
+    tap(at(6.2),15); await sleep(5);
+    tb.querySelector('.bpal button[data-n="5"]').click();
+    ok(info().startsWith('Do → Sol → Fa · 3 blocs'),'2e coupe au temps 7 : '+info());
+    tap(at(1.5),60); tb.querySelector('.bpal button[data-n="9"]').click();
+    ok(info().startsWith('La → Sol → Fa'),'toucher un bloc puis une note : '+info());
+    tap(at(6),15); await sleep(5);
+    ok(info().startsWith('La → Sol · 2 blocs'),'toucher une coupe existante l\'enlève : '+info());
+    tb.querySelector('.bgo').click(); await sleep(30);
+    const b=P.lastBuf();
+    ok(near(fz(b,1.1,1.8),55,3)&&near(fz(b,5.1,5.8),49,3),'notes jouées : '+fz(b,1.1,1.8).toFixed(1)+' / '+fz(b,5.1,5.8).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

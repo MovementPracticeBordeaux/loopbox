@@ -141,3 +141,9 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 .pane>.field:first-child{margin-top:12px;}
 .trk.kbass .rec{display:none;}
 .trk.kbass .tog::after{content:"🎸";margin-left:4px;}
+
+/* palette de notes de la basse */
+.bpal{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:10px;}
+@media (min-width:720px){ .bpal{grid-template-columns:repeat(12,1fr);} }
+.bpal button{padding:4px 2px;min-height:44px;font-size:17px;background:hsl(var(--h),55%,30%);border-color:transparent;color:#fff;}
+.bpal button.on{background:hsl(var(--h),70%,50%);outline:3px solid #fff;outline-offset:-3px;}
