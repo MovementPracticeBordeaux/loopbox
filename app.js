@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='30';
+const APPVER='31';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -70,7 +70,7 @@ function makeTrackNodes(i){
   let _buf=null;
   return {id:i,kind:'rec',bass:null,tab:'',name:'Piste '+(i+1),color:COLORS[i%COLORS.length],fadeIn:0,fadeOut:0,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',
     get buf(){ return _buf; }, set buf(v){ if(v!==_buf){ _buf=v; this.sel=null; this.pc=null; } },
-    sel:null,selMode:'mute',off:0,snap:true,po:null,pc:null,pitch:0,pp:null,pjob:null,get prev(){ return null; }, set prev(v){},gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
+    sel:null,selMode:'mute',off:0,snap:true,speed:1,sp:null,po:null,pc:null,pitch:0,pp:null,pjob:null,get prev(){ return null; }, set prev(v){},gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
 }
 // ---------- hauteur du son (sans changer la durée) ----------
 function* pitchShiftGen(x,semis,SR){
@@ -270,8 +270,18 @@ function playBuf(t){
   const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(o,0);
   t.po={src:r,k,out:nb}; return nb;
 }
+// vitesse : la piste est étirée (plus lente) ou resserrée (plus rapide) sans changer de note, puis remise à la durée de la boucle
+function spedBuf(t){
+  const base=pitchedBuf(t); if(!base||!t.speed||t.speed===1) return base;
+  const c=t.sp; if(c&&c.b===base&&c.speed===t.speed) return c.out;
+  const L=base.length, full=Math.round(L/t.speed), y=stretchSliced(base.getChannelData(0),full,base.sampleRate), out=new Float32Array(L);
+  out.set(y.subarray(0,Math.min(L,full)));
+  if(full>L){ const f=Math.min(Math.round(0.01*SR),L); for(let i=0;i<f;i++) out[L-1-i]*=i/f; }
+  const nb=ctx.createBuffer(1,L,base.sampleRate); nb.copyToChannel(out,0);
+  t.sp={b:base,speed:t.speed,out:nb}; return nb;
+}
 function playBufCore(t){
-  const b=pitchedBuf(t); if(!b) return b;
+  const b=spedBuf(t); if(!b) return b;
   if(!t.sel&&!t.fadeIn&&!t.fadeOut) return b;
   const mode=t.sel?(t.selMode||'mute'):'mute';
   const s=t.sel?t.sel.s:0, e=t.sel?t.sel.e:beats, fI=t.fadeIn||0, fO=t.fadeOut||0, c=t.pc;
@@ -385,7 +395,7 @@ function setFx(t){
   });
   prev.connect(t.gain);
 }
-function fxNames(t){ const l=t.fxs.filter(sl=>sl.type!=='none').map(sl=>((FX_LIST.find(f=>f[0]===sl.type)||[0,''])[1]).split(' (')[0]); if(t.pitch) l.unshift('Ton '+(t.pitch>0?'+':'')+t.pitch); return l.join(' + '); }
+function fxNames(t){ const l=t.fxs.filter(sl=>sl.type!=='none').map(sl=>((FX_LIST.find(f=>f[0]===sl.type)||[0,''])[1]).split(' (')[0]); if(t.speed&&t.speed!==1) l.unshift('Vitesse '+Math.round(t.speed*100)+' %'); if(t.pitch) l.unshift('Ton '+(t.pitch>0?'+':'')+t.pitch); return l.join(' + '); }
 function setLive(t,on){
   if(on&&!t.live){ try{ t.inp.connect(t.eq.inp); t.live=true; }catch(e){} }
   else if(!on&&t.live){ try{ t.inp.disconnect(t.eq.inp); t.live=false; }catch(e){} }
@@ -682,39 +692,89 @@ function readFile(file){
   if(file.arrayBuffer) return file.arrayBuffer();
   return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsArrayBuffer(file); });
 }
+const MAXFILE=300;
 async function importFile(t,file){
   if(recObj){ msg("Termine l'enregistrement en cours avant d'importer."); return; }
-  if(file.size>30*1024*1024){ msg('Fichier trop lourd : 30 Mo maximum.'); return; }
+  if(file.size>250*1024*1024){ msg('Fichier trop lourd : 250 Mo maximum. Pour une vidéo, enregistre un passage plus court.'); return; }
   try{ await ctx.resume(); }catch(e){}
   msg('Lecture du fichier…');
   let ab;
   try{ ab=await ctx.decodeAudioData(await readFile(file)); }
-  catch(e){ msg("Impossible de lire ce fichier. Formats courants acceptés : MP3, WAV, M4A, OGG."); return; }
-  const n=Math.min(ab.length,MAXLOOP*SR), mono=new Float32Array(n), nc=ab.numberOfChannels;
+  catch(e){ msg("Impossible de lire le son de ce fichier. Formats courants acceptés : MP3, WAV, M4A, OGG, et les vidéos MP4 / WebM (comme celles de l'enregistreur d'écran)."); return; }
+  const n=Math.min(ab.length,MAXFILE*SR), mono=new Float32Array(n), nc=ab.numberOfChannels;
   for(let c=0;c<nc;c++){ const d=ab.getChannelData(c); for(let i=0;i<n;i++) mono[i]+=d[i]/nc; }
   for(let i=0;i<n;i++) mono[i]=clamp(mono[i],-1,1);
   let pk=0; for(let i=0;i<n;i++){ const v=Math.abs(mono[i]); if(v>pk) pk=v; }
-  if(pk<0.001){ msg('Ce fichier semble silencieux.'); return; }
-  msg(ab.length>n?'Fichier long : seules les '+MAXLOOP+' premières secondes sont utilisées.':'');
-  if(!loopLen){ importFirst(t.id,mono); return; }
+  if(pk<0.001){ msg('Ce fichier semble silencieux (pour une vidéo d\'écran, vérifie que le son interne était bien activé).'); return; }
+  msg(ab.length>n?'Fichier très long : seules les '+(MAXFILE/60)+' premières minutes sont chargées.':'');
+  if(!loopLen){
+    if(n<=MAXLOOP*SR){ importFirst(t.id,mono); return; }
+    showPassage(t,mono,0); return;
+  }
   const L=loopLen;
   if(Math.abs(n-L)/L<0.01){ applyImport(t,mono,'once'); return; }
+  if(n>L){ showPassage(t,mono,L); return; }
   const box=$('.impbox',t.el), btns=$('.imbtns',t.el), txt=$('.imptxt',t.el);
   const dur=(n/SR).toFixed(1).replace('.',','), ld=(L/SR).toFixed(1).replace('.',',');
   btns.innerHTML='';
   const add=(label,fn,primary)=>{ const b=document.createElement('button'); b.textContent=label; if(primary) b.className='primary'; b.onclick=()=>{ box.hidden=true; fn(); }; btns.appendChild(b); };
-  if(n<L){
-    txt.textContent='Ton fichier dure '+dur+' s, la boucle '+ld+' s. Comment le placer ?';
-    add('Une fois, depuis le début',()=>applyImport(t,mono,'once'),true);
-    add('Répéter pour remplir',()=>applyImport(t,mono,'repeat'));
-  } else {
-    txt.textContent='Ton fichier dure '+dur+' s, la boucle '+ld+' s. Comment le placer ?';
-    add('Couper à la longueur de la boucle',()=>applyImport(t,mono,'once'),true);
-    const k=Math.ceil(n/baseLen-0.01);
-    if(k>=2&&k<=8&&baseLen*k<=MAXLOOP*SR) add('Allonger la boucle (×'+k+') pour tout garder',()=>{ setRepAll(k); if(rep===k) applyImport(t,mono,'once'); });
-  }
+  txt.textContent='Ton fichier dure '+dur+' s, la boucle '+ld+' s. Comment le placer ?';
+  add('Une fois, depuis le début',()=>applyImport(t,mono,'once'),true);
+  add('Répéter pour remplir',()=>applyImport(t,mono,'repeat'));
   add('Annuler',()=>{});
   box.hidden=false;
+}
+// écoute d'un passage avant de l'importer
+let impListen=null;
+function stopListen(){ if(!impListen) return; try{ impListen.src.stop(); }catch(e){} try{ impListen.src.disconnect(); }catch(e){} const b=impListen.btn; impListen=null; if(b) b.textContent='▶ Écouter le passage'; }
+function fmtClock(x){ const s=x/SR, m=Math.floor(s/60); return m+':'+(s-m*60).toFixed(2).padStart(5,'0').replace('.',','); }
+// choisir le passage d'un long fichier : fenêtre de la durée de la boucle (fixed), ou début et fin libres (première piste)
+function showPassage(t,mono,fixed){
+  const box=$('.impbox',t.el), btns=$('.imbtns',t.el), txt=$('.imptxt',t.el), N=mono.length;
+  const W=fixed||Math.min(N,Math.round(10*SR)), st={a:0,b:W};
+  let cv=$('.impc',t.el);
+  if(!cv){ cv=document.createElement('canvas'); cv.className='impc'; cv.style.cssText='width:100%;height:90px;display:block;margin-top:10px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none'; txt.after(cv); }
+  const BINS=1200, pk=new Float32Array(BINS), step=N/BINS; let mx=0.05;
+  for(let i=0;i<BINS;i++){ let m=0; const a=Math.floor(i*step), z=Math.min(N,Math.floor((i+1)*step)); for(let j=a;j<z;j+=16){ const v=Math.abs(mono[j]); if(v>m) m=v; } pk[i]=m; if(m>mx) mx=m; }
+  const draw=()=>{
+    txt.textContent='Choisis le passage : '+fmtClock(st.a)+' → '+fmtClock(st.b)+' ('+((st.b-st.a)/SR).toFixed(2).replace('.',',')+' s'+(fixed?', la durée de ta boucle':'')+') sur '+fmtClock(N)+'.';
+    const dpr=window.devicePixelRatio||1, w=Math.floor(cv.clientWidth*dpr), hh=Math.floor(cv.clientHeight*dpr); if(!w||!hh) return;
+    cv.width=w; cv.height=hh; const g=cv.getContext('2d'); g.clearRect(0,0,w,hh);
+    g.fillStyle='#9b968d'; for(let x=0;x<w;x++){ const v=pk[Math.min(BINS-1,Math.floor(x/w*BINS))]/mx*hh*0.85; g.fillRect(x,(hh-v)/2,1,Math.max(1,v)); }
+    const X=v=>v/N*w; g.fillStyle='rgba(255,138,0,.22)'; g.fillRect(X(st.a),0,X(st.b)-X(st.a),hh);
+    g.fillStyle='#FF8A00'; g.fillRect(X(st.a)-1.5*dpr,0,3*dpr,hh); g.fillRect(X(st.b)-1.5*dpr,0,3*dpr,hh);
+  };
+  const setA=v=>{ v=Math.round(v); if(fixed){ st.a=clamp(v,0,N-W); st.b=st.a+W; } else { st.a=clamp(v,0,st.b-Math.round(0.25*SR)); if(st.b-st.a>MAXLOOP*SR) st.b=st.a+MAXLOOP*SR; } stopListen(); draw(); };
+  const setB=v=>{ st.b=clamp(Math.round(v),st.a+Math.round(0.25*SR),Math.min(N,st.a+MAXLOOP*SR)); stopListen(); draw(); };
+  let drag=null;
+  cv.onpointerdown=ev=>{ const r=cv.getBoundingClientRect(), p=clamp((ev.clientX-r.left)/(r.width||1),0,1)*N; try{ cv.setPointerCapture(ev.pointerId); }catch(e){}
+    drag=fixed?{w:'win',d:p-st.a}:{w:Math.abs(p-st.a)<=Math.abs(p-st.b)?'a':'b'}; if(!fixed){ if(drag.w==='a') setA(p); else setB(p); } };
+  cv.onpointermove=ev=>{ if(!drag) return; const r=cv.getBoundingClientRect(), p=clamp((ev.clientX-r.left)/(r.width||1),0,1)*N; if(drag.w==='win') setA(p-drag.d); else if(drag.w==='a') setA(p); else setB(p); };
+  cv.onpointerup=cv.onpointercancel=()=>{ drag=null; };
+  btns.innerHTML='';
+  const mk=(label,fn,cls)=>{ const b=document.createElement('button'); b.textContent=label; if(cls) b.className=cls; b.onclick=fn; btns.appendChild(b); return b; };
+  const row=lab=>{ const d=document.createElement('div'); d.className='row wrap'; d.style.width='100%'; const s0=document.createElement('span'); s0.className='lbl w2'; s0.textContent=lab; d.appendChild(s0); btns.appendChild(d); return d; };
+  const nudges=(lab,fn,which)=>{ const r=row(lab); [[-1,'−1 s'],[-0.1,'−0,1 s'],[-0.01,'−10 ms'],[0.01,'+10 ms'],[0.1,'+0,1 s'],[1,'+1 s']].forEach(([d,l])=>{ const b=document.createElement('button'); b.textContent=l; b.className='impn'; b.dataset.w=which; b.dataset.d=d; b.onclick=()=>fn(d*SR); r.appendChild(b); }); };
+  nudges(fixed?'Passage':'Début',d=>setA(st.a+d),'a');
+  if(!fixed) nudges('Fin',d=>setB(st.b+d),'b');
+  const r2=row('');
+  const lb=document.createElement('button'); lb.textContent='▶ Écouter le passage'; lb.className='implisten';
+  lb.onclick=()=>{
+    if(impListen){ stopListen(); return; }
+    try{ ctx.resume(); }catch(e){}
+    const len=st.b-st.a, bb=ctx.createBuffer(1,len,SR); bb.copyToChannel(mono.subarray(st.a,st.b),0);
+    const src=ctx.createBufferSource(); src.buffer=bb; src.connect(chain.inp); src.start(ctx.currentTime+0.03);
+    src.onended=()=>{ if(impListen&&impListen.src===src) stopListen(); };
+    impListen={src,btn:lb}; lb.textContent='■ Arrêter l\'écoute';
+  };
+  r2.appendChild(lb);
+  const use=document.createElement('button'); use.textContent='✓ Utiliser ce passage'; use.className='primary impuse';
+  use.onclick=()=>{ stopListen(); box.hidden=true; cv.remove(); const slice=mono.slice(st.a,st.b); if(loopLen) applyImport(t,slice,'once'); else importFirst(t.id,slice); };
+  r2.appendChild(use);
+  if(fixed){ const k=Math.ceil((N-st.a)/baseLen-0.01), kk=Math.min(8,Math.floor(MAXLOOP*SR/baseLen)); if(k>=2&&kk>=2){ const gb=document.createElement('button'); gb.textContent='Allonger la boucle pour garder plus'; gb.onclick=()=>{ stopListen(); const kx=Math.min(kk,Math.ceil((N-st.a)/baseLen-0.01)); setRepAll(kx); if(rep===kx){ box.hidden=true; cv.remove(); applyImport(t,mono.slice(st.a,st.a+loopLen),'once'); } }; r2.appendChild(gb); } }
+  const cancel=document.createElement('button'); cancel.textContent='Annuler'; cancel.onclick=()=>{ stopListen(); box.hidden=true; cv.remove(); }; r2.appendChild(cancel);
+  box.hidden=false; draw();
+  try{ box.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
 }
 function applyImport(t,mono,mode){
   pushHist();
@@ -794,7 +854,7 @@ function setRep(k){
 }
 function snapState(){
   return {loopLen,beats,baseLen,baseBeats,rep,gridOff,mvol,fin,mt:masterTake?{...masterTake}:null,
-    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
+    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,speed:t.speed||1,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
       fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut}))};
 }
 function touchSettings(){ if(!H.pend) H.pend=snapState(); }
@@ -826,7 +886,7 @@ function restoreState(sn){
   tracks.forEach(t=>{
     const x=map.get(t);
     t.buf=x?x.buf:null;
-    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.po=null; t.pc=null; updOffUI(t);
+    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.speed=(x&&x.speed)||1; t.sp=null; t.po=null; t.pc=null; updOffUI(t); updSpeedUI(t);
     const p=x?x.pitch:0; if(p!==t.pitch){ t.pitch=p; if(!p) t.pp=null; }
     if(x){
       t.vol=x.vol; t.panv=x.panv; t.mute=x.mute; t.solo=x.solo; t.srcType=x.srcType; t.fadeIn=x.fadeIn||0; t.fadeOut=x.fadeOut||0;
@@ -1000,10 +1060,10 @@ const HELP={
   grow:"<b>Durée de la boucle</b> : ×1 est ta boucle de départ. ×2, ×3… la répètent pour l'allonger, ce qui laisse plus de temps à tes autres pistes. <b>Tu peux revenir en arrière à tout moment</b> en choisissant un nombre plus petit (×1 pour revenir à la boucle de départ). Quand tu raccourcis, seul le début est conservé : si tu avais enregistré du nouveau son sur la partie retirée, elle disparaît, mais « Annuler le dernier changement de durée » la rend, tant que tu n'as rien modifié d'autre.",
   proj:"<b>Projets</b> : chaque projet garde ses pistes, sa boucle et tous ses réglages. Ton travail est <b>enregistré automatiquement</b> dans ce navigateur (indication en haut à droite) ; « Enregistrer » force l'enregistrement tout de suite. « Enregistrer une copie » crée un nouveau projet à partir de celui-ci (avec le nom écrit dans la case). Dans « Mes projets », tu ouvres ou supprimes un projet. La latence et le gain du micro sont communs à tous les projets.",
   projfile:"<b>Fichier de sauvegarde</b> : crée un fichier « .loopbox » avec tout le projet (sons et réglages), à garder dans tes téléchargements ou à envoyer ailleurs. <b>Important</b> : les projets du navigateur disparaissent si tu effaces les données du site ou du navigateur ; le fichier, lui, reste. « Ouvrir un fichier » le recharge comme un nouveau projet. Le son y est stocké en qualité CD (16 bits).",
+  speed:"<b>Vitesse de la piste</b> : ralentit ou accélère cette piste seule, <b>sans changer sa note</b>, et sans toucher à la boucle de base ni aux autres pistes. 50 % = deux fois plus lent. Si la piste ralentie dépasse la durée de la boucle, seul le début est joué : allonge la boucle (Durée ×2) pour l'entendre en entier. <b>« Adapter au tempo du projet »</b> repère le tempo de la piste (par exemple un son importé d'internet) et règle sa vitesse pour qu'elle tombe en rythme avec ta boucle.",
   pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
   trep:"<b>Le reste de la piste</b> : ce que devient la piste en dehors de la partie choisie avec les repères orange. <b>Silence</b> : seule la partie est jouée. <b>Répéter en boucle</b> : la partie se répète en continu sur toute la boucle, à partir de son début. <b>×2 / ×3 / ×4</b> : jouée 2, 3 ou 4 fois à la suite, puis silence. <b>Rien n'est effacé</b> : la forme d'onde complète reste visible, la partie en orange et ses répétitions en orange pâle, et la durée de la boucle de base ne change jamais. Sans partie choisie, l'appli prend automatiquement les temps qui contiennent du son.",  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis la partie à conserver sur cette piste. Avec « aimanter aux temps », les repères se calent sur les temps ; sans, tu les places où tu veux, et les boutons ±1 ms / ±10 ms règlent le début et la fin à la milliseconde près. le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
-  imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
-  undo:"<b>Annuler / Rétablir</b> (↶ ↷ en haut) : reviennent en arrière ou en avant sur les prises, imports, effacements, découpes, durées de boucle et hauteurs, jusqu'à 30 étapes. Les réglages de volume, d'effets et de tonalité ne sont pas concernés.",
+  imp:"<b>Importer un son ou une vidéo</b> : MP3, WAV, M4A, OGG, ou une vidéo MP4 / WebM dont l'appli garde le son. <b>Pour récupérer le son d'internet sans passer par le micro</b> : lance l'enregistreur d'écran d'Android en choisissant le son « multimédia / interne » (pas le micro), joue le contenu, arrête, puis importe la vidéo ici. Si le fichier est plus long que nécessaire, tu choisis le passage à garder sur sa forme d'onde (glisser, ou ±10 ms à ±1 s) et tu peux l'écouter avant. <b>Sur la première piste</b>, l'appli repère le rythme du passage pour créer la boucle. Limites : 250 Mo, 5 minutes chargées, 40 secondes gardées.",  undo:"<b>Annuler / Rétablir</b> (↶ ↷ en haut) : reviennent en arrière ou en avant sur les prises, imports, effacements, découpes, durées de boucle et hauteurs, jusqu'à 30 étapes. Les réglages de volume, d'effets et de tonalité ne sont pas concernés.",
   tname:"<b>Nom et place</b> : donne un nom à la piste (« Kick », « Snare », « Voix »…), monte-la ou descends-la dans la liste, ou duplique-la : la copie reprend le son et tous les réglages, pratique pour essayer un autre effet sans toucher à l'original.",
   msub:"<b>Clics</b> : <b>Temps</b> = un clic par temps. <b>Croches</b> = deux clics par temps, <b>Doubles</b> = quatre : les clics intermédiaires sont plus doux. Pratique pour jouer des rythmes rapides bien en place.",
   meter:"<b>Mesure</b> : <b>4 temps</b> pour la plupart des rythmes, <b>3 temps</b> pour une valse ou un rythme ternaire. Ça change l'accent du métronome (le clic aigu), le décompte et le regroupement des temps à l'écran.",
@@ -1465,6 +1525,34 @@ function setKindUI(t){
   if(bass&&!t.tab) t.tab='bass';
   setTab(t,t.tab||(bass?'bass':'son'));
 }
+function updSpeedUI(t){
+  const e=$('.spv',t.el); if(!e) return;
+  const v=t.speed||1; e.textContent=Math.round(v*100)+' %'+(v<1?' (plus lent)':v>1?' (plus rapide)':'');
+  t.el.querySelectorAll('.spseg button').forEach(b=>b.classList.toggle('on',Math.abs(+b.dataset.v-v)<0.005));
+}
+function setSpeed(t,v,why){
+  if(!t.buf||recObj) return;
+  v=clamp(Math.round(v*100)/100,0.5,2);
+  if(v===(t.speed||1)){ updSpeedUI(t); return; }
+  touchSettings(); t.speed=v; commitSettings(); t.sp=null; t.pc=null; t.po=null;
+  updSpeedUI(t); msg('Calcul de la nouvelle vitesse…');
+  setTimeout(()=>{
+    startSrc(t); drawWave(t); updFxBadge(t); scheduleSave(true);
+    msg(why||('Vitesse de « '+t.name+' » : '+Math.round(v*100)+' %'+(v<1?', la note ne change pas. Si la fin dépasse la boucle, allonge la boucle (Durée ×2) pour l\'entendre en entier.':', la note ne change pas.')));
+  },30);
+}
+// adapter au tempo du projet : on mesure le tempo de la piste, puis on règle sa vitesse pour qu'elle suive la boucle
+function adaptSpeed(t){
+  if(!t.buf||!loopLen) return;
+  const raw=t.buf.getChannelData(0), D=raw.length;
+  let best=null;
+  for(let p=60;p<=180;p+=5){ const a=analyzeBeat(raw,D,p); if(a&&(!best||a.coh>best.coh)) best=a; }
+  if(!best){ msg('Je n\'arrive pas à repérer un rythme net sur cette piste : choisis la vitesse à la main.'); return; }
+  const src=60/best.T, cur=curBpm();
+  let pick=null; [src,src*2,src/2].forEach(b=>{ const r=cur/b; if(r>=0.5&&r<=2&&(!pick||Math.abs(Math.log(r))<Math.abs(Math.log(cur/pick)))) pick=b; });
+  if(!pick){ msg('Tempo de la piste trop éloigné de celui du projet.'); return; }
+  setSpeed(t,cur/pick,'Tempo de « '+t.name+' » repéré : '+pick.toFixed(1).replace('.',',')+' BPM. Vitesse réglée à '+Math.round(cur/pick*100)+' % pour suivre le projet ('+cur.toFixed(1).replace('.',',')+' BPM), sans changer la note.');
+}
 function fmtMs(v){ const ms=Math.round(v*1000); return (ms>0?'+':'')+ms+' ms'; }
 function setOffset(t,v){
   if(!t.buf||recObj) return;
@@ -1576,6 +1664,9 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="pitch">Hauteur du son (la note)</span><span class="ptv val" style="margin-left:auto">0 (son d'origine)</span></div>
       <input type="range" class="pitch" min="-12" max="12" step="1" value="0" aria-label="Hauteur piste ${t.id+1}">
       <div class="row wrap"><button class="p1">−1 octave</button><button class="p0">0</button><button class="p2">+1 octave</button><span class="pst lbl" style="margin-left:auto"></span></div></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="speed">Vitesse de la piste</span><span class="spv val" style="margin-left:auto">100 %</span></div>
+      <div class="seg spseg" style="margin-top:8px"><button data-v="0.5">50 %</button><button data-v="0.67">67 %</button><button data-v="0.75">75 %</button><button data-v="1">100 %</button><button data-v="1.25">125 %</button><button data-v="1.5">150 %</button><button data-v="2">200 %</button></div>
+      <div class="row wrap"><button class="spb" data-d="-0.01">−1 %</button><button class="spb" data-d="0.01">+1 %</button><button class="spauto primary">🎯 Adapter au tempo du projet</button></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="eq">Tonalité</span></div>
       <div class="seg eqp" style="margin-top:8px">${EQ_PRESETS.map(p=>`<button data-p="${p[0]}">${p[1]}</button>`).join('')}</div>
       <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
@@ -1609,7 +1700,7 @@ function buildTrackUI(t){
   </div>
   <div class="pane" data-pane="trk" hidden>
   <div class="row reconly" style="margin-top:12px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-  <div class="row wrap reconly"><button class="imp" data-help="imp">⬆ Importer un fichier audio</button><input type="file" class="impfile" accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.flac" hidden></div>
+  <div class="row wrap reconly"><button class="imp" data-help="imp">⬆ Importer un son ou une vidéo</button><input type="file" class="impfile" accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.aac,.flac,.mp4,.webm,.mkv,.3gp,.mov" hidden></div>
     <div class="field"><div class="row"><span class="lbl" data-help="tname">Nom et place de la piste</span></div>
       <div class="row" style="margin-top:6px"><input type="text" class="tnin" maxlength="24" style="flex:1" aria-label="Nom de la piste"><button class="tnok">Renommer</button></div>
       <div class="row wrap"><button class="tup">▲ Monter</button><button class="tdown">▼ Descendre</button><button class="tdup">⧉ Dupliquer</button></div></div>
@@ -1658,6 +1749,9 @@ function buildTrackUI(t){
   el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>bassChanged(t));
   initBassTimeline(t);
   el.querySelectorAll('.ttabs button').forEach(b=>b.onclick=()=>setTab(t,b.dataset.tab));
+  el.querySelectorAll('.spseg button').forEach(b=>b.onclick=()=>setSpeed(t,+b.dataset.v));
+  el.querySelectorAll('.spb').forEach(b=>b.onclick=()=>setSpeed(t,(t.speed||1)+(+b.dataset.d)));
+  $('.spauto',el).onclick=()=>adaptSpeed(t);
   el.querySelectorAll('.ofb').forEach(b=>b.onclick=()=>setOffset(t,(t.off||0)+(+b.dataset.d)/1000));
   $('.ofz',el).onclick=()=>setOffset(t,0);
   $('.ofauto',el).onclick=()=>autoAlign(t,+$('.qgrid',el).value);
@@ -1780,7 +1874,7 @@ function duplicateTrack(t){
   n.eq.lo.gain.value=n.eqv[0]; n.eq.mid.gain.value=n.eqv[1]; n.eq.hi.gain.value=n.eqv[2];
   n.fadeIn=t.fadeIn; n.fadeOut=t.fadeOut; n.kind=t.kind; n.bass=t.bass?JSON.parse(JSON.stringify(t.bass)):null; setKindUI(n); if(n.bass) showBassOpts(n);
   n.name=uniqueTrackName(t.name+' copie'); $('.tn',n.el).textContent=n.name;
-  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.off=t.off||0; n.snap=t.snap; updOffUI(n); n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
+  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.off=t.off||0; n.snap=t.snap; n.speed=t.speed||1; if(t.sp&&t.sp.b===t.buf) n.sp=t.sp; updOffUI(n); updSpeedUI(n); n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
   tracks.splice(tracks.indexOf(n),1); tracks.splice(tracks.indexOf(t)+1,0,n);
   reindexTracks();
   setFx(n); syncTrackUI(n); drawWave(n); applyGains(n); startSrc(n);
@@ -2250,7 +2344,7 @@ function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent
 function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 function mainData(){
   return {v:2,name:projName,go:gridOff,liveQ,scenes:scenes.map(sc=>sc?sc.map(x=>({i:tracks.indexOf(x.t),m:x.mute})).filter(x=>x.i>=0):null),meter,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
-    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,of:t.off||0,sn:t.snap!==false,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
+    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,of:t.off||0,sn:t.snap!==false,spd:t.speed||1,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
 }
 function summary(){ return {id:projId,name:projName,updated:Date.now(),beats:loopLen?beats:0,bpm:loopLen?+(beats*60/loopSec()).toFixed(1):bpm,ntr:tracks.filter(t=>t.buf).length,dur:loopLen?+loopSec().toFixed(1):0}; }
 async function saveProj(){
@@ -2314,7 +2408,7 @@ function applyProject(d,audio){
     const pcm=pcmOf(s,i);
     if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
     if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats+1e-6&&s.sel[1]-s.sel[0]>=0.02) t.sel={s:s.sel[0],e:Math.min(beats,s.sel[1])};
-    t.off=clamp(+s.of||0,-0.5,0.5); t.snap=s.sn!==false; updOffUI(t);
+    t.off=clamp(+s.of||0,-0.5,0.5); t.snap=s.sn!==false; updOffUI(t); t.speed=clamp(+s.spd||1,0.5,2); updSpeedUI(t);
     t.selMode=['mute','loop','2','3','4'].includes(s.smd)?s.smd:'mute';
     setFx(t); syncTrackUI(t); drawWave(t);
   });

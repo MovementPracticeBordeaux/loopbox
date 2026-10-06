@@ -542,6 +542,67 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(Math.abs(h[0]-(144+480))<=3,'1er coup à '+h[0]+' au lieu de '+(144+480));
     ok(P.$('#mnv').textContent==='−10 ms'||P.$('#mnv').textContent==='-10 ms','affichage : '+P.$('#mnv').textContent);
   });
+
+  // ---------------- import de vidéos, choix du passage, vitesse (v31) ----------------
+  const mkFile=(n,fill)=>{ const d=new Float32Array(n); fill(d); return {numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>d}; };
+  await test('import d\'un long fichier (vidéo d\'écran) : choisir le passage à la durée de la boucle',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    ok(/video\/\*/.test(P.$('.impfile').getAttribute('accept')),'les vidéos ne sont pas acceptées');
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length, f=mkFile(L*3,d=>{ for(let k=0;k*24000+1000<d.length;k++) d[k*24000+1000]=0.8; });
+    await P.importFile(1,f);
+    const t2=P.$$('.trk')[1];
+    ok(!t2.querySelector('.impbox').hidden&&t2.querySelector('.impc'),'le choix du passage ne s\'affiche pas');
+    ok(/Choisis le passage : 0:00,00 → /.test(t2.querySelector('.imptxt').textContent),'texte : '+t2.querySelector('.imptxt').textContent);
+    t2.querySelector('.impn[data-w="a"][data-d="1"]').click(); await sleep(5);
+    ok(/0:01,00 → /.test(t2.querySelector('.imptxt').textContent),'+1 s : '+t2.querySelector('.imptxt').textContent);
+    P.starts.length=0; t2.querySelector('.implisten').click(); await sleep(10);
+    ok(P.starts.some(x=>x.buf&&x.buf.length===L),'l\'écoute du passage ne démarre pas');
+    t2.querySelector('.impuse').click(); await sleep(30);
+    const b=P.lastBuf(), h=P.hits(b);
+    ok(b.length===L&&h[0]===1000,'passage importé : longueur '+b.length+', 1er son à '+h[0]+' (attendu 1000, soit 1 s plus loin dans le fichier)');
+    ok(t2.querySelector('.impbox').hidden,'la boîte devrait se fermer');
+  });
+  await test('import d\'un long fichier sur la 1re piste : début et fin libres, puis boucle créée',async()=>{
+    const P=await boot();
+    const T=60/100, f=mkFile(SR*60,d=>{ for(let k=0;k*T*SR<d.length;k++) d[Math.round(k*T*SR)+2000]=0.8; });
+    await P.importFile(0,f);
+    const t1=P.$('.trk');
+    ok(!t1.querySelector('.impbox').hidden,'pas de choix de passage');
+    ok(/→ 0:10,00 \(10,00 s\)/.test(t1.querySelector('.imptxt').textContent),'passage par défaut : '+t1.querySelector('.imptxt').textContent);
+    t1.querySelector('.impn[data-w="b"][data-d="-1"]').click(); t1.querySelector('.impn[data-w="b"][data-d="-1"]').click(); await sleep(5);
+    ok(/→ 0:08,00/.test(t1.querySelector('.imptxt').textContent),'fin −2 s : '+t1.querySelector('.imptxt').textContent);
+    t1.querySelector('.impuse').click(); await sleep(60);
+    ok(P.$('#lockhint').style.display!=='none'&&/Rythme détecté/.test(P.$('#msg').textContent),'boucle non créée : '+P.$('#msg').textContent);
+  });
+  await test('vitesse d\'une piste : 50 % sans changer la note, et adaptation au tempo du projet',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length, beat=L/8;
+    await P.importFile(1,mkFile(L,d=>{ for(let k=0;k<8;k++) d[Math.round(144+k*beat)]=0.8; }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); await sleep(10);
+    P.$('#dplay').click(); await sleep(30);
+    t2.querySelector('.spseg button[data-v="0.5"]').click(); await sleep(120);
+    let h=P.hits(P.lastPlayed());
+    ok(h.length===4,'50 % : '+h.length+' coups dans la boucle (attendu 4)');
+    ok(h.every((x,k)=>Math.abs(x-(144+2*k*beat))<SR*0.012),'espacement : '+h.join(','));
+    ok(/50 %/.test(t2.querySelector('.spv').textContent)&&/Vitesse 50 %/.test(t2.querySelector('.fxbadge').textContent),'affichage');
+    P.$('#undo').click(); await sleep(40);
+    ok(P.hits(P.lastPlayed()).length===8,'annulation');
+    // un son importé à 120 BPM dans une boucle à ~96 BPM
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(2,mkFile(L,d=>{ for(let k=0;144+k*0.5*SR<L;k++) d[Math.round(144+k*0.5*SR)]=0.8; }));
+    const t3=P.$$('.trk')[2]; t3.querySelector('.tog').click(); await sleep(10);
+    t3.querySelector('.spauto').click(); await sleep(150);
+    ok(/8\d %/.test(t3.querySelector('.spv').textContent),'vitesse adaptée : '+t3.querySelector('.spv').textContent+' | '+P.$('#msg').textContent);
+    h=P.hits(P.lastPlayed()); const gaps=h.slice(1).map((x,i)=>x-h[i]);
+    ok(gaps.every(g=>Math.abs(g-beat)<SR*0.012),'après adaptation, un son par temps : écarts '+gaps.join(','));
+    // la note ne change pas
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(3,mkFile(L,d=>{ for(let i=0;i<L;i++) d[i]=0.4*Math.sin(2*Math.PI*220*i/SR); }));
+    const t4=P.$$('.trk')[3]; t4.querySelector('.tog').click(); t4.querySelector('.spseg button[data-v="0.75"]').click(); await sleep(150);
+    ok(near(freqOf(P.lastPlayed()),220,3),'note changée : '+freqOf(P.lastPlayed()).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
