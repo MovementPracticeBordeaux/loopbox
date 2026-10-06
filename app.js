@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='32';
+const APPVER='33';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -252,15 +252,15 @@ function setPitch(t,v){
 }
 function pitchText(v){ return v===0?'0 (son d\'origine)':((v>0?'+':'')+v+(Math.abs(v)===1?' demi-ton':' demi-tons')+(Math.abs(v)===12?' (1 octave)':'')); }
 // positions (en temps) des copies de la partie choisie, selon « le reste de la piste »
+function repPeriod(P){ return P>=0.75?Math.max(1,Math.round(P)):P; }
 function repCopies(t){
   if(!t.sel||!loopLen) return [];
-  const m=t.selMode||'mute', P=t.sel.e-t.sel.s;
-  if(m==='mute'||P<=0||P>=beats) return [[t.sel.s,P]];
-  const K=m==='loop'?Math.ceil(beats/P):Math.min(+m,Math.floor(beats/P)), out=[];
-  for(let k=0;k<K;k++) out.push([t.sel.s+k*P,m==='loop'?Math.min(P,beats-k*P):P]);
+  const m=t.selMode||'mute', P=t.sel.e-t.sel.s, per=repPeriod(P);
+  if(m==='mute'||P<=0||per>=beats) return [[t.sel.s,P]];
+  const K=m==='loop'?Math.ceil(beats/per):Math.min(+m,Math.floor(beats/per)), out=[];
+  for(let k=0;k<K;k++) out.push([t.sel.s+k*per,Math.min(P,per,m==='loop'?beats-k*per:per)]);
   return out;
 }
-// lecture avec décalage dans le temps (rotation de la boucle, rien n'est coupé)
 function playBuf(t){
   const r=playBufCore(t); if(!r||!t.off) return r;
   const k=Math.round(t.off*SR), c=t.po;
@@ -296,8 +296,9 @@ function playBufCore(t){
   for(let i=1;i<=fo&&seg.length-i>=0;i++) seg[seg.length-i]*=(i-1)/fo;
   const out=new Float32Array(L);
   const cps=mode==='mute'?[[s,e-s]]:repCopies(t);
+  const per=mode==='mute'?(e-s):repPeriod(e-s);
   cps.forEach(([cs,cl],k)=>{
-    const st=Math.round(a+k*(e-s)*bl), n=k===0?seg.length:Math.min(seg.length,Math.round(L-k*(e-s)*bl));
+    const st=Math.round(a+k*per*bl), lim=mode==='mute'?seg.length:Math.round(Math.min(per*bl,L-k*per*bl)), n=Math.min(seg.length,lim);
     const tail=Math.min(Math.round(0.005*SR),n);
     for(let i=0;i<n;i++){ let v=seg[i]; if(n<seg.length&&n-i<=tail) v*=(n-i)/tail; const j=(st+i)%L; out[j]=clamp(out[j]+v,-1,1); }
   });
@@ -1062,7 +1063,7 @@ const HELP={
   projfile:"<b>Fichier de sauvegarde</b> : crée un fichier « .loopbox » avec tout le projet (sons et réglages), à garder dans tes téléchargements ou à envoyer ailleurs. <b>Important</b> : les projets du navigateur disparaissent si tu effaces les données du site ou du navigateur ; le fichier, lui, reste. « Ouvrir un fichier » le recharge comme un nouveau projet. Le son y est stocké en qualité CD (16 bits).",
   speed:"<b>Vitesse de la piste</b> : ralentit ou accélère cette piste seule, <b>sans changer sa note</b>, et sans toucher à la boucle de base ni aux autres pistes. 50 % = deux fois plus lent. Si la piste ralentie dépasse la durée de la boucle, seul le début est joué : allonge la boucle (Durée ×2) pour l'entendre en entier. <b>« Adapter au tempo du projet »</b> repère le tempo de la piste (par exemple un son importé d'internet) et règle sa vitesse pour qu'elle tombe en rythme avec ta boucle.",
   pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
-  trep:"<b>Le reste de la piste</b> : ce que devient la piste en dehors de la partie choisie avec les repères orange. <b>Silence</b> : seule la partie est jouée. <b>Répéter en boucle</b> : la partie se répète en continu sur toute la boucle, à partir de son début. <b>×2 / ×3 / ×4</b> : jouée 2, 3 ou 4 fois à la suite, puis silence. <b>Rien n'est effacé</b> : la forme d'onde complète reste visible, la partie en orange et ses répétitions en orange pâle, et la durée de la boucle de base ne change jamais. Sans partie choisie, l'appli prend automatiquement les temps qui contiennent du son.",  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis la partie à conserver sur cette piste ; le reste devient muet, <b>sans rien déplacer</b> (les pistes restent calées entre elles). Pour que la lecture commence à ton début : <b>« Faire de cette partie la boucle »</b> (si c'est la seule piste avec du son : la boucle prend exactement le début et la fin choisis) ou <b>« Placer la partie au début de la boucle »</b> (avec d'autres pistes : la partie glisse au début, la durée de la boucle ne change pas). Avec « aimanter aux temps », les repères se calent sur les temps ; sans, tu les places où tu veux, et les boutons ±1 ms / ±10 ms règlent le début et la fin à la milliseconde près. le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
+  trep:"<b>Le reste de la piste</b> : ce que devient la piste en dehors de la partie choisie avec les repères orange. <b>Silence</b> : seule la partie est jouée. <b>Répéter en boucle</b> : la partie se répète en continu sur toute la boucle, à partir de son début. <b>×2 / ×3 / ×4</b> : jouée 2, 3 ou 4 fois à la suite, puis silence. <b>Rien n'est effacé</b> : la forme d'onde complète reste visible, la partie en orange et ses répétitions en orange pâle, et la durée de la boucle de base ne change jamais. Sans partie choisie, l'appli prend automatiquement les temps qui contiennent du son.",  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis la partie à conserver sur cette piste ; le reste devient muet, <b>sans rien déplacer</b> (les pistes restent calées entre elles). Pour que la lecture commence à ton début : <b>« Faire de cette partie la boucle »</b> (seule piste avec du son : la boucle prend exactement le début et la fin choisis) ou <b>« Faire tourner cette partie en boucle »</b> (avec d'autres pistes : la partie démarre au début de la boucle de base et se répète sur toute sa durée, tous les N temps entiers). « Placer la partie au début » la fait seulement glisser au début, sans la répéter. Avec « aimanter aux temps », les repères se calent sur les temps ; sans, tu les places où tu veux, et les boutons ±1 ms / ±10 ms règlent le début et la fin à la milliseconde près. le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un son ou une vidéo</b> : MP3, WAV, M4A, OGG, ou une vidéo MP4 / WebM dont l'appli garde le son. <b>Pour récupérer le son d'internet sans passer par le micro</b> : lance l'enregistreur d'écran d'Android en choisissant le son « multimédia / interne » (pas le micro), joue le contenu, arrête, puis importe la vidéo ici. Si le fichier est plus long que nécessaire, tu choisis le passage à garder sur sa forme d'onde (glisser, ou ±10 ms à ±1 s) et tu peux l'écouter avant. <b>Sur la première piste</b>, l'appli repère le rythme du passage pour créer la boucle. Limites : 250 Mo, 5 minutes chargées, 40 secondes gardées.",  undo:"<b>Annuler / Rétablir</b> (↶ ↷ en haut) : reviennent en arrière ou en avant sur les prises, imports, effacements, découpes, durées de boucle et hauteurs, jusqu'à 30 étapes. Les réglages de volume, d'effets et de tonalité ne sont pas concernés.",
   tname:"<b>Nom et place</b> : donne un nom à la piste (« Kick », « Snare », « Voix »…), monte-la ou descends-la dans la liste, ou duplique-la : la copie reprend le son et tous les réglages, pratique pour essayer un autre effet sans toucher à l'original.",
   msub:"<b>Clics</b> : <b>Temps</b> = un clic par temps. <b>Croches</b> = deux clics par temps, <b>Doubles</b> = quatre : les clics intermédiaires sont plus doux. Pratique pour jouer des rythmes rapides bien en place.",
@@ -1740,7 +1741,7 @@ function buildTrackUI(t){
   $('.ts3',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e-1); };
   $('.ts4',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e+1); };
   $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
-  $('.tsloop',el).onclick=()=>selToLoop(t);
+  $('.tsloop',el).onclick=()=>{ if(tracks.some(x=>x!==t&&x.buf)) loopPart(t); else selToLoop(t); };
   $('.tsalign',el).onclick=()=>alignSelStart(t);
   el.querySelectorAll('.tsn').forEach(b=>b.onclick=()=>{ const q=tsGet(), db=(+b.dataset.ms/1000)/(loopSec()/beats); if(b.dataset.w==='s') setTrackSel(t,q.s+db,q.e); else setTrackSel(t,q.s,q.e+db); });
   $('.tsnap',el).onchange=e=>{ t.snap=e.target.checked; scheduleSave(true); };
@@ -1797,7 +1798,8 @@ function updRepUI(t){
   t.el.querySelectorAll('.trep button').forEach(b=>{
     const v=b.dataset.m;
     b.classList.toggle('on',t.sel?v===m:v==='mute');
-    b.disabled=!t.buf||!loopLen||(v!=='mute'&&(!p||n<1||n>=beats))||(v!=='mute'&&v!=='loop'&&(+v)*n>beats);
+    const per=repPeriod(n);
+    b.disabled=!t.buf||!loopLen||(v!=='mute'&&(!p||n<=0||per>=beats))||(v!=='mute'&&v!=='loop'&&(+v)*per>beats);
   });
 }
 function setSelMode(t,m){
@@ -1834,6 +1836,19 @@ function selToLoop(t){
   msg('La boucle commence maintenant au début choisi et dure '+nbeats+' temps ('+(len/SR).toFixed(2).replace('.',',')+' s). ↶ pour revenir.');
 }
 // plusieurs pistes : on fait glisser la partie pour qu'elle démarre au début de la boucle (sans toucher à la durée)
+// autres pistes : la partie démarre au début de la boucle de base et se répète sur toute sa durée (en un seul geste)
+function loopPart(t){
+  if(!t.buf||!loopLen||recObj) return;
+  let p=t.sel?{s:t.sel.s,e:t.sel.e}:partOf(t);
+  if(!p||p.e-p.s>=beats-1e-6){ msg('Choisis d\'abord la partie à faire tourner avec les repères orange (plus courte que la boucle).'); return; }
+  touchSettings();
+  t.sel={s:p.s,e:p.e}; t.selMode='loop';
+  const lim=Math.max(0.5,loopSec()); t.off=clamp(Math.round(-(p.s*loopSec()/beats)*SR)/SR,-lim,lim);
+  commitSettings(); t.pc=null; t.po=null;
+  startSrc(t); drawWave(t); drawTsel(t); updOffUI(t); scheduleSave(true);
+  const per=repPeriod(p.e-p.s);
+  msg('La partie de « '+t.name+' » démarre au début de la boucle et se répète tous les '+per+' temps, sur toute la boucle ('+beats+' temps). ↶ pour revenir.');
+}
 function alignSelStart(t){
   if(!t.buf||!t.sel||recObj) return;
   const v=-(t.sel.s*loopSec()/beats);
@@ -1859,7 +1874,7 @@ function drawTsel(t,dr){
   $('.tsl',t.el).textContent=(q.s===0&&q.e===beats)?'Tout est gardé':'Temps '+fb(q.s+1)+' → '+fb(q.e)+' sur '+beats;
   const sn=$('.tsnap',t.el); if(sn) sn.checked=t.snap!==false;
   const others=tracks.some(x=>x!==t&&x.buf), hasSel=!!t.sel; const tl=$('.tsloop',t.el), ta=$('.tsalign',t.el);
-  if(tl){ tl.hidden=!hasSel||others; } if(ta){ ta.hidden=!hasSel; }
+  if(tl){ tl.hidden=!t.buf||!loopLen; tl.textContent=others?'🔁 Faire tourner cette partie en boucle':'✂ Faire de cette partie la boucle'; } if(ta){ ta.hidden=!hasSel; }
   if($('.tbody',t.el).hidden||$('.tsel',t.el).hidden) return;
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), h=Math.floor(c.clientHeight*dpr); if(!w||!h) return;
   c.width=w; c.height=h;

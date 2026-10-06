@@ -634,11 +634,31 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     await P.importFile(1,mkFile(L,d=>{ d[Math.round(3*beat+500)]=0.8; d[Math.round(5*beat+500)]=0.8; }));
     const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
     t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click(); await sleep(10);
-    ok(t2.querySelector('.tsloop').hidden&&!t2.querySelector('.tsalign').hidden,'boutons : avec d\'autres pistes, seul « Placer… » doit apparaître');
+    ok(/Faire tourner cette partie en boucle/.test(t2.querySelector('.tsloop').textContent)&&!t2.querySelector('.tsalign').hidden,'boutons avec d\'autres pistes : '+t2.querySelector('.tsloop').textContent);
     P.$('#dplay').click(); await sleep(20);
     t2.querySelector('.tsalign').click(); await sleep(30);
     const h=P.hits(P.lastPlayed());
     ok(Math.abs(h[0]-500)<=3&&P.lastPlayed().length===L,'1er son à '+h[0]+' (attendu ~500), longueur '+P.lastPlayed().length);
+  });
+
+  await test('piste 2 plus courte : faire tourner une partie en boucle sur toute la boucle de base, sans dérive',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length, beat=L/8;
+    await P.importFile(1,mkFile(L,d=>{ d[Math.round(3*beat+500)]=0.8; d[Math.round(4*beat+500)]=0.8; }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click();
+    t2.querySelector('.ts3').click(); t2.querySelector('.ts3').click(); t2.querySelector('.ts3').click(); await sleep(10);
+    t2.querySelector('.tsn[data-w="e"][data-ms="10"]').click(); t2.querySelector('.tsn[data-w="e"][data-ms="10"]').click(); await sleep(10);
+    ok(/Temps 4 → 5,03\d sur 8/.test(t2.querySelector('.tsl').textContent),'partie choisie : '+t2.querySelector('.tsl').textContent);
+    P.$('#dplay').click(); await sleep(20);
+    t2.querySelector('.tsloop').click(); await sleep(30);
+    const h=P.hits(P.lastPlayed());
+    ok(h.length===8,'coups joués '+h.length+' (attendu 8 : 4 répétitions de 2 coups)');
+    ok(h.every((x,k)=>Math.abs(x-(500+k*beat))<=3),'dérive : écarts '+h.map((x,k)=>Math.round(x-(500+k*beat))).join(','));
+    ok(/se répète tous les 2 temps/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    P.$('#undo').click(); await sleep(30);
+    ok(P.hits(P.lastPlayed()).length===2,'annulation en un seul ↶ : '+P.hits(P.lastPlayed()).length+' coups');
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
