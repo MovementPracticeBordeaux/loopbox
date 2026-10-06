@@ -25,7 +25,7 @@ export WAV, partage direct, pistes séparées en `.zip`, diagnostic de l'apparei
 Les tests chargent l'appli dans un navigateur simulé, avec un faux micro et un faux moteur audio, et vérifient notamment :
 le calage de la boucle, la place des sons ajoutés, la durée ×N, annuler / rétablir, la partie propre, la hauteur,
 la pause, l'import, les projets, le recalage, l'envers, les fondus, le changement de tempo, le mode live, le partage,
-les pistes séparées, l'installation et le mode casque (45 tests).
+les pistes séparées, l'installation et le mode casque (46 tests).
 
 ```
 npm install

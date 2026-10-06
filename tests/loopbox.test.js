@@ -660,6 +660,45 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(30);
     ok(P.hits(P.lastPlayed()).length===2,'annulation en un seul ↶ : '+P.hits(P.lastPlayed()).length+' coups');
   });
+
+  // ---------------- mélodie chantée → basse (v34) ----------------
+  const singVoice=(L,beat,notes)=>mkFile(L,d=>{ let sd=9, ph=0;
+    for(let i=0;i<L;i++){ const b=i/beat; const nt=notes.find(x=>b>=x[0]&&b<x[1]); sd=(sd*16807)%2147483647; let v=0.004*(sd/2147483647*2-1);
+      if(nt){ const f=440*Math.pow(2,(nt[2]-69)/12)*Math.pow(2,0.25/12*Math.sin(2*Math.PI*5*i/SR)); ph+=f/SR; const tt=(b-nt[0])*beat/SR, env=Math.min(1,tt/0.02)*Math.min(1,((nt[1]-b)*beat/SR)/0.03);
+        v+=0.3*env*(Math.sin(2*Math.PI*ph)+0.5*Math.sin(4*Math.PI*ph)+0.3*Math.sin(6*Math.PI*ph)+0.15*Math.sin(8*Math.PI*ph)); }
+      d[i]=v; } });
+  await test('mélodie chantée → basse : notes, durées et silences repérés, descendus dans les graves, transposables',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    // La3 2 temps, Do4 2 temps, silence 1 temps, Mi4 3 temps (voix d'homme qui chante assez haut)
+    await P.importFile(1,singVoice(L,beat,[[0,2,57],[2,4,60],[5,8,64]]));
+    P.$$('.trk')[1].querySelector('.tn').textContent;
+    P.$('#addbass').click(); await sleep(20);
+    const tb=P.$$('.trk')[2];
+    const ms=tb.querySelector('.msrc'); ok(ms.selectedOptions[0].textContent==='Piste 2','piste chantée proposée par défaut : '+ms.selectedOptions[0].textContent);
+    tb.querySelector('.mgo').click(); await sleep(60);
+    const info=tb.querySelector('.btlinfo').textContent, m=P.$('#msg').textContent;
+    ok(/^La → Do → — → Mi · 4 blocs \(dont 1 silence\)/.test(info),'blocs : '+info+' | '+m);
+    ok(/3 notes repérées/.test(m)&&/descendues de 2 octaves/.test(m)&&/de La1 à Mi2/.test(m),'message : '+m);
+    ok(tb.querySelector('.brhy').value==='melodie','rythme « Suivre les notes » : '+tb.querySelector('.brhy').value);
+    tb.querySelector('.bgo').click(); await sleep(40);
+    const b=P.lastBuf();
+    ok(near(fz(b,0.3,1.7),55,2),'La1 attendu : '+fz(b,0.3,1.7).toFixed(1));
+    ok(near(fz(b,2.3,3.7),65.4,2),'Do2 attendu : '+fz(b,2.3,3.7).toFixed(1));
+    ok(near(fz(b,5.3,7.7),82.4,2.5),'Mi2 attendu : '+fz(b,5.3,7.7).toFixed(1));
+    const x=b.getChannelData(0); let s2=0; for(let i=Math.round(4.2*beat);i<Math.round(4.8*beat);i++) s2+=x[i]*x[i];
+    ok(Math.sqrt(s2/(0.6*beat))<0.01,'le silence (temps 5) devrait être muet');
+    tb.querySelector('.btr[data-d="12"]').click(); tb.querySelector('.bgo').click(); await sleep(40);
+    ok(near(fz(P.lastBuf(),0.3,1.7),110,3),'+1 octave : '+fz(P.lastBuf(),0.3,1.7).toFixed(1));
+    tb.querySelector('.btr[data-d="-1"]').click(); tb.querySelector('.bgo').click(); await sleep(40);
+    ok(near(fz(P.lastBuf(),0.3,1.7),103.8,3),'−1 demi-ton : '+fz(P.lastBuf(),0.3,1.7).toFixed(1));
+    // un bloc transformé en silence avec la palette
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:300,clientY:60,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:300,clientY:60,bubbles:true}));
+    tb.querySelector('.bpal button[data-n="-1"]').click();
+    ok(/^Sol♯ → — → — → Ré♯ · 4 blocs \(dont 2 silences\)/.test(tb.querySelector('.btlinfo').textContent),'silence par la palette : '+tb.querySelector('.btlinfo').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

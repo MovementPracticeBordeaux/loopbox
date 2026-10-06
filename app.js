@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='33';
+const APPVER='34';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1079,6 +1079,8 @@ const HELP={
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
+  mel2b:"<b>Mélodie chantée → basse</b> : enregistre-toi en chantant ou en fredonnant la ligne (une note à la fois, aussi aiguë que tu veux), sur une piste normale. Choisis cette piste ici : l'appli repère chaque note et sa durée, les cale sur la grille choisie (double-croche, croche ou temps), met des silences là où tu ne chantes pas, et descend le tout dans les graves (par octaves, donc les notes restent justes). Le rythme passe sur « Suivre les notes ». Corrige ensuite un bloc avec la palette, ou décale toute la basse avec « Transposer ».",
+  btrans:"<b>Transposer</b> : monte ou descend toute la basse d'un demi-ton ou d'une octave. Utile si ta voix ne descend pas assez bas : chante plus haut, puis descends d'une ou deux octaves ici.",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
@@ -1262,7 +1264,8 @@ const RHYTHMS={
   doubles:['Quatre coups par temps (pulsation)',Array.from({length:16},(_,i)=>[i/4,.2,i%4===0?1:(i%2?.55:.75)])],
   funk:['Funk (syncopé)',[[0,.4,1],[.75,.2,.7],[1.5,.3,.85],[2,.4,.9],[2.75,.2,.7],[3.5,.4,.8]]],
   hiphop:['Hip-hop (notes longues)',[[0,1.3,1],[1.75,.5,.8],[2.5,1.2,.85]]],
-  tenue:['Une note tenue par mesure',[[0,3.9,1]]]
+  tenue:['Une note tenue par mesure',[[0,3.9,1]]],
+  melodie:['Suivre les notes (une note par bloc, tenue)',[]]
 };
 const MELODIES={same:'Même note (celle du bloc)',oct:"Avec l'octave (aiguë une note sur deux)",fifth:'Avec la quinte (une note sur deux)',walk:'Marche (walking vers le bloc suivant)'};
 const LEGACY_PAT={tonique:['noire','same'],octaves:['croches','oct'],marche:['noire','walk'],funk:['funk','oct'],hiphop:['hiphop','fifth'],pulse:['doubles','same']};
@@ -1299,15 +1302,23 @@ function defaultBass(nb){ return {rhy:'noire',mel:'same',type:'sub',len:1,beats:
 function nbOf(t){ return loopLen?beats:(+$('.bbeats',t.el).value||8); }
 // les blocs couvrent toujours toute la boucle, sans trou ni chevauchement
 function normSegs(segs,nb){
-  let sg=(segs||[]).map(x=>({s:Math.round(+x.s||0),e:Math.round(+x.e||0),n:((Math.round(+x.n||0)%12)+12)%12,glide:!!x.glide})).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
+  const q=v=>Math.round((+v||0)*64)/64;
+  let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
   if(!sg.length) return [{s:0,e:nb,n:0,glide:false}];
-  const tot=sg[sg.length-1].e;
-  if(tot<nb&&tot>0&&nb%tot===0&&sg[0].s===0){ const base=sg.slice(); for(let k=1;k<nb/tot;k++) base.forEach(x=>sg.push({...x,s:x.s+k*tot,e:x.e+k*tot})); }
+  const tot=sg[sg.length-1].e, ratio=nb/tot;
+  if(tot<nb&&tot>0&&Math.abs(ratio-Math.round(ratio))<1e-9&&sg[0].s===0){ const base=sg.slice(); for(let k=1;k<Math.round(ratio);k++) base.forEach(x=>sg.push({...x,s:x.s+k*tot,e:x.e+k*tot})); }
   sg=sg.filter(x=>x.s<nb);
   sg[0].s=0; for(let i=1;i<sg.length;i++) sg[i].s=sg[i-1].e;
   sg[sg.length-1].e=nb;
   return sg.filter(x=>x.e>x.s);
 }
+// note exacte de chaque bloc : celle enregistrée (m), sinon l'octave la plus proche du bloc précédent
+function segRoots(segs){
+  const roots=[]; let prev=null;
+  segs.forEach(x=>{ if(x.n==null){ roots.push(null); return; } let m; if(x.m!=null) m=x.m; else { m=prev!=null?nearOct(rootOf(x.n),prev):rootOf(x.n); while(m>52) m-=12; while(m<28) m+=12; } roots.push(m); prev=m; });
+  return roots;
+}
+const noteName=m=>NOTE_FR[((m%12)+12)%12]+(Math.floor(m/12)-1);
 // anciens réglages (note + évolution + accords) → blocs sur la ligne de temps
 function legacySegs(o,nb){
   const bars=Math.max(1,Math.ceil(nb/meter)), note=o.note||0;
@@ -1335,15 +1346,21 @@ function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft) t.bdraft=normBass(t.bas
 const rootOf=n=>n<=4?36+n:24+n;
 const nearOct=(m,ref)=>{ while(m-ref>6) m-=12; while(ref-m>6) m+=12; return m; };
 function bassEvents(o,nb){
-  const segs=normSegs(o.segs,nb), rh=(RHYTHMS[o.rhy]||RHYTHMS.noire)[1], bars=Math.max(1,Math.ceil(nb/meter));
+  const segs=normSegs(o.segs,nb), bars=Math.max(1,Math.ceil(nb/meter)), roots=segRoots(segs);
+  const nextRoot=i=>{ for(let k=1;k<=segs.length;k++){ const r=roots[(i+k)%segs.length]; if(r!=null) return r; } return roots[i]; };
+  if(o.rhy==='melodie') return segs.map((sg,i)=>{
+    if(sg.n==null) return null;
+    const root=roots[i], nr=nearOct(nextRoot(i),root);
+    return {pos:sg.s,m:root,m2:(sg.glide&&segs.length>1)?nr:root,len:Math.max(0.1,(sg.e-sg.s)*Math.min(1,o.len||1)-0.02),vel:1};
+  }).filter(Boolean);
+  const rh=(RHYTHMS[o.rhy]||RHYTHMS.noire)[1];
   const segAt=p=>{ for(let i=0;i<segs.length;i++) if(p>=segs[i].s&&p<segs[i].e) return i; return segs.length-1; };
-  const raw=[];
+  let raw=[];
   for(let b=0;b<bars;b++) for(const e of rh){ if(e[0]>=meter) continue; const pos=b*meter+e[0]; if(pos>=nb) continue; raw.push({pos,len:e[1]*(o.len||1),vel:e[2],si:segAt(pos)}); }
+  raw=raw.filter(r=>segs[r.si].n!=null);
   const cnt=new Array(segs.length).fill(0); raw.forEach(r=>{ r.k=cnt[r.si]++; });
-  // octave de chaque bloc : la plus proche du bloc précédent (la basse prend le chemin le plus court)
-  const roots=[]; segs.forEach((x,i)=>{ let m=i?nearOct(rootOf(x.n),roots[i-1]):rootOf(x.n); while(m>52) m-=12; while(m<28) m+=12; roots.push(m); });
   return raw.map(r=>{
-    const sg=segs[r.si], root=roots[r.si], ni=(r.si+1)%segs.length, nx=segs[ni], nroot=nearOct(roots[ni],root), last=r.k===cnt[r.si]-1;
+    const sg=segs[r.si], root=roots[r.si], nroot=nearOct(nextRoot(r.si),root), last=r.k===cnt[r.si]-1;
     let iv=0;
     if(o.mel==='oct') iv=r.k%2?12:0;
     else if(o.mel==='fifth') iv=r.k%2?7:0;
@@ -1352,6 +1369,85 @@ function bassEvents(o,nb){
     const m2=(sg.glide&&last&&segs.length>1)?nroot+(iv===12?12:0):m;
     return {pos:r.pos,m,m2,len,vel:r.vel};
   });
+}
+// ---------- mélodie chantée → notes ----------
+// suivi de la note chantée (méthode YIN), sur un son ramené à 12 kHz pour aller vite
+function pitchTrack(x){
+  const D=4, sr=SR/D, n=Math.floor(x.length/D), y=new Float32Array(n);
+  for(let i=0;i<n;i++){ let a=0; for(let j=0;j<D;j++) a+=x[i*D+j]; y[i]=a/D; }
+  const W=512, H=128, tmin=Math.floor(sr/1100), tmax=Math.ceil(sr/60), d=new Float32Array(tmax+2), dn=new Float32Array(tmax+2), fr=[];
+  let rmsMax=0;
+  for(let st=0;st+W+tmax+1<n;st+=H){
+    let e=0; for(let j=0;j<W;j++) e+=y[st+j]*y[st+j];
+    const rms=Math.sqrt(e/W); if(rms>rmsMax) rmsMax=rms;
+    let f=null, conf=0;
+    if(rms>1e-4){
+      for(let tau=1;tau<=tmax+1;tau++){ let sum=0; for(let j=0;j<W;j++){ const v=y[st+j]-y[st+j+tau]; sum+=v*v; } d[tau]=sum; }
+      let run=0; dn[0]=1; for(let tau=1;tau<=tmax+1;tau++){ run+=d[tau]; dn[tau]=run>0?d[tau]*tau/run:1; }
+      let best=-1;
+      for(let tau=tmin;tau<tmax;tau++){ if(dn[tau]<0.15){ while(tau+1<tmax&&dn[tau+1]<dn[tau]) tau++; best=tau; break; } }
+      if(best>0){ const a=dn[best-1], b=dn[best], c=dn[best+1], den=a-2*b+c, p=den?0.5*(a-c)/den:0; f=sr/(best+p); conf=1-b; }
+    }
+    fr.push({t:(st+W/2)/sr,f,conf,rms});
+  }
+  return {frames:fr,rmsMax,hop:H/sr};
+}
+function melodyToSegs(x,nb,q){
+  const {frames,rmsMax,hop}=pitchTrack(x), beatSec=loopSec()/beats;
+  const mid=frames.map(f=>(f.f&&f.f>60&&f.f<1100&&f.conf>0.8&&f.rms>Math.max(0.004,rmsMax*0.08))?69+12*Math.log2(f.f/440):null);
+  const med=mid.map((v,i)=>{ if(v==null) return null; const w=[]; for(let k=i-2;k<=i+2;k++) if(k>=0&&k<mid.length&&mid[k]!=null) w.push(mid[k]); w.sort((a,b)=>a-b); return w[Math.floor(w.length/2)]; });
+  const notes=[]; let cur=null;
+  for(let i=0;i<med.length;i++){
+    const v=med[i]==null?null:Math.round(med[i]), t=frames[i].t;
+    if(cur&&v===cur.m){ cur.t1=t; continue; }
+    let stable=0; for(let k=i;k<Math.min(med.length,i+3);k++){ const w=med[k]==null?null:Math.round(med[k]); if(w===v) stable++; }
+    if(stable<3&&cur){ cur.t1=t; continue; }
+    if(cur) notes.push(cur);
+    cur=v==null?null:{m:v,t0:t,t1:t};
+  }
+  if(cur) notes.push(cur);
+  const segs=[];
+  notes.forEach(nt=>{
+    let s0=Math.round(nt.t0/beatSec/q)*q, e0=Math.round((nt.t1+hop)/beatSec/q)*q;
+    s0=clamp(s0,0,nb); e0=clamp(e0,0,nb);
+    if(segs.length&&s0<segs[segs.length-1].e) s0=segs[segs.length-1].e;
+    if(e0-s0<q-1e-9) return;
+    const l=segs[segs.length-1];
+    if(l&&l.m===nt.m&&Math.abs(l.e-s0)<1e-9) l.e=e0; else segs.push({s:s0,e:e0,m:nt.m});
+  });
+  if(!segs.length) return null;
+  const ms=segs.map(x=>x.m).sort((a,b)=>a-b), medM=ms[Math.floor(ms.length/2)], shift=12*Math.round((36-medM)/12);
+  const out=[]; let pos=0;
+  segs.forEach(x=>{ if(x.s>pos+1e-9) out.push({s:pos,e:x.s,n:null}); const m=x.m+shift; out.push({s:x.s,e:x.e,n:((m%12)+12)%12,m}); pos=x.e; });
+  if(pos<nb-1e-9) out.push({s:pos,e:nb,n:null});
+  return {segs:out,count:segs.length,shift,lo:ms[0]+shift,hi:ms[ms.length-1]+shift,orig:[ms[0],ms[ms.length-1]]};
+}
+function fillMelSrc(t){
+  const sel=$('.msrc',t.el); if(!sel) return;
+  const list=tracks.filter(x=>x!==t&&x.buf&&x.kind!=='bass'), cur=sel.value;
+  sel.innerHTML=list.length?list.map(x=>`<option value="${x.id}"></option>`).join(''):'<option value="">aucune piste enregistrée</option>';
+  list.forEach((x,i)=>{ sel.options[i].textContent=x.name; });
+  if(list.some(x=>String(x.id)===cur)) sel.value=cur; else if(list.length) sel.value=String(list[list.length-1].id);
+  $('.mgo',t.el).disabled=!list.length;
+}
+function melToBass(t){
+  const src=tracks.find(x=>String(x.id)===$('.msrc',t.el).value);
+  if(!src||!src.buf||!loopLen){ msg('Enregistre d\'abord ta mélodie sur une piste normale, puis choisis-la ici.'); return; }
+  const q=+$('.mq',t.el).value, r=melodyToSegs(playBuf(src).getChannelData(0),nbOf(t),q);
+  if(!r){ msg('Je n\'ai repéré aucune note nette : chante plus fort ou plus près du micro, et une seule note à la fois.'); return; }
+  const d=ensureDraft(t); d.segs=r.segs; t.bsel=0;
+  $('.brhy',t.el).value='melodie';
+  bassChanged(t);
+  const oct=r.shift/12;
+  msg(r.count+' note'+(r.count>1?'s':'')+' repérée'+(r.count>1?'s':'')+' sur « '+src.name+' » ('+noteName(r.orig[0])+' à '+noteName(r.orig[1])+')'+(oct?', descendue'+(r.count>1?'s':'')+' de '+Math.abs(oct)+' octave'+(Math.abs(oct)>1?'s':'')+(oct>0?' (montée)':''):'')+' : la basse joue maintenant de '+noteName(r.lo)+' à '+noteName(r.hi)+'. Écoute l\'aperçu, ajuste avec « Transposer » ou la palette, puis « Créer la basse ».');
+}
+function transposeBass(t,dd){
+  const d=ensureDraft(t), roots=segRoots(d.segs);
+  const ms=roots.filter(x=>x!=null); if(!ms.length) return;
+  if(Math.min(...ms)+dd<24||Math.max(...ms)+dd>64){ msg('Limite atteinte : la basse irait trop '+(dd<0?'grave':'aigu')+'.'); return; }
+  d.segs.forEach((x,i)=>{ if(roots[i]==null) return; x.m=roots[i]+dd; x.n=((x.m%12)+12)%12; });
+  bassChanged(t);
+  msg('Basse transposée : de '+noteName(Math.min(...ms)+dd)+' à '+noteName(Math.max(...ms)+dd)+'.');
 }
 function renderBass(o,L,nb){
   const bl=L/nb, out=new Float32Array(L), ev=bassEvents(o,nb);
@@ -1374,11 +1470,12 @@ function showBassOpts(t){
 function drawBassTimeline(t){
   const c=$('.btl',t.el); if(!c) return;
   const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), sel=t.bsel||0, cur=segs[sel];
-  $('.btlinfo',t.el).textContent=segs.map(x=>NOTE_FR[x.n]+(x.glide?' ↝':'')).join(' → ')+' · '+segs.length+' bloc'+(segs.length>1?'s':'');
-  $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
+  const lab=x=>x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''), rests=segs.filter(x=>x.n==null).length;
+  $('.btlinfo',t.el).textContent=(segs.length<=10?segs.map(lab).join(' → ')+' · ':'')+segs.length+' bloc'+(segs.length>1?'s':'')+(rests?' (dont '+rests+' silence'+(rests>1?'s':'')+')':'');
+  if(cur.n!=null) $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
   $('.bsplit',t.el).disabled=cur.e-cur.s<2; $('.bdel',t.el).disabled=segs.length<2;
   $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
-  t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',+b.dataset.n===cur.n));
+  t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',b.dataset.n==='-1'?cur.n==null:+b.dataset.n===cur.n));
   $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+(cur.s+1)+' → '+cur.e;
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':'✓ Créer la basse';
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr); if(!w||!hh) return;
@@ -1397,10 +1494,10 @@ function drawBassTimeline(t){
   g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif";
   segs.forEach((x,i)=>{
     const x0=X(x.s)+2*dpr, x1=X(x.e)-2*dpr;
-    g.fillStyle='hsl('+NOTE_HUE[x.n]+',70%,'+(i===sel?'52%':'38%')+')';
+    g.fillStyle=x.n==null?(i===sel?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)'):'hsl('+NOTE_HUE[x.n]+',70%,'+(i===sel?'52%':'38%')+')';
     if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.fill(); } else g.fillRect(x0,by0,Math.max(2,x1-x0),by1-by0);
     if(i===sel){ g.strokeStyle='#fff'; g.lineWidth=2.5*dpr; if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.stroke(); } else g.strokeRect(x0,by0,x1-x0,by1-by0); }
-    g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(NOTE_FR[x.n]+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
+    g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
     if(i<segs.length-1){ g.fillStyle='#FF8A00'; g.fillRect(X(x.e)-2*dpr,0,4*dpr,hh); g.font=Math.round(RH*0.5)+'px sans-serif'; g.fillText('✂',X(x.e),RH*0.42); g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; }
   });
 }
@@ -1415,7 +1512,7 @@ function initBassTimeline(t){
     if(k<=0||k>=nb) return;
     const bi=segs.findIndex(x=>x.e===k);
     if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; $('.bst',t.el).textContent='Coupe enlevée au temps '+(k+1)+'.'; }
-    else { const i=segs.findIndex(x=>k>x.s&&k<x.e); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,glide:x.glide}); x.e=k; x.glide=false; t.bsel=i+1; $('.bst',t.el).textContent='Coupé au temps '+(k+1)+' : touche une note pour ce nouveau bloc.'; }
+    else { const i=segs.findIndex(x=>k>x.s&&k<x.e); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=k; x.glide=false; t.bsel=i+1; $('.bst',t.el).textContent='Coupé au temps '+(k+1)+' : touche une note pour ce nouveau bloc.'; }
     bassChanged(t);
   };
   c.addEventListener('pointerdown',ev=>{
@@ -1440,9 +1537,15 @@ function initBassTimeline(t){
   $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); drawBassTimeline(t); };
   $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); drawBassTimeline(t); };
   $('.bsn',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].n=+e.target.value; bassChanged(t); };
-  t.el.querySelectorAll('.bpal button').forEach(b=>b.onclick=()=>{ const d=ensureDraft(t); d.segs[t.bsel||0].n=+b.dataset.n; bassChanged(t); $('.bst',t.el).textContent=''; });
+  t.el.querySelectorAll('.bpal button').forEach(b=>b.onclick=()=>{
+    const d=ensureDraft(t), x=d.segs[t.bsel||0], v=+b.dataset.n;
+    if(v<0){ x.n=null; x.m=undefined; }
+    else { const old=segRoots(d.segs)[t.bsel||0]; x.n=v; x.m=(x.m!=null||old!=null)?nearOct(rootOf(v),old!=null?old:rootOf(v)):undefined; if(x.m==null) delete x.m; }
+    bassChanged(t); $('.bst',t.el).textContent=''; });
+  t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
+  $('.mgo',t.el).onclick=()=>melToBass(t);
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
-  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
+  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
   $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } bassChanged(t); };
 }
 function drawBassViz(t){
@@ -1517,7 +1620,7 @@ function setTab(t,tab){
   t.el.querySelectorAll('.ttabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   t.el.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==tab);
   if(tab==='cut') drawTsel(t);
-  if(tab==='bass'){ drawBassTimeline(t); drawBassViz(t); }
+  if(tab==='bass'){ fillMelSrc(t); drawBassTimeline(t); drawBassViz(t); }
 }
 function setKindUI(t){
   const bass=t.kind==='bass';
@@ -1645,11 +1748,17 @@ function buildTrackUI(t){
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
   <div class="seg ttabs" style="margin-top:14px"><button data-tab="bass" hidden>🎸 Basse</button><button data-tab="son">🎚 Son</button><button data-tab="cut">✂ Découpe</button><button data-tab="fx">✨ Effets</button><button data-tab="trk">⚙ Piste</button></div>
   <div class="pane" data-pane="bass" hidden>
+    <details class="field mel2b" style="margin-top:12px"><summary class="lbl" style="font-size:18px">🎤 Transformer une mélodie chantée en basse</summary>
+      <p class="hint" data-help="mel2b">Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves.</p>
+      <div class="row wrap"><span class="lbl w2">Piste</span><select class="msrc" style="width:auto" aria-label="Piste chantée"></select><select class="mq" style="width:auto" aria-label="Calage des notes"><option value="0.25" selected>notes calées à la double-croche</option><option value="0.5">calées à la croche</option><option value="1">calées au temps</option></select></div>
+      <div class="row"><button class="mgo primary">🎤 Repérer les notes et créer les blocs</button></div>
+    </details>
     <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
     <p class="hint" style="margin:6px 0 0">✂ <b>Touche la règle</b> (les numéros de temps) pour couper à cet endroit, ou pour enlever une coupe. <b>Touche un bloc</b> pour le choisir, puis touche sa note ci-dessous.</p>
     <canvas class="btl" style="width:100%;height:104px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
     <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button></div>
-    <div class="bpal">${NOTE_FR.map((n,i)=>`<button data-n="${i}" style="--h:${NOTE_HUE[i]}">${n}</button>`).join('')}</div>
+    <div class="bpal">${NOTE_FR.map((n,i)=>`<button data-n="${i}" style="--h:${NOTE_HUE[i]}">${n}</button>`).join('')}<button data-n="-1" style="--h:0;filter:saturate(0)">∅ Silence</button></div>
+    <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
     <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label><button class="bsplit">✂ Couper le bloc choisi en deux</button><button class="bdel">🗑 Retirer le bloc</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl">Notes jouées</span></div>
@@ -2085,7 +2194,7 @@ function lockUI(){
   updBpm();
   tracks.forEach(t=>{ t.fxn.forEach(f=>f.set(f.slot.amt,beatDur())); });
   checkMem();
-  tracks.forEach(t=>{ const r=$('.bbrow',t.el); if(r) r.hidden=!!loopLen; });
+  tracks.forEach(t=>{ const r=$('.bbrow',t.el); if(r) r.hidden=!!loopLen; if(t.kind==='bass') fillMelSrc(t); });
   updTempoRow();
   updLive();
   tracks.forEach((t,i)=>{
