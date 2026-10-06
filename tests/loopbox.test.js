@@ -472,6 +472,76 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const played=P.starts.filter(x=>x.buf).slice(-6).map(x=>rmsAll(x.buf));
     ok(played.every(v=>v>0.05),'une piste a été écrasée : niveaux '+played.map(v=>v.toFixed(3)).join(','));
   });
+
+  // ---------------- latence et calage précis (v30) ----------------
+  const lateTake=async(P,r,late,jit)=>{
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length/SR, t0e=r.tp+r.first-0.003, cur=P.ctx.currentTime;
+    const tgt0=t0e+Math.ceil((cur+1.2-t0e)/L)*L+0.003, press=tgt0-0.3;
+    P.impulses=[]; for(let k=0;k<8;k++) P.impulses.push(Math.round((tgt0+k*(L/8)+r.lat+late+(jit?jit[k]:0))*SR));
+    await P.runUntil(press,[{t:press,fn:()=>P.rec(1).click()}]); await P.runUntil(press+L+1.2);
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    return t2;
+  };
+  await test('latence : une prise en retard de 40 ms est calée sur les temps sans rien couper',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const t2=await lateTake(P,r,0.040);
+    const orig=P.lastBuf(), before=P.hits(orig);
+    ok(before.every((x,k)=>Math.abs(x-(144+Math.round(k*r.buf.length/8))-Math.round(0.04*SR))<=4),'préparation : prise pas en retard de 40 ms');
+    t2.querySelector('.qgrid').value='1'; t2.querySelector('.ofauto').click(); await sleep(30);
+    const beat=r.buf.length/8, h=P.hits(P.lastPlayed());
+    ok(h.length===8,'coups joués '+h.length);
+    ok(h.every((x,k)=>Math.abs(x-(144+k*beat))<=4),'après calage : écarts '+h.map((x,k)=>Math.round(x-(144+k*beat))).join(','));
+    ok(/−?-?3\d ms|−?-?4\d ms/.test(t2.querySelector('.offv').textContent),'décalage affiché : '+t2.querySelector('.offv').textContent);
+    ok(P.hits(orig).join()===before.join(),'le son d\'origine a été modifié');
+    t2.querySelector('.ofb[data-d="10"]').click(); await sleep(20);
+    const h2=P.hits(P.lastPlayed());
+    ok(Math.abs((h2[0]-h[0])-480)<=2,'+10 ms devrait retarder de 480 échantillons : '+(h2[0]-h[0]));
+    t2.querySelector('.ofz').click(); await sleep(20);
+    ok(t2.querySelector('.offv').textContent==='0 ms'&&P.hits(P.lastPlayed()).join()===before.join(),'« 0 » doit revenir au son d\'origine');
+  });
+  await test('recaler chaque son : attaques sur les temps, queues des sons préservées (plus de grignotage)',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length, beat=L/8, d=new Float32Array(L), jit=[0.022,-0.018,0.015,-0.022,0.01,-0.012,0.02,-0.008]; let sd=3;
+    const pos=[];
+    for(let k=0;k<8;k++){ const p=Math.round(144+k*beat+jit[k]*SR); pos.push(p); for(let i=0;i<Math.round(0.35*SR)&&p+i<L;i++) d[p+i]+=0.7*Math.exp(-i/(0.1*SR))*Math.sin(2*Math.PI*90*i/SR); }
+    for(let k=0;k<8;k++){ const p=Math.round(144+(k+0.6)*beat); for(let i=0;i<1500&&p+i<L;i++){ sd=(sd*16807)%2147483647; d[p+i]+=0.05*(sd/2147483647*2-1); } }
+    await P.importFile(1,{numberOfChannels:1,length:L,sampleRate:SR,duration:L/SR,getChannelData:()=>d});
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    const orig=P.lastBuf();
+    t2.querySelector('.qgrid').value='1'; t2.querySelector('.qstr').value='1'; t2.querySelector('.qbtn').click(); await sleep(30);
+    const hitsG=b=>{ const x=b.getChannelData(0), o=[]; let prev=-1e9; for(let i=0;i<x.length;i++) if(Math.abs(x[i])>0.4&&i-prev>Math.round(0.2*SR)){ o.push(i); prev=i; } return o; };
+    const out=P.lastBuf(), h=hitsG(out), h0=hitsG(orig);
+    ok(h.length===8,'coups '+h.length);
+    const dev=h.map((x,k)=>x-(144+k*beat)), dev0=h0.map((x,k)=>x-(144+k*beat));
+    ok(Math.max(...dev)-Math.min(...dev)<=4,'attaques pas alignées : écarts '+dev.map(Math.round).join(',')+' (avant '+dev0.map(Math.round).join(',')+')');
+    const rms=(b,a,z)=>{ const x=b.getChannelData(0); let s=0; for(let i=a;i<z;i++) s+=x[i]*x[i]; return Math.sqrt(s/(z-a)); };
+    const tails=h.map((x,k)=>20*Math.log10(rms(out,x+Math.round(0.02*SR),x+Math.round(0.2*SR))/rms(orig,h0[k]+Math.round(0.02*SR),h0[k]+Math.round(0.2*SR))));
+    ok(tails.every(v=>Math.abs(v)<1.5),'queues des sons modifiées (dB) : '+tails.map(v=>v.toFixed(1)).join(','));
+  });
+  await test('repères début/fin réglables à la milliseconde, et sans aimant',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const t2=await lateTake(P,r,0);
+    t2.querySelector('.tsn[data-w="s"][data-ms="10"]').click(); await sleep(10);
+    ok(/Temps 1,01\d → 8 sur 8/.test(t2.querySelector('.tsl').textContent),'+10 ms au début : '+t2.querySelector('.tsl').textContent);
+    t2.querySelector('.tsn[data-w="e"][data-ms="-1"]').click(); await sleep(10);
+    ok(/→ 7,998 sur 8/.test(t2.querySelector('.tsl').textContent),'−1 ms à la fin : '+t2.querySelector('.tsl').textContent);
+    const sn=t2.querySelector('.tsnap'); sn.checked=false; sn.dispatchEvent(new P.w.Event('change'));
+    const c=t2.querySelector('.tsc'); c.getBoundingClientRect=()=>({left:0,width:800});
+    const pe=(ty,x)=>c.dispatchEvent(new P.w.MouseEvent(ty,{clientX:x,bubbles:true}));
+    pe('pointerdown',2); pe('pointermove',330); pe('pointerup',330); await sleep(10);
+    ok(/Temps 4,3 → /.test(t2.querySelector('.tsl').textContent),'repère libre : '+t2.querySelector('.tsl').textContent);
+  });
+  await test('prise de base : ajuster le début à la milliseconde sans changer la durée',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    ok(P.$('#editor').style.display!=='none','cadre de la prise de base');
+    P.$('.mn[data-d="-10"]').click(); await sleep(20);
+    const b=P.lastBuf(), h=P.hits(b);
+    ok(b.length===r.buf.length,'durée changée : '+b.length);
+    ok(Math.abs(h[0]-(144+480))<=3,'1er coup à '+h[0]+' au lieu de '+(144+480));
+    ok(P.$('#mnv').textContent==='−10 ms'||P.$('#mnv').textContent==='-10 ms','affichage : '+P.$('#mnv').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

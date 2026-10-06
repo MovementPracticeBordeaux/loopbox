@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='29';
+const APPVER='30';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -70,7 +70,7 @@ function makeTrackNodes(i){
   let _buf=null;
   return {id:i,kind:'rec',bass:null,tab:'',name:'Piste '+(i+1),color:COLORS[i%COLORS.length],fadeIn:0,fadeOut:0,live:true,offT:0,inp,eq,eqv:[0,0,0],srcType:'beatbox',
     get buf(){ return _buf; }, set buf(v){ if(v!==_buf){ _buf=v; this.sel=null; this.pc=null; } },
-    sel:null,selMode:'mute',pc:null,pitch:0,pp:null,pjob:null,get prev(){ return null; }, set prev(v){},gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
+    sel:null,selMode:'mute',off:0,snap:true,po:null,pc:null,pitch:0,pp:null,pjob:null,get prev(){ return null; }, set prev(v){},gain:g,pan:p,src:null,vol:0.8,panv:0,mute:false,solo:false,fxs:[{type:'none',amt:0.5}],fxn:[],el:null,cache:{}};
 }
 // ---------- hauteur du son (sans changer la durée) ----------
 function* pitchShiftGen(x,semis,SR){
@@ -260,7 +260,17 @@ function repCopies(t){
   for(let k=0;k<K;k++) out.push([t.sel.s+k*P,m==='loop'?Math.min(P,beats-k*P):P]);
   return out;
 }
+// lecture avec décalage dans le temps (rotation de la boucle, rien n'est coupé)
 function playBuf(t){
+  const r=playBufCore(t); if(!r||!t.off) return r;
+  const k=Math.round(t.off*SR), c=t.po;
+  if(c&&c.src===r&&c.k===k) return c.out;
+  const L=r.length, d=r.getChannelData(0), o=new Float32Array(L);
+  for(let i=0;i<L;i++) o[mod(i+k,L)]=d[i];
+  const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(o,0);
+  t.po={src:r,k,out:nb}; return nb;
+}
+function playBufCore(t){
   const b=pitchedBuf(t); if(!b) return b;
   if(!t.sel&&!t.fadeIn&&!t.fadeOut) return b;
   const mode=t.sel?(t.selMode||'mute'):'mute';
@@ -764,6 +774,7 @@ function buildFromSel(){
     let pk=0; for(let i=a;i<b;i++){ const v=Math.abs(m.raw[i]); if(v>pk) pk=v; }
     if(pk>0.05){ for(let i=a;i<b;i++){ if(Math.abs(m.raw[i])>0.25*pk){ startS=i-m.pre; break; } } }
   }
+  startS+=Math.round((m.nudge||0)*SR);
   const one=new Float32Array(LS);
   for(let i=0;i<LS;i++){ const src=startS+i; if(src>=0&&src<m.raw.length) one[i]=m.raw[src]; }
   applyFades(one);
@@ -783,7 +794,7 @@ function setRep(k){
 }
 function snapState(){
   return {loopLen,beats,baseLen,baseBeats,rep,gridOff,mvol,fin,mt:masterTake?{...masterTake}:null,
-    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
+    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
       fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut}))};
 }
 function touchSettings(){ if(!H.pend) H.pend=snapState(); }
@@ -815,7 +826,7 @@ function restoreState(sn){
   tracks.forEach(t=>{
     const x=map.get(t);
     t.buf=x?x.buf:null;
-    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.pc=null;
+    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.po=null; t.pc=null; updOffUI(t);
     const p=x?x.pitch:0; if(p!==t.pitch){ t.pitch=p; if(!p) t.pp=null; }
     if(x){
       t.vol=x.vol; t.panv=x.panv; t.mute=x.mute; t.solo=x.solo; t.srcType=x.srcType; t.fadeIn=x.fadeIn||0; t.fadeOut=x.fadeOut||0;
@@ -903,6 +914,7 @@ function peaksOf(raw,w){
 }
 function drawEditor(){
   const m=masterTake; if(!m) return;
+  { const e=$('#mnv'); if(e) e.textContent=fmtMs(m.nudge||0); }
   const c=$('#edc'), dpr=window.devicePixelRatio||1;
   const w=Math.floor(c.clientWidth*dpr), h=Math.floor(c.clientHeight*dpr); if(!w||!h) return;
   c.width=w; c.height=h;
@@ -989,14 +1001,13 @@ const HELP={
   proj:"<b>Projets</b> : chaque projet garde ses pistes, sa boucle et tous ses réglages. Ton travail est <b>enregistré automatiquement</b> dans ce navigateur (indication en haut à droite) ; « Enregistrer » force l'enregistrement tout de suite. « Enregistrer une copie » crée un nouveau projet à partir de celui-ci (avec le nom écrit dans la case). Dans « Mes projets », tu ouvres ou supprimes un projet. La latence et le gain du micro sont communs à tous les projets.",
   projfile:"<b>Fichier de sauvegarde</b> : crée un fichier « .loopbox » avec tout le projet (sons et réglages), à garder dans tes téléchargements ou à envoyer ailleurs. <b>Important</b> : les projets du navigateur disparaissent si tu effaces les données du site ou du navigateur ; le fichier, lui, reste. « Ouvrir un fichier » le recharge comme un nouveau projet. Le son y est stocké en qualité CD (16 bits).",
   pitch:"<b>Hauteur du son</b> : monte ou descend la <b>note</b> de la piste, <b>sans changer sa durée ni son rythme</b> : elle reste calée sur la boucle. Le réglage est en <b>demi-tons</b> (+12 = une octave plus aigu, −12 = une octave plus grave). L'appli recalcule la piste quand tu relâches le curseur (de quelques instants à quelques secondes selon la longueur) : « Calcul… » s'affiche, et l'ancien son continue de jouer en attendant. Plus tu t'éloignes de 0 (surtout au-delà de ±7), plus le son peut devenir métallique ou perdre en précision. Le son d'origine n'est jamais modifié : remets 0 pour le retrouver. Fonctionne aussi sur un fichier importé.",
-  trep:"<b>Le reste de la piste</b> : ce que devient la piste en dehors de la partie choisie avec les repères orange. <b>Silence</b> : seule la partie est jouée. <b>Répéter en boucle</b> : la partie se répète en continu sur toute la boucle, à partir de son début. <b>×2 / ×3 / ×4</b> : jouée 2, 3 ou 4 fois à la suite, puis silence. <b>Rien n'est effacé</b> : la forme d'onde complète reste visible, la partie en orange et ses répétitions en orange pâle, et la durée de la boucle de base ne change jamais. Sans partie choisie, l'appli prend automatiquement les temps qui contiennent du son.",  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis les temps à conserver sur cette piste, le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
+  trep:"<b>Le reste de la piste</b> : ce que devient la piste en dehors de la partie choisie avec les repères orange. <b>Silence</b> : seule la partie est jouée. <b>Répéter en boucle</b> : la partie se répète en continu sur toute la boucle, à partir de son début. <b>×2 / ×3 / ×4</b> : jouée 2, 3 ou 4 fois à la suite, puis silence. <b>Rien n'est effacé</b> : la forme d'onde complète reste visible, la partie en orange et ses répétitions en orange pâle, et la durée de la boucle de base ne change jamais. Sans partie choisie, l'appli prend automatiquement les temps qui contiennent du son.",  tsel:"<b>Garder la partie propre (cette piste)</b> : choisis la partie à conserver sur cette piste. Avec « aimanter aux temps », les repères se calent sur les temps ; sans, tu les places où tu veux, et les boutons ±1 ms / ±10 ms règlent le début et la fin à la milliseconde près. le reste devient muet (zones assombries sur la forme d'onde). <b>Ça ne change ni la boucle ni la piste de base.</b> Rien n'est perdu : tu peux élargir de nouveau la sélection, ou toucher « Tout garder ». Glisse les repères orange sur la forme d'onde, ou utilise les boutons. Une nouvelle prise sur la piste remet la sélection à zéro.",
   imp:"<b>Importer un fichier audio</b> : place un son de ton téléphone (MP3, WAV, M4A, OGG…) sur cette piste. <b>Sur la première piste</b>, l'appli essaie de repérer le rythme du fichier pour définir la boucle : règle d'abord le curseur de tempo près de celui du morceau. <b>Sur les autres pistes</b>, tu choisis comment l'adapter à la boucle : une seule fois depuis le début, répété pour la remplir, coupé, ou en allongeant la boucle. La vitesse du fichier n'est pas modifiée. Limites : 30 Mo et 40 secondes (le reste est ignoré).",
   undo:"<b>Annuler / Rétablir</b> (↶ ↷ en haut) : reviennent en arrière ou en avant sur les prises, imports, effacements, découpes, durées de boucle et hauteurs, jusqu'à 30 étapes. Les réglages de volume, d'effets et de tonalité ne sont pas concernés.",
   tname:"<b>Nom et place</b> : donne un nom à la piste (« Kick », « Snare », « Voix »…), monte-la ou descends-la dans la liste, ou duplique-la : la copie reprend le son et tous les réglages, pratique pour essayer un autre effet sans toucher à l'original.",
   msub:"<b>Clics</b> : <b>Temps</b> = un clic par temps. <b>Croches</b> = deux clics par temps, <b>Doubles</b> = quatre : les clics intermédiaires sont plus doux. Pratique pour jouer des rythmes rapides bien en place.",
   meter:"<b>Mesure</b> : <b>4 temps</b> pour la plupart des rythmes, <b>3 temps</b> pour une valse ou un rythme ternaire. Ça change l'accent du métronome (le clic aigu), le décompte et le regroupement des temps à l'écran.",
-  quant:"<b>Recaler sur le rythme</b> : l'appli repère chaque son de la piste et le déplace vers le temps le plus proche de la grille choisie (temps, croches ou doubles-croches). <b>100 %</b> = exactement sur la grille, <b>50 %</b> = à mi-chemin, plus naturel. Idéal pour les percussions ; sur une voix ou un son continu, ça peut créer des coupures. ↶ annule si le résultat ne te plaît pas.",
-  fades:"<b>Fondus</b> : le son de la piste monte progressivement au début (entrée) ou s'éteint progressivement à la fin (sortie) de sa partie, sur la durée choisie. Ça ne touche pas au son d'origine. <b>Jouer à l'envers</b> retourne la piste (effet « son inversé »), ↶ pour revenir.",
+  quant:"<b>Grille de rythme</b> : choisis la grille (temps, croches ou doubles-croches) utilisée pour caler la piste. <b>« Recaler chaque son »</b> va plus loin : il déplace chaque attaque séparément vers la grille, à 100 %, 75 % ou 50 %. Il ne touche qu'aux vraies attaques (les petits bruits restent attachés au son précédent) et raccorde les sons en fondu. À utiliser si tes sons sont irréguliers entre eux ; si la prise est juste en retard partout, utilise plutôt « Caler la piste sur le rythme (sans couper) ». ↶ annule.",  fades:"<b>Fondus</b> : le son de la piste monte progressivement au début (entrée) ou s'éteint progressivement à la fin (sortie) de sa partie, sur la durée choisie. Ça ne touche pas au son d'origine. <b>Jouer à l'envers</b> retourne la piste (effet « son inversé »), ↶ pour revenir.",
   tempochg:"<b>Changer le tempo</b> : accélère ou ralentit toute la boucle, toutes les pistes ensemble, <b>sans changer la note</b>. Règle le nouveau tempo avec −5 / −1 / +1 / +5 puis « Appliquer ». De la moitié au double du tempo actuel. Plus l'écart est grand, plus le son peut s'abîmer un peu. ↶ annule.",
   live:"<b>Mode live</b> : un gros bouton par piste pour la couper ou la relancer pendant la lecture. Le changement tombe <b>en rythme</b> : au début de la prochaine mesure, au début de la prochaine boucle, ou tout de suite, selon ton choix. Le bouton clignote tant que le changement est en attente. Idéal pour jouer devant quelqu'un.",
   scenes:"<b>Scènes</b> : mémorise une combinaison de pistes en jeu (par exemple A = couplet, B = refrain), puis « Lancer » la rappelle d'un coup, en rythme. Règle d'abord les pistes avec les gros boutons, puis « Mémoriser ».",
@@ -1005,7 +1016,9 @@ const HELP={
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
-  bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
+  bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
+  mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
+  trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
   pan:"<b>Gauche ⇄ Droite</b> (panoramique) : place le son plus à gauche ou plus à droite dans ton casque. Au milieu, il est centré. Pratique pour séparer les pistes et aérer le mix.",
   eq:"<b>Tonalité</b> : trois curseurs pour façonner le son de cette piste. Ils agissent à l'écoute : tu peux les changer à tout moment, même après l'enregistrement, et entendre le résultat dans le mix. <b>Graves</b> : le corps, le « boum ». <b>Médiums</b> : la présence, le corps d'une voix ou d'une caisse claire. <b>Aigus</b> : la brillance, les « tss », l'air. Au milieu (0 dB) : son d'origine. Les boutons rapides règlent les trois d'un coup : <b>Punch</b> (plus de corps et d'attaque), <b>Clair</b> (plus brillant), <b>Voix nette</b> (moins de graves boueux, voix plus présente), <b>Chaud</b> (plus rond, moins agressif). Tu peux ensuite affiner avec les curseurs. Astuce : si une piste « mange » les autres, baisse ses graves ou ses médiums.",
@@ -1452,25 +1465,62 @@ function setKindUI(t){
   if(bass&&!t.tab) t.tab='bass';
   setTab(t,t.tab||(bass?'bass':'son'));
 }
+function fmtMs(v){ const ms=Math.round(v*1000); return (ms>0?'+':'')+ms+' ms'; }
+function setOffset(t,v){
+  if(!t.buf||recObj) return;
+  v=clamp(Math.round(v*1000)/1000,-0.5,0.5);
+  if(v===t.off) return;
+  touchSettings(); t.off=v; commitSettings(); t.po=null;
+  startSrc(t); drawWave(t); updOffUI(t); scheduleSave(true);
+}
+function updOffUI(t){ const e=$('.offv',t.el); if(e) e.textContent=fmtMs(t.off||0); }
+// calage automatique : on mesure de combien les sons de la piste tombent à côté des temps, et on décale toute la piste d'autant
+// vraies attaques : celles dont le volume réel atteint au moins 30 % du son le plus fort (les petits bruits sont ignorés)
+function strongOnsets(d,L){
+  const all=detectOnsets(d,L), win=Math.round(0.03*SR);
+  all.forEach(o=>{ let p=0; for(let i=o.n;i<Math.min(L,o.n+win);i++){ const v=Math.abs(d[i]); if(v>p) p=v; } o.pk=p; });
+  const mx=Math.max(0,...all.map(o=>o.pk));
+  return all.filter(o=>o.pk>=0.3*mx);
+}
+function autoAlign(t,q){
+  if(!t.buf||!loopLen||recObj) return;
+  const d=t.buf.getChannelData(0), L=d.length, on=strongOnsets(d,L);
+  if(on.length<2){ msg('Pas assez de sons nets sur cette piste pour la caler automatiquement : utilise les boutons ±1 / ±10 ms.'); return; }
+  const strong=on.map(o=>o.n);
+  const g=L/(beats*q), go=gridOff||0;
+  const ds=strong.map(p=>go+Math.round((p-go)/g)*g-p).sort((a,b)=>a-b);
+  const med=ds[Math.floor(ds.length/2)], spread=(ds[Math.floor(ds.length*0.8)]-ds[Math.floor(ds.length*0.2)])/2;
+  setOffset(t,med/SR);
+  msg('Piste « '+t.name+' » décalée de '+fmtMs(t.off)+' : ses sons tombent maintenant sur '+(q===1?'les temps':q===2?'les croches':'les doubles-croches')+', sans rien couper'+(spread/SR>0.025?' (sons assez irréguliers : affine avec ±1 ms si besoin)':'')+'. ↶ pour revenir.');
+}
 function quantizeTrack(t,q,strength){
   if(!t.buf||!loopLen||recObj) return;
   const src=t.buf.getChannelData(0), L=src.length;
-  const on=detectOnsets(src,L).map(o=>o.n);
-  if(!on.length){ msg('Aucun son net à recaler sur cette piste.'); return; }
-  const g=L/(beats*q), pre=Math.round(0.01*SR), fo=Math.round(0.006*SR), fi=64, go=gridOff||0;
+  const all=strongOnsets(src,L);
+  if(!all.length){ msg('Aucun son net à recaler sur cette piste.'); return; }
+  const minGap=Math.round(0.08*SR), on=[];
+  all.forEach(o=>{ if(!on.length||o.n-on[on.length-1]>=minGap) on.push(o.n); });
+  const g=L/(beats*q), go=gridOff||0, pre=Math.round(0.01*SR), xf=Math.round(0.008*SR);
+  const sh=[]; let lastT=null, maxSh=0, moved=0;
+  on.forEach((p,i)=>{
+    const tg=go+Math.round((p-go)/g)*g;
+    if(lastT!==null&&Math.abs(tg-lastT)<1){ sh.push(p-on[i-1]<g*0.5?sh[i-1]:0); return; }
+    const v=Math.round((tg-p)*strength); sh.push(v); lastT=tg;
+    if(Math.abs(v)>Math.round(0.002*SR)) moved++; maxSh=Math.max(maxSh,Math.abs(v));
+  });
+  const segs=[], firstA=Math.max(0,on[0]-pre);
+  if(firstA>0) segs.push([0,firstA,0]);
+  on.forEach((p,i)=>{ const a0=Math.max(0,p-pre), b0=i+1<on.length?Math.max(a0+1,on[i+1]-pre):L; segs.push([a0,b0,sh[i]]); });
   const out=new Float32Array(L);
-  for(let j=0;j<Math.max(0,on[0]-pre);j++) out[j]+=src[j];
-  let maxSh=0, moved=0;
-  for(let i=0;i<on.length;i++){
-    const p=on[i], tgt=go+Math.round((p-go)/g)*g, sh=Math.round((tgt-p)*strength);
-    if(Math.abs(sh)>Math.round(0.002*SR)) moved++;
-    maxSh=Math.max(maxSh,Math.abs(sh));
-    const a=Math.max(0,p-pre), z=i+1<on.length?Math.max(a+1,on[i+1]-pre):L;
-    for(let j=a;j<z;j++){
+  for(let i=0;i<segs.length;i++){
+    const [a0,b0,s0]=segs[i], nx=segs[i+1];
+    let ext=0; if(nx){ ext=xf; const gap=(nx[0]+nx[2])-(b0+s0); if(gap>0) ext+=Math.min(gap,pre); ext=Math.min(ext,pre-Math.round(0.002*SR)); }
+    const end=Math.min(L,b0+ext);
+    for(let j=a0;j<end;j++){
       let v=src[j];
-      if(i+1<on.length&&z-j<fo) v*=(z-j)/fo;
-      if(a>0&&j-a<fi) v*=(j-a)/fi;
-      out[mod(j+sh,L)]+=v;
+      if(i>0&&j-a0<xf) v*=(j-a0)/xf;
+      if(nx&&j>=end-xf) v*=(end-j)/xf;
+      out[mod(j+s0,L)]+=v;
     }
   }
   for(let j=0;j<L;j++) out[j]=clamp(out[j],-1,1);
@@ -1480,7 +1530,7 @@ function quantizeTrack(t,q,strength){
   t.buf=nb; t.sel=keep;
   if(masterTake&&masterTake.i===t.id) masterTake=null;
   drawWave(t); startSrc(t); lockUI(); scheduleSave();
-  msg(moved?(moved+' son'+(moved>1?'s':'')+' recalé'+(moved>1?'s':'')+' (décalage max '+Math.round(maxSh/SR*1000)+' ms).'):'Les sons étaient déjà en place.');
+  msg(moved?(moved+' son'+(moved>1?'s':'')+' recalé'+(moved>1?'s':'')+' (décalage max '+Math.round(maxSh/SR*1000)+' ms). Si ta prise est juste en retard partout, préfère « Caler la piste sur le rythme (sans couper) ».'):'Les sons étaient déjà en place.');
 }
 function reverseTrack(t){
   if(!t.buf||recObj) return;
@@ -1535,12 +1585,17 @@ function buildTrackUI(t){
   <div class="pane" data-pane="cut" hidden>
   <div class="field tsel" hidden><div class="row"><span class="lbl" data-help="tsel">Garder la partie propre</span><span class="tsl lbl" style="margin-left:auto"></span></div>
     <canvas class="tsc" style="width:100%;height:76px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
-    <div class="row wrap"><button class="ts1">◀ début</button><button class="ts2">début ▶</button><button class="ts3" style="margin-left:auto">◀ fin</button><button class="ts4">fin ▶</button></div>
+    <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="tsnap" checked style="width:22px;height:22px"> aimanter aux temps</label></div>
+    <div class="row wrap"><span class="lbl w2">Début</span><button class="ts1">◀ 1 temps</button><button class="tsn" data-w="s" data-ms="-10">−10 ms</button><button class="tsn" data-w="s" data-ms="-1">−1 ms</button><button class="tsn" data-w="s" data-ms="1">+1 ms</button><button class="tsn" data-w="s" data-ms="10">+10 ms</button><button class="ts2">1 temps ▶</button></div>
+    <div class="row wrap"><span class="lbl w2">Fin</span><button class="ts3">◀ 1 temps</button><button class="tsn" data-w="e" data-ms="-10">−10 ms</button><button class="tsn" data-w="e" data-ms="-1">−1 ms</button><button class="tsn" data-w="e" data-ms="1">+1 ms</button><button class="tsn" data-w="e" data-ms="10">+10 ms</button><button class="ts4">1 temps ▶</button></div>
     <div class="row"><button class="tsall">Tout garder</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl" data-help="trep">Le reste de la piste</span><span class="trl lbl" style="margin-left:auto"></span></div>
     <div class="seg trep" style="margin-top:8px"><button data-m="mute">Silence</button><button data-m="loop">Répéter en boucle</button><button data-m="2">×2</button><button data-m="3">×3</button><button data-m="4">×4</button></div></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="quant">Recaler sur le rythme</span></div>
-      <div class="row wrap" style="margin-top:6px"><select class="qgrid" style="width:auto" aria-label="Grille de recalage"><option value="1">sur les temps</option><option value="2" selected>sur les croches</option><option value="4">sur les doubles-croches</option></select><select class="qstr" style="width:auto" aria-label="Force du recalage"><option value="1">100 % (exact)</option><option value="0.75" selected>75 %</option><option value="0.5">50 % (naturel)</option></select><button class="qbtn">🎯 Recaler</button></div></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="slip">Décaler la piste dans le temps</span><span class="offv val" style="margin-left:auto">0 ms</span></div>
+      <div class="row wrap" style="margin-top:6px"><button class="ofb" data-d="-10">−10 ms</button><button class="ofb" data-d="-1">−1 ms</button><button class="ofb" data-d="1">+1 ms</button><button class="ofb" data-d="10">+10 ms</button><button class="ofz">0</button></div>
+      <div class="row wrap"><button class="ofauto primary">🎯 Caler la piste sur le rythme (sans couper)</button></div></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="quant">Grille de rythme et recalage son par son</span></div>
+      <div class="row wrap" style="margin-top:6px"><select class="qgrid" style="width:auto" aria-label="Grille de recalage"><option value="1">sur les temps</option><option value="2" selected>sur les croches</option><option value="4">sur les doubles-croches</option></select><select class="qstr" style="width:auto" aria-label="Force du recalage"><option value="1">100 % (exact)</option><option value="0.75" selected>75 %</option><option value="0.5">50 % (naturel)</option></select><button class="qbtn">✂ Recaler chaque son</button></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="fades">Fondus et sens</span></div>
       <div class="row wrap" style="margin-top:6px"><span class="lbl">Entrée</span><select class="fdi" style="width:auto" aria-label="Fondu d'entrée">${FADE_OPTS}</select><span class="lbl">Sortie</span><select class="fdo" style="width:auto" aria-label="Fondu de sortie">${FADE_OPTS}</select></div>
       <div class="row"><button class="revb">↔ Jouer à l'envers</button></div></div>
@@ -1593,6 +1648,8 @@ function buildTrackUI(t){
   $('.ts3',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e-1); };
   $('.ts4',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e+1); };
   $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
+  el.querySelectorAll('.tsn').forEach(b=>b.onclick=()=>{ const q=tsGet(), db=(+b.dataset.ms/1000)/(loopSec()/beats); if(b.dataset.w==='s') setTrackSel(t,q.s+db,q.e); else setTrackSel(t,q.s,q.e+db); });
+  $('.tsnap',el).onchange=e=>{ t.snap=e.target.checked; scheduleSave(true); };
   el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>setSelMode(t,b.dataset.m));
   $('.del',el).onclick=()=>removeLastTrack();
   $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
@@ -1601,6 +1658,9 @@ function buildTrackUI(t){
   el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>bassChanged(t));
   initBassTimeline(t);
   el.querySelectorAll('.ttabs button').forEach(b=>b.onclick=()=>setTab(t,b.dataset.tab));
+  el.querySelectorAll('.ofb').forEach(b=>b.onclick=()=>setOffset(t,(t.off||0)+(+b.dataset.d)/1000));
+  $('.ofz',el).onclick=()=>setOffset(t,0);
+  $('.ofauto',el).onclick=()=>autoAlign(t,+$('.qgrid',el).value);
   $('.qbtn',el).onclick=()=>quantizeTrack(t,+$('.qgrid',el).value,+$('.qstr',el).value);
   $('.revb',el).onclick=()=>reverseTrack(t);
   $('.fdi',el).onchange=e=>{ touchSettings(); t.fadeIn=+e.target.value; commitSettings(); t.pc=null; startSrc(t); scheduleSave(true); };
@@ -1612,8 +1672,8 @@ function buildTrackUI(t){
   $('.tdup',el).onclick=()=>duplicateTrack(t);
   (()=>{
     const c=$('.tsc',el); let drag=null;
-    const beatAt=ev=>{ const r=c.getBoundingClientRect(); return Math.round(clamp((ev.clientX-r.left)/(r.width||1),0,1)*beats); };
-    const mv=ev=>{ if(!drag) return; const b=beatAt(ev); if(drag.which==='s') drag.s=clamp(b,0,drag.e-1); else drag.e=clamp(b,drag.s+1,beats); drawTsel(t,drag); };
+    const beatAt=ev=>{ const r=c.getBoundingClientRect(), v=clamp((ev.clientX-r.left)/(r.width||1),0,1)*beats; return t.snap===false?v:Math.round(v); };
+    const mv=ev=>{ if(!drag) return; const b=beatAt(ev), mn=t.snap===false?0.02:1; if(drag.which==='s') drag.s=clamp(b,0,drag.e-mn); else drag.e=clamp(b,drag.s+mn,beats); drawTsel(t,drag); };
     c.addEventListener('pointerdown',ev=>{ if(!t.buf||!loopLen) return; try{ c.setPointerCapture(ev.pointerId); }catch(e){} const q=tsGet(), b=beatAt(ev); drag={s:q.s,e:q.e,which:Math.abs(b-q.s)<=Math.abs(b-q.e)?'s':'e'}; mv(ev); });
     c.addEventListener('pointermove',mv);
     const end=()=>{ if(!drag) return; const d=drag; drag=null; setTrackSel(t,d.s,d.e); };
@@ -1635,7 +1695,8 @@ function partOf(t){
 function updRepUI(t){
   const lab=$('.trl',t.el); if(!lab) return;
   const m=t.selMode||'mute', p=partOf(t), n=p?p.e-p.s:0;
-  lab.textContent=t.sel?('partie : temps '+(t.sel.s+1)+' → '+t.sel.e):(p&&n<beats?'partie détectée : temps '+(p.s+1)+' → '+p.e:'');
+  const fb=x=>String(Math.round(x*1000)/1000).replace('.',',');
+  lab.textContent=t.sel?('partie : temps '+fb(t.sel.s+1)+' → '+fb(t.sel.e)):(p&&n<beats?'partie détectée : temps '+(p.s+1)+' → '+p.e:'');
   t.el.querySelectorAll('.trep button').forEach(b=>{
     const v=b.dataset.m;
     b.classList.toggle('on',t.sel?v===m:v==='mute');
@@ -1657,9 +1718,10 @@ function setSelMode(t,m){
 }
 function setTrackSel(t,s,e){
   if(!t.buf||!loopLen) return;
-  s=clamp(s,0,beats-1); e=clamp(e,1,beats);
-  if(e-s<1) return;
-  const ns=(s===0&&e===beats)?null:{s,e};
+  const r6=x=>Math.round(x*1e6)/1e6;
+  s=r6(clamp(s,0,beats-0.02)); e=r6(clamp(e,0.02,beats));
+  if(e-s<0.02) return;
+  const ns=(Math.abs(s)<1e-6&&Math.abs(e-beats)<1e-6)?null:{s,e};
   if((!ns&&!t.sel)||(ns&&t.sel&&ns.s===t.sel.s&&ns.e===t.sel.e)){ drawTsel(t); return; }
   pushHist();
   t.sel=ns; t.pc=null; drawWave(t);
@@ -1669,7 +1731,9 @@ function drawTsel(t,dr){
   const c=$('.tsc',t.el); if(!c) return;
   updRepUI(t);
   const q=dr||t.sel||{s:0,e:beats};
-  $('.tsl',t.el).textContent=(q.s===0&&q.e===beats)?'Tout est gardé':'Temps '+(q.s+1)+' → '+q.e+' sur '+beats;
+  const fb=x=>{ const v=Math.round(x*1000)/1000; return String(v).replace('.',','); };
+  $('.tsl',t.el).textContent=(q.s===0&&q.e===beats)?'Tout est gardé':'Temps '+fb(q.s+1)+' → '+fb(q.e)+' sur '+beats;
+  const sn=$('.tsnap',t.el); if(sn) sn.checked=t.snap!==false;
   if($('.tbody',t.el).hidden||$('.tsel',t.el).hidden) return;
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), h=Math.floor(c.clientHeight*dpr); if(!w||!h) return;
   c.width=w; c.height=h;
@@ -1716,7 +1780,7 @@ function duplicateTrack(t){
   n.eq.lo.gain.value=n.eqv[0]; n.eq.mid.gain.value=n.eqv[1]; n.eq.hi.gain.value=n.eqv[2];
   n.fadeIn=t.fadeIn; n.fadeOut=t.fadeOut; n.kind=t.kind; n.bass=t.bass?JSON.parse(JSON.stringify(t.bass)):null; setKindUI(n); if(n.bass) showBassOpts(n);
   n.name=uniqueTrackName(t.name+' copie'); $('.tn',n.el).textContent=n.name;
-  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
+  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.off=t.off||0; n.snap=t.snap; updOffUI(n); n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
   tracks.splice(tracks.indexOf(n),1); tracks.splice(tracks.indexOf(t)+1,0,n);
   reindexTracks();
   setFx(n); syncTrackUI(n); drawWave(n); applyGains(n); startSrc(n);
@@ -1822,7 +1886,7 @@ function drawWave(t){
   const g=c.getContext('2d'); g.clearRect(0,0,w,h);
   if(!t.buf) return;
   const repd=!!(t.sel&&loopLen&&t.selMode&&t.selMode!=='mute');
-  const d=(repd?playBuf(t):t.buf).getChannelData(0), bins=Math.floor(w/2), step=d.length/bins;
+  const d=((repd||t.off)?playBuf(t):t.buf).getChannelData(0), bins=Math.floor(w/2), step=d.length/bins;
   const pk=[]; let mx=0.15;
   for(let i=0;i<bins;i++){ let m=0; const a=Math.floor(i*step), z=Math.floor((i+1)*step); for(let j=a;j<z;j+=4){ const v=Math.abs(d[j]); if(v>m)m=v; } pk.push(m); if(m>mx)mx=m; }
   g.fillStyle=t.color;
@@ -2186,7 +2250,7 @@ function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent
 function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 function mainData(){
   return {v:2,name:projName,go:gridOff,liveQ,scenes:scenes.map(sc=>sc?sc.map(x=>({i:tracks.indexOf(x.t),m:x.mute})).filter(x=>x.i>=0):null),meter,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
-    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
+    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,of:t.off||0,sn:t.snap!==false,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
 }
 function summary(){ return {id:projId,name:projName,updated:Date.now(),beats:loopLen?beats:0,bpm:loopLen?+(beats*60/loopSec()).toFixed(1):bpm,ntr:tracks.filter(t=>t.buf).length,dur:loopLen?+loopSec().toFixed(1):0}; }
 async function saveProj(){
@@ -2249,7 +2313,8 @@ function applyProject(d,audio){
     t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
     const pcm=pcmOf(s,i);
     if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
-    if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats&&s.sel[1]-s.sel[0]>=1) t.sel={s:s.sel[0],e:s.sel[1]};
+    if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats+1e-6&&s.sel[1]-s.sel[0]>=0.02) t.sel={s:s.sel[0],e:Math.min(beats,s.sel[1])};
+    t.off=clamp(+s.of||0,-0.5,0.5); t.snap=s.sn!==false; updOffUI(t);
     t.selMode=['mute','loop','2','3','4'].includes(s.smd)?s.smd:'mute';
     setFx(t); syncTrackUI(t); drawWave(t);
   });
@@ -2436,6 +2501,11 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
   let reloading=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!hadCtl||reloading) return; reloading=true; location.reload(); });
 }
+document.querySelectorAll('.mn').forEach(b=>b.onclick=()=>{
+  const m=masterTake; if(!m||recObj) return;
+  pushHist(); m.nudge=clamp(Math.round(((m.nudge||0)+(+b.dataset.d)/1000)*1000)/1000,-0.3,0.3);
+  buildFromSel(); $('#mnv').textContent=fmtMs(m.nudge);
+});
 $('#undo').onclick=undo; $('#redo').onclick=redo;
 function setProjMenu(open){
   const m=$('#projmenu'); m.hidden=!open;

@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <header>
@@ -78,6 +78,7 @@
   <div class="row" style="margin-top:0"><b class="tn" data-help="editor">Garder la partie propre</b><span id="edlbl" class="lbl" style="margin-left:auto"></span></div>
   <canvas id="edc" style="width:100%;height:92px;display:block;margin-top:10px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
   <div class="row wrap"><button id="sm">◀ début</button><button id="sp">début ▶</button><button id="em" style="margin-left:auto">◀ fin</button><button id="ep">fin ▶</button></div>
+  <div class="row wrap"><span class="lbl" data-help="mnudge">Ajuster le début</span><button class="mn" data-d="-10">−10 ms</button><button class="mn" data-d="-1">−1 ms</button><button class="mn" data-d="1">+1 ms</button><button class="mn" data-d="10">+10 ms</button><span id="mnv" class="val">0 ms</span></div>
 </section>
 
 <section class="card" id="grow" style="display:none">
@@ -142,6 +143,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
