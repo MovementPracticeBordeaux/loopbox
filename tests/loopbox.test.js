@@ -603,6 +603,43 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const t4=P.$$('.trk')[3]; t4.querySelector('.tog').click(); t4.querySelector('.spseg button[data-v="0.75"]').click(); await sleep(150);
     ok(near(freqOf(P.lastPlayed()),220,3),'note changée : '+freqOf(P.lastPlayed()).toFixed(1));
   });
+
+  await test('une seule piste : la partie choisie devient la boucle (plus de blanc au début)',async()=>{
+    const P=await boot();
+    const n=SR*20, f=mkFile(n,d=>{ for(let k=0;k*0.5*SR+SR*3<n;k++){ const p=Math.round(SR*3+k*0.5*SR); for(let i=0;i<300;i++) d[p+i]=0.8*Math.exp(-i/80); } });
+    await P.importFile(0,f);
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    const L0=P.lastBuf().length, nb0=+P.$('#growlbl').textContent.match(/\d+/)[0];
+    const bl=L0/nb0, first=P.hits(P.lastBuf())[0];
+    // début au premier son, sans aimant
+    const sn=t1.querySelector('.tsnap'); sn.checked=false; sn.dispatchEvent(new P.w.Event('change'));
+    const c=t1.querySelector('.tsc'); c.getBoundingClientRect=()=>({left:0,width:1000});
+    const pe=(ty,x)=>c.dispatchEvent(new P.w.MouseEvent(ty,{clientX:x,bubbles:true}));
+    const hs=P.hits(P.lastBuf()), xs=hs[4]/L0*1000, xe=hs[20]/L0*1000;
+    pe('pointerdown',1); pe('pointermove',xs); pe('pointerup',xs); await sleep(10);
+    pe('pointerdown',999); pe('pointermove',xe); pe('pointerup',xe); await sleep(10);
+    ok(!t1.querySelector('.tsloop').hidden,'le bouton « Faire de cette partie la boucle » devrait être visible');
+    t1.querySelector('.tsloop').click(); await sleep(30);
+    const b=P.lastBuf(), h=P.hits(b);
+    ok(h[0]<Math.round(0.01*SR),'le 1er son devrait être au tout début de la boucle : '+h[0]);
+    ok(Math.abs(b.length-(hs[20]-hs[4]))<=2,'la boucle devrait avoir la durée de la partie : '+b.length+' au lieu de '+(hs[20]-hs[4]));
+    ok(/La boucle commence maintenant au début choisi/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    P.$('#undo').click(); await sleep(30);
+    ok(P.$('#growlbl').textContent.startsWith(nb0+' temps'),'annulation : '+P.$('#growlbl').textContent);
+  });
+  await test('plusieurs pistes : placer la partie au début de la boucle (sans changer sa durée)',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    P.$('#addtrk').click(); await sleep(10);
+    const L=r.buf.length, beat=L/8;
+    await P.importFile(1,mkFile(L,d=>{ d[Math.round(3*beat+500)]=0.8; d[Math.round(5*beat+500)]=0.8; }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click(); t2.querySelector('.ts2').click(); await sleep(10);
+    ok(t2.querySelector('.tsloop').hidden&&!t2.querySelector('.tsalign').hidden,'boutons : avec d\'autres pistes, seul « Placer… » doit apparaître');
+    P.$('#dplay').click(); await sleep(20);
+    t2.querySelector('.tsalign').click(); await sleep(30);
+    const h=P.hits(P.lastPlayed());
+    ok(Math.abs(h[0]-500)<=3&&P.lastPlayed().length===L,'1er son à '+h[0]+' (attendu ~500), longueur '+P.lastPlayed().length);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
