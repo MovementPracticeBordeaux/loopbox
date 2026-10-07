@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='35';
+const APPVER='36';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1482,7 +1482,7 @@ function melToBass(t){
   $('.brhy',t.el).value='melodie';
   bassChanged(t);
   const oct=r.shift/12;
-  msg(r.count+' note'+(r.count>1?'s':'')+' repérée'+(r.count>1?'s':'')+' sur « '+src.name+' » ('+noteName(r.orig[0])+' à '+noteName(r.orig[1])+')'+(oct?(oct<0?', descendue':', montée')+(r.count>1?'s':'')+' de '+Math.abs(oct)+' octave'+(Math.abs(oct)>1?'s':''):'')+(t.kind==='synth'?' : la mélodie joue maintenant de ':' : la basse joue maintenant de ')+noteName(r.lo)+' à '+noteName(r.hi)+'. Écoute l\'aperçu, ajuste avec « Transposer » ou la palette, puis « Créer la basse ».');
+  msg(r.count+' note'+(r.count>1?'s':'')+' repérée'+(r.count>1?'s':'')+' sur « '+src.name+' » ('+noteName(r.orig[0])+' à '+noteName(r.orig[1])+')'+(oct?(oct<0?', descendue':', montée')+(r.count>1?'s':'')+' de '+Math.abs(oct)+' octave'+(Math.abs(oct)>1?'s':''):'')+(t.kind==='synth'?' : la mélodie joue maintenant de ':' : la basse joue maintenant de ')+noteName(r.lo)+' à '+noteName(r.hi)+'. Écoute l\'aperçu, ajuste avec « Transposer » ou la palette, puis « '+(t.kind==='synth'?'Créer la mélodie':'Créer la basse')+' ».');
 }
 function transposeBass(t,dd){
   const d=ensureDraft(t), roots=segRoots(d.segs,t.kind);
@@ -1522,7 +1522,7 @@ function drawBassTimeline(t){
   $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
   t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',b.dataset.n==='-1'?cur.n==null:+b.dataset.n===cur.n));
   $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+(cur.s+1)+' → '+cur.e;
-  $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':'✓ Créer la basse';
+  $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':(t.kind==='synth'?'✓ Créer la mélodie':'✓ Créer la basse');
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr); if(!w||!hh) return;
   c.width=w; c.height=hh;
   const g=c.getContext('2d'); g.clearRect(0,0,w,hh);
@@ -1646,7 +1646,7 @@ function genBass(t){
   if(t.kind==='synth'&&o.style!==prevStyle){ const fl=STYLES[o.style][2]; t.fxs=fl.map(ty=>({type:ty,amt:0.45})); if(!t.fxs.length) t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t); fxTxt=fl.length?' Effets du style posés : '+fl.map(ty=>((FX_LIST.find(f=>f[0]===ty)||[0,''])[1]).split(' (')[0].toLowerCase()).join(' + ')+' (modifiables dans ✨ Effets).':''; }
   if(masterTake&&masterTake.i===t.id) masterTake=null;
   syncTrackUI(t); drawWave(t); startSrc(t); buildDots(); lockUI(); updLive(); scheduleSave();
-  $('.bst',t.el).textContent=''; drawBassViz(t);
+  $('.bst',t.el).textContent=''; drawBassTimeline(t); drawBassViz(t);
   if(t.kind==='synth'){ msg('Mélodie créée : style « '+STYLES[o.style][0]+' », '+r.count+' notes.'+fxTxt); return; }
   msg('Ligne de basse créée : '+o.segs.map(x=>x.n==null?'—':NOTE_FR[x.n]).join(' → ')+' · '+RHYTHMS[o.rhy][0].toLowerCase()+' · '+MELODIES[o.mel].split(' (')[0].toLowerCase()+' · son '+BASS_TYPES[o.type].split(' (')[0]+' ('+r.count+' notes).');
 }
@@ -1679,6 +1679,8 @@ function setKindUI(t){
   const sel=$('.btype',t.el);
   if(sel&&sel.dataset.k!==(syn?'s':'b')){ sel.dataset.k=syn?'s':'b'; const src=syn?Object.keys(STYLES).map(k=>[k,STYLES[k][0]]):Object.keys(BASS_TYPES).map(k=>[k,BASS_TYPES[k]]); sel.innerHTML=src.map(([k,l])=>`<option value="${k}">${l}</option>`).join(''); }
   const sm=$('.mel2b summary',t.el); if(sm) sm.textContent=syn?'🎤 Transformer une mélodie chantée en notes':'🎤 Transformer une mélodie chantée en basse';
+  const mh=$('.mel2b .hint',t.el); if(mh){ mh.textContent=syn?"Chante ou fredonne ta mélodie sur une piste normale, puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les joue avec le style choisi, à la hauteur de ta voix.":"Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves."; mh.dataset.help=syn?'synth':'mel2b'; }
+  const bt=$('.bgo',t.el); if(bt&&!t.buf) bt.textContent=syn?'✓ Créer la mélodie':'✓ Créer la basse';
   const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Style':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
   $('.ttabs button[data-tab="bass"]',t.el).hidden=!bass;

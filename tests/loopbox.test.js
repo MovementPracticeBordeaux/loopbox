@@ -347,6 +347,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
   await test('basse : réglages par défaut = une seule note partout (plus de notes qui changent toutes seules)',async()=>{
     const {P,tb}=await bassBoot();
     ok(/kbass/.test(tb.className)&&tb.querySelector('.tn').textContent==='Basse','piste de basse');
+    ok(tb.querySelector('.bgo').textContent==='✓ Créer la basse','libellé de la basse : '+tb.querySelector('.bgo').textContent);
     ok(tb.querySelector('.bmel').value==='same'&&tb.querySelector('.btlinfo').textContent.startsWith('Do · 1 bloc'),'défauts : '+tb.querySelector('.bmel').value+' / '+tb.querySelector('.btlinfo').textContent);
     const POS={noire:[0,1,2,3],croches:[0,.5,1,1.5,2,2.5,3,3.5],funk:[0,.75,1.5,2,2.75,3.5],hiphop:[0,1.75,2.5]};
     for(const rh of ['noire','croches','funk','hiphop']){
@@ -711,6 +712,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/ksynth/.test(tm.className)&&tm.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tm.className+' / '+tm.querySelector('.tn').textContent);
     ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Mélodie'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
     const st=tm.querySelector('.btype'); ok(st.options.length===8&&/Lo-fi/.test(st.options[0].textContent),'styles : '+[...st.options].map(o=>o.textContent).join(' | '));
+    ok(tm.querySelector('.bgo').textContent==='✓ Créer la mélodie'&&!/graves/.test(tm.querySelector('.mel2b .hint').textContent),'libellés de la piste mélodie : '+tm.querySelector('.bgo').textContent+' | '+tm.querySelector('.mel2b .hint').textContent);
     tm.querySelector('.mgo').click(); await sleep(60);
     ok(/^La → Do → — → Mi/.test(tm.querySelector('.btlinfo').textContent),'blocs : '+tm.querySelector('.btlinfo').textContent);
     ok(!/descendue|montée/.test(P.$('#msg').textContent)&&/de La3 à Mi4/.test(P.$('#msg').textContent),'la hauteur de la voix doit être gardée : '+P.$('#msg').textContent);
@@ -719,6 +721,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     let b=P.lastBuf();
     ok(near(fz(b,0.3,1.7),220,4)&&near(fz(b,2.3,3.7),261.6,4)&&near(fz(b,5.3,7.7),329.6,5),'notes jouées : '+[fz(b,0.3,1.7),fz(b,2.3,3.7),fz(b,5.3,7.7)].map(v=>v.toFixed(1)).join(' / '));
     ok(/Mélodie créée : style « Jeu vidéo · 8-bit »/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    ok(tm.querySelector('.bgo').textContent==='✓ Appliquer les changements','bouton après création : '+tm.querySelector('.bgo').textContent);
     st.value='trap_bell'; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(40);
     ok(/Écho/.test(tm.querySelector('.fxbadge').textContent)&&/Réverb/.test(tm.querySelector('.fxbadge').textContent),'effets du style : '+tm.querySelector('.fxbadge').textContent);
     // chaque style produit un son propre (ni silence, ni valeur invalide, ni saturation)
