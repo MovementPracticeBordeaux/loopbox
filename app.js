@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='40';
+const APPVER='41';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1085,6 +1085,9 @@ const HELP={
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
+  mtrans:"<b>Transitions du bloc</b> : comment le bloc choisi commence et se termine. <b>Entrée</b> : fondu (le son monte), filtre qui s'ouvre (sourd puis clair), montée par les aigus (le grave arrive peu à peu). <b>Sortie</b> : fondu, filtre qui se ferme, ralenti (le son ralentit et descend comme une cassette qu'on arrête), écho qui s'éteint (le son s'arrête et ses échos continuent), hachage (le son se répète en petits morceaux). Choisis aussi la durée (1 temps à 2 mesures).",
+  mblank:"<b>Insérer un blanc</b> : ajoute un silence de la durée choisie à l'endroit du curseur, sur toutes les pistes ; la suite du morceau recule d'autant. Pour un blanc sans rien décaler, choisis une partie et « Rendre muette ».",
+  mfx:"<b>Sons de transition</b> : des sons fabriqués par l'appli, ajoutés par-dessus le morceau. Montée de bruit et souffle inversé se terminent au curseur (pour annoncer un refrain ou un drop) ; impact et descente partent du curseur. Ils apparaissent en violet sur la règle ; 🗑 les retire.",
   msec:"<b>Partie du morceau</b> : place le curseur (touche la règle) puis « Début = curseur », avance le curseur puis « Fin = curseur ». La partie est surlignée en orange. <b>Dupliquer cette partie</b> la recopie juste après, <b>sur toutes les pistes à la fois</b> (piste principale, basse, mélodie…), et décale la suite du morceau. <b>Supprimer cette partie</b> l'enlève partout et rapproche la suite. Pratique pour construire couplet, refrain, couplet… puis faire varier une des copies.",
   mvar:"<b>Créer une variation de ce bloc</b> : le bloc choisi joue désormais une copie de sa piste (par exemple « Basse (variation) »), ajoutée à la liste des pistes. Modifie cette copie (autres notes, autre style, autres effets…) : seul ce bloc change, le reste du morceau garde la piste d'origine. Pour qu'un autre bloc joue aussi la variation, fais-le glisser sur sa ligne.",
   mont:"<b>Montage du morceau</b> : compose un morceau du début à la fin, comme sur un logiciel de montage vidéo. Chaque piste a sa ligne ; chaque bloc joue la boucle de la piste (elle se répète tant que le bloc dure). <b>Touche la règle</b> (numéros de mesures) pour placer le curseur. <b>Touche une ligne vide</b> pour ajouter un bloc d'un tour de boucle. <b>Fais glisser un bloc</b> pour le déplacer, <b>son bord droit ou gauche</b> pour l'allonger ou le raccourcir. Avec un bloc choisi : couper au curseur, dupliquer, supprimer, ou changer son ton (variation : refrain un ton plus haut…). Glisse sur une zone vide pour faire défiler. La ligne rouge marque la fin du morceau. ▶ en bas joue le morceau quand le montage est ouvert.",
@@ -2261,15 +2264,15 @@ $('#lq').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; liveQ=b
 // ======================= 🎬 MONTAGE DU MORCEAU =======================
 // Le morceau est une ligne de temps (en temps) avec, pour chaque piste, des blocs qui jouent la boucle de la piste :
 // déplacer, couper, allonger / raccourcir (la boucle se répète), dupliquer, supprimer, changer le ton d'un bloc.
-let song={end:0,clips:[],known:[],cur:0,sel:-1,zoom:22,view:0,snap:true,rs:null,re:null};
+let song={end:0,clips:[],fx:[],known:[],cur:0,sel:-1,zoom:22,view:0,snap:true,rs:null,re:null};
 let songPlay=null;
 const songCache=new Map();
 const SG_RH=28, SG_LH=56;
 function songTracks(){ return tracks.filter(t=>t.buf); }
 function trackByUid(u){ return tracks.find(t=>t.uid===u); }
-function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; songCache.clear(); }
-function songSnapData(){ return {end:song.end,clips:song.clips.map(c=>({...c})),known:song.known.slice()}; }
-function songApplyData(d){ song.end=d&&d.end>0?d.end:0; song.clips=d&&Array.isArray(d.clips)?d.clips.filter(c=>c&&c.u&&c.len>0).map(c=>({u:c.u,s:Math.max(0,+c.s||0),len:+c.len,off:+c.off||0,tp:clamp(Math.round(+c.tp||0),-12,12)})):[]; song.known=d&&Array.isArray(d.known)?d.known.slice():song.clips.map(c=>c.u); if(song.sel>=song.clips.length) song.sel=-1; }
+function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; song.fx=[]; songCache.clear(); }
+function songSnapData(){ return {end:song.end,clips:song.clips.map(c=>({...c})),fx:song.fx.map(f=>({...f})),known:song.known.slice()}; }
+function songApplyData(d){ song.end=d&&d.end>0?d.end:0; song.clips=d&&Array.isArray(d.clips)?d.clips.filter(c=>c&&c.u&&c.len>0).map(c=>({u:c.u,s:Math.max(0,+c.s||0),len:+c.len,off:+c.off||0,tp:clamp(Math.round(+c.tp||0),-12,12),ti:TIN[c.ti]?c.ti:'none',til:+c.til||0,to:TOUT[c.to]?c.to:'none',tol:+c.tol||0})):[]; song.fx=d&&Array.isArray(d.fx)?d.fx.filter(f=>f&&FXS[f.k]&&f.len>0).map(f=>({k:f.k,s:Math.max(0,+f.s||0),len:+f.len})):[]; song.known=d&&Array.isArray(d.known)?d.known.slice():song.clips.map(c=>c.u); if(song.sel>=song.clips.length) song.sel=-1; }
 // première ouverture : chaque piste avec du son joue sur 4 tours de boucle ; les nouvelles pistes sont ajoutées sur toute la durée
 function songPrepare(){
   if(!loopLen) return;
@@ -2298,6 +2301,76 @@ function songStop(keepCur){
   songPlay.nodes.forEach(n=>{ try{ n.stop&&n.stop(); }catch(e){} try{ n.disconnect(); }catch(e){} });
   songPlay=null; updSongUI(); drawSong();
 }
+const TIN={none:1,fade:1,filter:1,hp:1}, TOUT={none:1,fade:1,filter:1,tape:1,echo:1,stutter:1};
+const FXS={riser:'Montée de bruit',swell:'Souffle inversé',impact:'Impact',down:'Descente'};
+// joue un bloc (lecture ou export) avec ses transitions d'entrée et de sortie
+function schedClip(ac,t,c,from,T0,bd,end,dest,nodes){
+  const a=Math.max(c.s,from), z=Math.min(c.s+c.len,end); if(z<=a) return;
+  const b=clipBuf(t,c.tp), dur=b.duration;
+  const s=ac.createBufferSource(); s.buffer=b; s.loop=true;
+  const g=ac.createGain();
+  const ti=TIN[c.ti]?c.ti:'none', to=TOUT[c.to]?c.to:'none';
+  const inL=ti!=='none'?Math.min(c.til||0,c.len)*bd:0, outL=to!=='none'?Math.min(c.tol||0,c.len)*bd:0;
+  const when=T0+(a-from)*bd, until=T0+(z-from)*bd, cs=T0+(c.s-from)*bd, ce=T0+(Math.min(c.s+c.len,end)-from)*bd;
+  const offs=mod((c.off+(a-c.s))*bd,dur);
+  let f=null;
+  if(ti==='filter'||ti==='hp'||to==='filter'){ f=ac.createBiquadFilter(); f.type=ti==='hp'?'highpass':'lowpass'; f.frequency.value=ti==='hp'?20:20000; f.Q.value=0.9; s.connect(f); f.connect(g); } else s.connect(g);
+  g.connect(dest); nodes.push(s,g); if(f) nodes.push(f);
+  const env=g.gain, os=outL>0?Math.max(when+0.005,ce-outL):until;
+  try{
+    env.setValueAtTime(0,when);
+    if(ti==='fade'&&cs+inL>when){ env.linearRampToValueAtTime(Math.max(0.001,(when-cs)/inL),when+0.004); env.linearRampToValueAtTime(1,cs+inL); }
+    else env.linearRampToValueAtTime(1,when+0.004);
+    if(f&&ti==='filter'&&cs+inL>when){ const fr=clamp((when-cs)/inL,0,1); f.frequency.setValueAtTime(200*Math.pow(100,fr),when); f.frequency.exponentialRampToValueAtTime(20000,cs+inL); }
+    if(f&&ti==='hp'&&cs+inL>when){ const fr=clamp((when-cs)/inL,0,1); f.frequency.setValueAtTime(3000*Math.pow(20/3000,fr),when); f.frequency.exponentialRampToValueAtTime(20,cs+inL); }
+    if(outL>0&&os<until){
+      if(to==='fade'||to==='tape'||to==='echo'){ env.setValueAtTime(1,os); env.linearRampToValueAtTime(0.0001,until); }
+      if(to==='filter'){ if(f.type!=='lowpass'){ f.type='lowpass'; } f.frequency.setValueAtTime(20000,os); f.frequency.exponentialRampToValueAtTime(200,until); }
+      if(to==='tape'){ s.playbackRate.setValueAtTime(1,os); s.playbackRate.linearRampToValueAtTime(0.06,until); }
+      if(to==='echo'){ const d=ac.createDelay(2), fb=ac.createGain(), wet=ac.createGain(); d.delayTime.value=Math.min(1.9,bd*0.75); fb.gain.value=0.55; wet.gain.value=0;
+        g.connect(d); d.connect(fb); fb.connect(d); d.connect(wet); wet.connect(dest);
+        wet.gain.setValueAtTime(0,os); wet.gain.linearRampToValueAtTime(0.9,os+0.02); wet.gain.setValueAtTime(0.9,until); wet.gain.linearRampToValueAtTime(0,until+outL);
+        nodes.push(d,fb,wet); }
+      if(to==='stutter'){ env.setValueAtTime(1,os); env.setValueAtTime(0,os+0.002);
+        const p=bd/4, k0=mod(offs+(os-when),dur), n=Math.max(1,Math.floor((until-os)/p+1e-6));
+        for(let k=0;k<n;k++){ const r=ac.createBufferSource(); r.buffer=b; const rg=ac.createGain(); r.connect(rg); rg.connect(dest);
+          const at=os+k*p, len=Math.min(p*0.85,until-at); if(len<=0.005) break; const lv=1-0.5*k/n;
+          rg.gain.setValueAtTime(0,at); rg.gain.linearRampToValueAtTime(lv,at+0.003); rg.gain.setValueAtTime(lv,at+len-0.004); rg.gain.linearRampToValueAtTime(0,at+len);
+          r.start(at,k0); try{ r.stop(at+len+0.01); }catch(e){} nodes.push(r,rg); } }
+    } else { env.setValueAtTime(1,Math.max(when+0.004,until-0.006)); env.linearRampToValueAtTime(0,until); }
+  }catch(e){}
+  s.start(when,offs); try{ s.stop((to==='stutter'&&outL>0?os+0.004:until)+0.02); }catch(e){}
+}
+// sons de transition (montée de bruit, souffle inversé, impact, descente), fabriqués ici
+function fxSound(k,sec){
+  const n=Math.max(1,Math.round((k==='impact'?Math.max(sec,1.4):sec)*SR)), y=new Float32Array(n);
+  let sd=987654321, x1=0,x2=0,y1=0,y2=0,b0=0,b1=0,b2=0,a1=0,a2=0, ph=0;
+  const bp=(fc,Q)=>{ const w0=2*Math.PI*Math.min(fc,SR*0.45)/SR, al=Math.sin(w0)/(2*Q), cs=Math.cos(w0), a0=1+al; b0=al/a0; b1=0; b2=-al/a0; a1=-2*cs/a0; a2=(1-al)/a0; };
+  for(let i=0;i<n;i++){
+    const u=i/n; sd=(sd*16807)%2147483647; const w=sd/2147483647*2-1;
+    let v=0;
+    if(k==='riser'||k==='down'||k==='swell'){
+      if(i%64===0){ if(k==='riser') bp(300*Math.pow(8000/300,u),1.2); else if(k==='down') bp(8000*Math.pow(200/8000,u),1.2); else bp(2500+3500*u,0.6); }
+      const o=b0*w+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1; x1=w; y2=y1; y1=o;
+      const env=k==='riser'?Math.pow(u,1.6):k==='down'?Math.pow(1-u,1.4):Math.pow(u,3);
+      v=o*env*(k==='swell'?1.6:1.2);
+      if(k==='swell'&&i>n-Math.round(0.004*SR)) v*=(n-i)/(0.004*SR);
+    } else {
+      const t=i/SR, f=45+90*Math.exp(-t/0.05); ph+=f/SR; v=Math.sin(2*Math.PI*ph)*Math.exp(-t/0.45)+(t<0.03?w*0.5*(1-t/0.03):0); v=Math.tanh(1.4*v);
+    }
+    y[i]=v;
+  }
+  let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(y[i])); if(pk>0) for(let i=0;i<n;i++) y[i]*=0.7/pk;
+  return y;
+}
+function schedFx(ac,fx,from,T0,bd,end,dest,nodes){
+  const st=fx.s, z=Math.min(fx.s+fx.len+(fx.k==='impact'?Math.max(0,1.4/bd-fx.len):0),end+8); if(z<=from) return;
+  const d=fxSound(fx.k,fx.len*bd), b=ac.createBuffer(1,d.length,SR); b.copyToChannel(d,0);
+  const s=ac.createBufferSource(); s.buffer=b; const g=ac.createGain(); g.gain.value=0.55; s.connect(g); g.connect(dest);
+  const when=T0+(Math.max(st,from)-from)*bd, off=Math.max(0,(from-st)*bd);
+  if(off>=b.duration) return;
+  s.start(when,off); nodes.push(s,g);
+}
 function songStart(fromBeat){
   if(!loopLen){ msg('Enregistre ou importe d\'abord une boucle.'); return; }
   if(recObj) return;
@@ -2307,17 +2380,8 @@ function songStart(fromBeat){
   try{ ctx.resume(); }catch(e){}
   applyGains();
   const bd=beatDur(), T0=ctx.currentTime+0.1, from=clamp(fromBeat>=song.end?0:fromBeat,0,song.end), nodes=[];
-  song.clips.forEach(c=>{
-    const t=trackByUid(c.u); if(!t||!t.buf) return;
-    const a=Math.max(c.s,from), z=Math.min(c.s+c.len,song.end); if(z<=a) return;
-    const b=clipBuf(t,c.tp), dur=b.duration;
-    const s=ctx.createBufferSource(); s.buffer=b; s.loop=true;
-    const g=ctx.createGain(); s.connect(g); g.connect(t.inp);
-    const when=T0+(a-from)*bd, until=T0+(z-from)*bd, offs=mod((c.off+(a-c.s))*bd,dur);
-    try{ g.gain.setValueAtTime(0,when); g.gain.linearRampToValueAtTime(1,when+0.004); g.gain.setValueAtTime(1,Math.max(when+0.004,until-0.006)); g.gain.linearRampToValueAtTime(0,until); }catch(e){}
-    s.start(when,offs); try{ s.stop(until+0.02); }catch(e){}
-    nodes.push(s,g);
-  });
+  song.clips.forEach(c=>{ const t=trackByUid(c.u); if(!t||!t.buf) return; schedClip(ctx,t,c,from,T0,bd,song.end,t.inp,nodes); });
+  song.fx.forEach(fx=>schedFx(ctx,fx,from,T0,bd,song.end,chain.inp,nodes));
   songPlay={T0,from,nodes,timer:setTimeout(()=>{ songStop(true); song.cur=0; drawSong(); updSongUI(); },((song.end-from)*bd+0.3)*1000)};
   updSongUI(); drawSong();
 }
@@ -2341,6 +2405,7 @@ function drawSong(){
   const g=cv.getContext('2d'); g.clearRect(0,0,w,h);
   const ppb=song.zoom*dpr, X=b=>(b-song.view)*ppb, RH=SG_RH*dpr, LH=SG_LH*dpr;
   g.fillStyle='rgba(255,255,255,.07)'; g.fillRect(0,0,w,RH);
+  song.fx.forEach(f=>{ g.fillStyle='rgba(185,120,255,.75)'; g.fillRect(X(f.s),RH*0.62,Math.max(3*dpr,X(f.s+f.len)-X(f.s)),RH*0.3); });
   if(song.rs!=null){ const a=X(song.rs), b=song.re!=null?X(song.re):a+2*dpr; g.fillStyle='rgba(255,138,0,.13)'; g.fillRect(a,0,b-a,h); g.fillStyle='rgba(255,138,0,.55)'; g.fillRect(a,0,b-a,RH*0.25); g.fillRect(a-1*dpr,0,2*dpr,h); if(song.re!=null) g.fillRect(b-1*dpr,0,2*dpr,h); }
   g.font=Math.round(RH*0.5)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; g.textBaseline='middle'; g.textAlign='left';
   const every=ppb*meter<34*dpr?(ppb*meter*2<34*dpr?4:2):1;
@@ -2385,7 +2450,9 @@ function updSongUI(){
   const p=songPos(); if($('#mcut')) $('#mcut').disabled=!(c&&p>c.s+1e-6&&p<c.s+c.len-1e-6);
   $('#mplay').textContent=songPlay?'❚❚ Pause':'▶ Lire le morceau';
   $('#mcurv').textContent='curseur : mesure '+fb(Math.max(0,p))+' · '+fmtSongTime(Math.max(0,p));
-  updSecUI();
+  updSecUI(); updFxList();
+  { const on=!!c; ['#mtin','#mtinl','#mtout','#mtoutl'].forEach(id=>{ const e=$(id); if(e) e.disabled=!on; });
+    if(c){ $('#mtin').value=c.ti||'none'; $('#mtout').value=c.to||'none'; if(c.til) $('#mtinl').value=String(c.til); if(c.tol) $('#mtoutl').value=String(c.tol); } }
 }
 // --- gestes ---
 (function(){
@@ -2434,10 +2501,11 @@ function updSongUI(){
 })();
 function songSelClip(){ return song.clips[song.sel]; }
 // morceaux de blocs : la partie d'un bloc comprise entre a et b (le son continue au bon endroit de la boucle)
-function clipPart(c,a,b){ const s0=Math.max(c.s,a), e0=Math.min(c.s+c.len,b); if(e0-s0<1e-6) return null; return {...c,s:s0,len:e0-s0,off:mod(c.off+(s0-c.s),beats)}; }
+function clipPart(c,a,b){ const s0=Math.max(c.s,a), e0=Math.min(c.s+c.len,b); if(e0-s0<1e-6) return null; const p={...c,s:s0,len:e0-s0,off:mod(c.off+(s0-c.s),beats)}; if(s0>c.s+1e-6){ p.ti='none'; p.til=0; } if(e0<c.s+c.len-1e-6){ p.to='none'; p.tol=0; } return p; }
 function songSecOk(){ return song.rs!=null&&song.re!=null&&song.re-song.rs>1e-6; }
 function updSecUI(){
   const e=$('#msecv'); if(!e) return;
+  { const m=$('#msecmute'); if(m) m.disabled=!songSecOk(); }
   const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
   e.textContent=songSecOk()?'mesures '+fb(song.rs)+' → '+fb(song.re):(song.rs!=null?'début : mesure '+fb(song.rs)+', place la fin':'place le curseur, puis début et fin');
   ['#msecdup','#msecdel'].forEach(id=>{ const b=$(id); if(b) b.disabled=!songSecOk(); });
@@ -2480,6 +2548,45 @@ function songMakeVar(){
   songCache.delete(n.uid); scheduleSave(true); songRestartIfPlaying(); drawSong();
   msg('Variation créée : « '+n.name+' » ne joue que ce bloc. Modifie ses notes, ses effets ou son son dans sa piste (en bas) : le reste du morceau garde « '+t.name+' ». ↶ pour annuler.');
 }
+function songBlank(){
+  const p=songSnap(songPos()), L=+$('#mblankl').value;
+  if(!(p>=0&&p<=song.end)) return;
+  songAct(()=>{
+    const out=[]; song.clips.forEach(c=>{ const p1=clipPart(c,-1e9,p), p2=clipPart(c,p,1e9); if(p1) out.push(p1); if(p2) out.push({...p2,s:p2.s+L}); });
+    song.clips=out; song.fx.forEach(f=>{ if(f.s>=p) f.s+=L; }); song.end+=L; song.sel=-1;
+    msg('Blanc de '+(L%meter===0?(L/meter)+' mesure'+(L/meter>1?'s':''):L+' temps')+' inséré au curseur : la suite du morceau a reculé.');
+  });
+}
+function songSecMute(){
+  if(!songSecOk()) return;
+  const a=song.rs, b=song.re;
+  songAct(()=>{
+    const out=[]; song.clips.forEach(c=>{ const p1=clipPart(c,-1e9,a), p2=clipPart(c,b,1e9); if(p1) out.push(p1); if(p2) out.push(p2); });
+    song.clips=out; song.sel=-1;
+    msg('Partie rendue muette sur toutes les pistes (un blanc), sans rien décaler.');
+  });
+}
+function songSetTrans(){
+  const c=songSelClip(); if(!c) return;
+  songAct(()=>{ c.ti=$('#mtin').value; c.til=c.ti==='none'?0:+$('#mtinl').value; c.to=$('#mtout').value; c.tol=c.to==='none'?0:+$('#mtoutl').value; });
+}
+function songAddFx(){
+  if(!loopLen) return;
+  const k=$('#mfxk').value, L=+$('#mfxl').value, p=songSnap(songPos());
+  const s0=(k==='riser'||k==='swell')?Math.max(0,p-L):p;
+  songAct(()=>{ song.fx.push({k,s:s0,len:L}); if(s0+L>song.end&&k!=='riser'&&k!=='swell') song.end=s0+L; msg(FXS[k]+' ajouté'+(k==='riser'||k==='swell'?' : il se termine au curseur.':' au curseur.')); });
+}
+function updFxList(){
+  const box=$('#mfxlist'); if(!box) return;
+  const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
+  box.innerHTML='';
+  song.fx.slice().map((f,i)=>({f,i})).sort((a,b)=>a.f.s-b.f.s).forEach(({f,i})=>{
+    const r=document.createElement('div'); r.className='row wrap';
+    const l=document.createElement('span'); l.className='lbl'; l.textContent='✨ '+FXS[f.k]+' · mesures '+fb(f.s)+' → '+fb(f.s+f.len); r.appendChild(l);
+    const d=document.createElement('button'); d.textContent='🗑'; d.setAttribute('aria-label','Retirer ce son de transition'); d.onclick=()=>songAct(()=>{ song.fx.splice(i,1); });
+    d.style.marginLeft='auto'; r.appendChild(d); box.appendChild(r);
+  });
+}
 function songAct(fn){ if(!loopLen||recObj) return; pushHist(); fn(); scheduleSave(true); songRestartIfPlaying(); drawSong(); }
 $('#montbtn').onclick=()=>{
   const m=$('#mont'); m.hidden=!m.hidden; $('#montbtn').classList.toggle('on',!m.hidden); $('#montbtn').setAttribute('aria-expanded',String(!m.hidden));
@@ -2489,6 +2596,10 @@ $('#montbtn').onclick=()=>{
 $('#msecs').onclick=()=>{ song.rs=Math.max(0,songSnap(songPos())); if(song.re!=null&&song.re<=song.rs) song.re=null; drawSong(); };
 $('#msece').onclick=()=>{ const p=songSnap(songPos()); if(song.rs==null||p<=song.rs){ msg('Place d\'abord le début de la partie, puis le curseur plus loin pour la fin.'); return; } song.re=Math.min(p,song.end); drawSong(); };
 $('#msecdup').onclick=songSecDup;
+$('#msecmute').onclick=songSecMute;
+$('#mblank').onclick=songBlank;
+$('#mfxadd').onclick=songAddFx;
+['#mtin','#mtinl','#mtout','#mtoutl'].forEach(id=>{ $(id).onchange=songSetTrans; });
 $('#msecdel').onclick=songSecDel;
 $('#mvar').onclick=songMakeVar;
 $('#mplay').onclick=()=>{ if(songPlay) songStop(); else songStart(song.cur); };
@@ -2496,7 +2607,7 @@ $('#mstop').onclick=()=>{ songStop(true); song.cur=0; drawSong(); };
 $('#mzoomin').onclick=()=>{ song.zoom=Math.min(120,song.zoom*1.5); drawSong(); };
 $('#mzoomout').onclick=()=>{ song.zoom=Math.max(3,song.zoom/1.5); drawSong(); };
 $('#msnap').onchange=e=>{ song.snap=e.target.checked; };
-$('#mcut').onclick=()=>{ const c=songSelClip(), p=Math.round(songPos()); if(!c||!(p>c.s&&p<c.s+c.len)){ msg('Place le curseur (touche la règle) à l\'intérieur du bloc choisi.'); return; } songAct(()=>{ const n={...c,s:p,len:c.s+c.len-p,off:mod(c.off+(p-c.s),beats)}; c.len=p-c.s; song.clips.push(n); song.sel=song.clips.length-1; msg('Bloc coupé à la mesure '+String(Math.round(p/meter*100)/100+1).replace('.',',')+'.'); }); };
+$('#mcut').onclick=()=>{ const c=songSelClip(), p=Math.round(songPos()); if(!c||!(p>c.s&&p<c.s+c.len)){ msg('Place le curseur (touche la règle) à l\'intérieur du bloc choisi.'); return; } songAct(()=>{ const n={...c,s:p,len:c.s+c.len-p,off:mod(c.off+(p-c.s),beats),ti:'none',til:0}; c.len=p-c.s; c.to='none'; c.tol=0; song.clips.push(n); song.sel=song.clips.length-1; msg('Bloc coupé à la mesure '+String(Math.round(p/meter*100)/100+1).replace('.',',')+'.'); }); };
 $('#mdup').onclick=()=>{ const c=songSelClip(); if(!c) return; songAct(()=>{ const n={...c,s:c.s+c.len}; song.clips.push(n); song.sel=song.clips.length-1; if(n.s+n.len>song.end) song.end=n.s+n.len; msg('Bloc dupliqué juste après.'); }); };
 $('#mdel').onclick=()=>{ const c=songSelClip(); if(!c) return; songAct(()=>{ song.clips.splice(song.sel,1); song.sel=-1; msg('Bloc supprimé.'); }); };
 $('#mtpm').onclick=()=>{ const c=songSelClip(); if(!c) return; if(c.tp<=-12) return; msg('Calcul…'); setTimeout(()=>songAct(()=>{ c.tp--; msg('Ton du bloc : '+(c.tp>0?'+':'')+c.tp+' demi-ton'+(Math.abs(c.tp)>1?'s':'')+'.'); }),20); };
@@ -2523,14 +2634,9 @@ async function renderSong(opt){
     const q=makeEq(off,t.eqv); let prev=q.out;
     t.fxs.forEach(sl=>{ if(sl.type==='none') return; const f=makeFx(off,sl.type,sl.amt,bd); prev.connect(f.inp); prev=f.out; });
     prev.connect(g);
-    cl.forEach(c=>{
-      const b=clipBuf(t,c.tp), s=off.createBufferSource(); s.buffer=b; s.loop=true;
-      const cg=off.createGain(); s.connect(cg); cg.connect(q.inp);
-      const a=c.s*bd, z=Math.min(c.s+c.len,song.end)*bd;
-      try{ cg.gain.setValueAtTime(0,a); cg.gain.linearRampToValueAtTime(1,a+0.004); cg.gain.setValueAtTime(1,Math.max(a+0.004,z-0.006)); cg.gain.linearRampToValueAtTime(0,z); }catch(e){}
-      s.start(a,mod(c.off*bd,b.duration)); try{ s.stop(z+0.02); }catch(e){}
-    });
+    cl.forEach(c=>schedClip(off,t,c,0,0,bd,song.end,q.inp,[]));
   });
+  song.fx.forEach(fx=>schedFx(off,fx,0,0,bd,song.end,ch.inp,[]));
   const r=await off.startRendering();
   if(opt.fadeEnd){ const fl=Math.min(r.length,Math.round(Math.min(4,song.end*bd)*SR)); for(let c=0;c<r.numberOfChannels;c++){ const d=r.getChannelData(c); for(let i=0;i<fl;i++) d[r.length-fl+i]*=1-i/fl; } }
   return r;

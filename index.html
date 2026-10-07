@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 <header>
@@ -93,10 +93,17 @@
   <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="msnap" checked style="width:22px;height:22px"> caler sur les mesures</label></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mclip">Bloc choisi</span><span id="mclipinfo" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="mcut">✂ Couper au curseur</button><button id="mdup">⧉ Dupliquer</button><button id="mdel">🗑 Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div>
+    <div class="row wrap"><span class="lbl w2" data-help="mtrans">Entrée</span><select id="mtin" style="width:auto" aria-label="Transition d'entrée"><option value="none">aucune transition</option><option value="fade">fondu (le son monte)</option><option value="filter">filtre qui s'ouvre</option><option value="hp">montée par les aigus</option></select><select id="mtinl" style="width:auto" aria-label="Durée de l'entrée"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
+    <div class="row wrap"><span class="lbl w2">Sortie</span><select id="mtout" style="width:auto" aria-label="Transition de sortie"><option value="none">aucune transition</option><option value="fade">fondu (le son descend)</option><option value="filter">filtre qui se ferme</option><option value="tape">ralenti (tape stop)</option><option value="echo">écho qui s'éteint</option><option value="stutter">hachage (stutter)</option></select><select id="mtoutl" style="width:auto" aria-label="Durée de la sortie"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
     <div class="row wrap"><button id="mvar" class="primary" data-help="mvar">✨ Créer une variation de ce bloc</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="msec">Partie du morceau (toutes les pistes)</span><span id="msecv" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="msecs">⇤ Début = curseur</button><button id="msece">Fin = curseur ⇥</button></div>
-    <div class="row wrap"><button id="msecdup" class="primary">⧉ Dupliquer cette partie</button><button id="msecdel">🗑 Supprimer cette partie</button></div></div>
+    <div class="row wrap"><button id="msecdup" class="primary">⧉ Dupliquer cette partie</button><button id="msecmute">🔇 Rendre muette (blanc)</button><button id="msecdel">🗑 Supprimer cette partie</button></div></div>
+  <div class="field"><div class="row"><span class="lbl" data-help="mblank">Insérer un blanc au curseur</span></div>
+    <div class="row wrap"><select id="mblankl" style="width:auto" aria-label="Durée du blanc"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mblank">⏸ Insérer le blanc</button></div></div>
+  <div class="field"><div class="row"><span class="lbl" data-help="mfx">Sons de transition</span></div>
+    <div class="row wrap"><select id="mfxk" style="width:auto" aria-label="Son de transition"><option value="riser">Montée de bruit (finit au curseur)</option><option value="swell">Souffle inversé (finit au curseur)</option><option value="impact">Impact (au curseur)</option><option value="down">Descente (part du curseur)</option></select><select id="mfxl" style="width:auto" aria-label="Durée"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mfxadd" class="primary">✨ Ajouter</button></div>
+    <div id="mfxlist"></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mend">Fin du morceau</span><span id="mendv" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="mendm">− 1 mesure</button><button id="mendp">+ 1 mesure</button><button id="mendfit">Fin = dernier bloc</button></div></div>
   <div class="row wrap"><button id="mexp" class="primary">⬇ Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
@@ -158,6 +165,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>

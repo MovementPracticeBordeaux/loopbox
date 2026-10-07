@@ -961,6 +961,61 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#addtrk').click(); await sleep(10); P.$('#undo').click(); await sleep(10);
     ok(P.$$('.trk').length===2,'une piste vide ajoutée à la main ne doit pas disparaître avec ↶');
   });
+
+  // ---------------- montage : blancs, transitions, sons de transition (v41) ----------------
+  const songStarts=P=>{ const st=P.starts.filter(x=>x.buf); const t0=Math.min(...st.map(x=>x.when)), bd=60/95.9; return st.map(x=>({...x,beat:Math.round((x.when-t0)/bd*100)/100})); };
+  await test('montage : insérer un blanc au curseur, et rendre muette une partie',async()=>{
+    const {P,tap,X}=await montBoot();
+    tap(X(8),12); P.$('#mblankl').value='4'; P.$('#mblank').click(); await sleep(10);
+    ok(/^9 mesures/.test(P.$('#montinfo').textContent),'durée après le blanc : '+P.$('#montinfo').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    let pos=[...new Set(songStarts(P).map(x=>x.beat))].sort((a,b)=>a-b);
+    ok(pos.join(',')==='0,12','départs après le blanc (temps) : '+pos.join(','));
+    P.$('#mplay').click(); P.$('#undo').click(); await sleep(10);
+    tap(X(8),12); P.$('#msecs').click(); tap(X(16),12); P.$('#msece').click(); P.$('#msecmute').click(); await sleep(10);
+    ok(/^8 mesures/.test(P.$('#montinfo').textContent),'la durée ne doit pas changer : '+P.$('#montinfo').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    pos=[...new Set(songStarts(P).map(x=>x.beat))].sort((a,b)=>a-b);
+    ok(pos.join(',')==='0,16'&&songStarts(P).length===4,'départs avec la partie muette : '+pos.join(',')+' ('+songStarts(P).length+' blocs)');
+    P.$('#mplay').click();
+  });
+  await test('montage : transitions d\'entrée et de sortie d\'un bloc (hachage, coupe, sauvegarde)',async()=>{
+    const idb=new FI.IDBFactory();
+    const {P,tap,X,Y}=await montBoot(idb);
+    tap(X(14),Y(1)); await sleep(5);
+    P.$('#mtout').value='stutter'; P.$('#mtoutl').value='4'; P.$('#mtout').dispatchEvent(new P.w.Event('change'));
+    P.$('#mtin').value='fade'; P.$('#mtinl').value='2'; P.$('#mtin').dispatchEvent(new P.w.Event('change')); await sleep(10);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    const st=songStarts(P), sl=st.filter(x=>x.beat>=28&&x.beat<32);
+    ok(sl.length===16,'hachage sur 1 mesure : '+sl.length+' petits morceaux (attendu 16, un par double-croche)');
+    P.$('#mplay').click();
+    tap(X(8),12); tap(X(14),Y(1)); P.$('#mcut').click(); await sleep(5);
+    ok(P.$('#mtout').value==='stutter'&&P.$('#mtin').value==='none','après coupe, la 2e partie garde la sortie : entrée '+P.$('#mtin').value+' / sortie '+P.$('#mtout').value);
+    tap(X(4),Y(1)); await sleep(5);
+    ok(P.$('#mtin').value==='fade'&&P.$('#mtout').value==='none','la 1re partie garde l\'entrée : '+P.$('#mtin').value+' / '+P.$('#mtout').value);
+    await sleep(900);
+    const Q=await boot({idb}); await sleep(400);
+    Q.$('#montbtn').click(); await sleep(20);
+    const cv=Q.$('#mcv'); cv.getBoundingClientRect=()=>({left:0,top:0,width:900,height:200});
+    cv.dispatchEvent(new Q.w.MouseEvent('pointerdown',{clientX:X(20),clientY:Y(1),bubbles:true})); cv.dispatchEvent(new Q.w.MouseEvent('pointerup',{clientX:X(20),clientY:Y(1),bubbles:true}));
+    ok(Q.$('#mtout').value==='stutter'&&Q.$('#mtoutl').value==='4','transition retrouvée au rechargement : '+Q.$('#mtout').value+' '+Q.$('#mtoutl').value);
+  });
+  await test('montage : sons de transition (montée de bruit avant le curseur, impact au curseur)',async()=>{
+    const {P,tap,X}=await montBoot();
+    tap(X(16),12); P.$('#mfxk').value='riser'; P.$('#mfxl').value='4'; P.$('#mfxadd').click(); await sleep(5);
+    P.$('#mfxk').value='impact'; P.$('#mfxadd').click(); await sleep(5);
+    ok(P.$('#mfxlist').children.length===2&&/Montée de bruit · mesures 4 → 5/.test(P.$('#mfxlist').textContent),'liste : '+P.$('#mfxlist').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    const st=songStarts(P), bd=60/95.9, ris=st.find(x=>Math.abs(x.beat-12)<0.05&&Math.abs(x.buf.length-4*bd*SR)<400);
+    ok(ris&&Math.abs(ris.beat-12)<0.05,'la montée doit partir au temps 12 et finir au curseur : '+(ris&&ris.beat));
+    if(ris){ const d=ris.buf.getChannelData(0), q=Math.floor(d.length/4); const rms=(a,b)=>{ let s=0; for(let i=a;i<b;i++) s+=d[i]*d[i]; return Math.sqrt(s/(b-a)); };
+      ok([...d].every(v=>Number.isFinite(v)),'valeurs invalides dans la montée');
+      ok(rms(3*q,4*q)>4*rms(0,q),'la montée doit monter en volume : '+rms(0,q).toFixed(3)+' → '+rms(3*q,4*q).toFixed(3)); }
+    ok(st.some(x=>Math.abs(x.beat-16)<0.05&&x.buf.length>=Math.round(1.4*SR)&&x.buf.length<Math.round(3*SR)),'impact au curseur absent');
+    P.$('#mplay').click();
+    P.$('#mfxlist').querySelector('button').click(); await sleep(5);
+    ok(P.$('#mfxlist').children.length===1,'retrait d\'un son');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
