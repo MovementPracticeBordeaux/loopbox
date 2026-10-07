@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='36';
+const APPVER='37';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -856,7 +856,7 @@ function setRep(k){
 function snapState(){
   return {loopLen,beats,baseLen,baseBeats,rep,gridOff,mvol,fin,mt:masterTake?{...masterTake}:null,
     tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,speed:t.speed||1,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
-      fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut}))};
+      fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut,kind:t.kind||'rec',bass:t.bass?JSON.parse(JSON.stringify(t.bass)):null,voice:t.voice||null}))};
 }
 function touchSettings(){ if(!H.pend) H.pend=snapState(); }
 function commitSettings(){
@@ -888,6 +888,7 @@ function restoreState(sn){
     const x=map.get(t);
     t.buf=x?x.buf:null;
     t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.speed=(x&&x.speed)||1; t.sp=null; t.po=null; t.pc=null; updOffUI(t); updSpeedUI(t);
+    { const k=(x&&x.kind)||'rec', bs=x&&x.bass?JSON.parse(JSON.stringify(x.bass)):null, vo=(x&&x.voice)||null; if(k!==t.kind||JSON.stringify(bs)!==JSON.stringify(t.bass)||vo!==t.voice){ t.kind=k; t.bass=bs; t.voice=vo; t.bdraft=null; if(t.el){ setKindUI(t); if(isGen(t)) showBassOpts(t); } } }
     const p=x?x.pitch:0; if(p!==t.pitch){ t.pitch=p; if(!p) t.pp=null; }
     if(x){
       t.vol=x.vol; t.panv=x.panv; t.mute=x.mute; t.solo=x.solo; t.srcType=x.srcType; t.fadeIn=x.fadeIn||0; t.fadeOut=x.fadeOut||0;
@@ -1079,6 +1080,7 @@ const HELP={
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
+  tf:"<b>Transformer la piste</b> : l'appli repère les notes que tu as chantées, fredonnées ou sifflées sur cette piste, les cale sur la boucle (double-croche, croche ou temps) et les fait jouer par un instrument. <b>En ligne de basse</b> : descendue dans les graves. <b>En mélodie</b> : gardée à ta hauteur, avec un style (lo-fi, hip-hop, trap…). Le son d'origine est conservé avec le projet : « 🎙 Revenir au son enregistré » le récupère, et tu peux passer de basse à mélodie et inversement. ↶ annule.",
   synth:"<b>Piste mélodie</b> : comme la piste de basse, mais pour jouer une mélodie avec un instrument. Chante ou fredonne ta ligne sur une piste normale, puis « Repérer les notes » : l'appli la transforme en notes (à la même hauteur que ta voix) et la joue avec le <b>style</b> choisi : lo-fi (piano électrique), hip-hop (pluck), rap / trap (cloche ou lead), nappe, flûte, 8-bit ou orgue. Chaque style pose ses effets sur la piste (lo-fi, écho, réverbération…), modifiables ensuite dans ✨ Effets.",
   mel2b:"<b>Mélodie chantée → basse</b> : enregistre-toi en chantant ou en fredonnant la ligne (une note à la fois, aussi aiguë que tu veux), sur une piste normale. Choisis cette piste ici : l'appli repère chaque note et sa durée, les cale sur la grille choisie (double-croche, croche ou temps), met des silences là où tu ne chantes pas, et descend le tout dans les graves (par octaves, donc les notes restent justes). Le rythme passe sur « Suivre les notes ». Corrige ensuite un bloc avec la palette, ou décale toute la basse avec « Transposer ».",
   btrans:"<b>Transposer</b> : monte ou descend toute la basse d'un demi-ton ou d'une octave. Utile si ta voix ne descend pas assez bas : chante plus haut, puis descends d'une ou deux octaves ici.",
@@ -1589,6 +1591,10 @@ function initBassTimeline(t){
     bassChanged(t); $('.bst',t.el).textContent=''; });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
   $('.mgo',t.el).onclick=()=>melToBass(t);
+  $('.tfb',t.el).onclick=()=>transformTrack(t,'bass');
+  $('.tfm',t.el).onclick=()=>transformTrack(t,'synth');
+  $('.tfvoice',t.el).onclick=()=>revertVoice(t);
+  $('.tfswap',t.el).onclick=()=>transformTrack(t,t.kind==='synth'?'bass':'synth');
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
   $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
   $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } bassChanged(t); };
@@ -1629,11 +1635,11 @@ function startPreview(t){
   $('.bprev',t.el).textContent='■ Arrêter l\'aperçu';
   $('.bst',t.el).textContent=loopLen?'Aperçu calé sur ta boucle : change les réglages pour l\'entendre évoluer, puis valide.':'Aperçu seul (aucune boucle encore) : la boucle sera créée en validant.';
 }
-function genBass(t){
+function genBass(t,noHist){
   if(recObj) return;
   const o=readBassOpts(t);
   stopPreview(false);
-  pushHist();
+  if(!noHist) pushHist();
   if(!loopLen){
     loopLen=Math.round(o.beats*60/bpm*SR); beats=o.beats; baseLen=loopLen; baseBeats=beats; rep=1; gridOff=0; masterTake=null;
     if(!running) t0=ctx.currentTime;
@@ -1649,6 +1655,46 @@ function genBass(t){
   $('.bst',t.el).textContent=''; drawBassTimeline(t); drawBassViz(t);
   if(t.kind==='synth'){ msg('Mélodie créée : style « '+STYLES[o.style][0]+' », '+r.count+' notes.'+fxTxt); return; }
   msg('Ligne de basse créée : '+o.segs.map(x=>x.n==null?'—':NOTE_FR[x.n]).join(' → ')+' · '+RHYTHMS[o.rhy][0].toLowerCase()+' · '+MELODIES[o.mel].split(' (')[0].toLowerCase()+' · son '+BASS_TYPES[o.type].split(' (')[0]+' ('+r.count+' notes).');
+}
+// ---------- transformer n'importe quelle piste en basse ou en mélodie ----------
+function updVoiceUI(t){
+  const r=$('.tfback',t.el); if(!r) return;
+  r.hidden=!(isGen(t)&&t.voice);
+  const b=$('.tfswap',t.el); if(b) b.textContent=t.kind==='synth'?'🎸 Changer en ligne de basse':'🎹 Changer en mélodie';
+}
+function transformTrack(t,kind){
+  if(!t.buf||!loopLen||recObj){ if(!loopLen) msg('Il faut d\'abord une boucle.'); return; }
+  stopPreview(false);
+  const fromGen=isGen(t);
+  if(fromGen&&!t.voice) return;
+  const q=+($('.tfq',t.el)||{value:0.25}).value||0.25;
+  const data=fromGen?t.voice.play:playBuf(t).getChannelData(0).slice();
+  const r=melodyToSegs(data,beats,q,kind);
+  if(!r){ msg('Je n\'ai repéré aucune note nette sur « '+t.name+' » : chante ou fredonne plus fort, une seule note à la fois (sur « ou » ou « na »).'); return; }
+  pushHist();
+  if(!fromGen) t.voice={buf:t.buf,play:data,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,speed:t.speed||1,pitch:t.pitch||0,fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),name:t.name};
+  t.kind=kind; t.bass=defaultBass(beats,kind); t.bass.segs=r.segs; t.bass.rhy='melodie'; if(kind==='synth') t.bass.style=null;
+  t.bdraft=null; t.bsel=0;
+  t.sel=null; t.selMode='mute'; t.off=0; t.speed=1; t.pitch=0; t.pp=null; t.sp=null; t.po=null; t.pc=null;
+  if(kind==='bass'){ t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t); }
+  const base=t.voice.name||t.name;
+  t.name=uniqueTrackName(base+(kind==='synth'?' (mélodie)':' (basse)'),t); $('.tn',t.el).textContent=t.name;
+  setKindUI(t); showBassOpts(t);
+  genBass(t,true);
+  setTab(t,'bass'); updVoiceUI(t); updOffUI(t); updSpeedUI(t); syncTrackUI(t); updLive();
+  msg('« '+base+' » transformée en '+(kind==='synth'?'mélodie':'ligne de basse')+' : '+r.count+' note'+(r.count>1?'s':'')+', de '+noteName(r.lo)+' à '+noteName(r.hi)+'. Le son enregistré est gardé : « 🎙 Revenir au son enregistré » dans l\'onglet '+(kind==='synth'?'Mélodie':'Basse')+'. ↶ pour annuler.');
+}
+function revertVoice(t){
+  if(!t.voice||recObj) return;
+  stopPreview(false); pushHist();
+  const v=t.voice; let b=v.buf;
+  if(b.length!==loopLen){ const src=b.getChannelData(0), o=new Float32Array(loopLen); for(let i=0;i<loopLen;i++) o[i]=src[i%src.length]; b=ctx.createBuffer(1,loopLen,b.sampleRate); b.copyToChannel(o,0); }
+  t.buf=b; t.sel=v.sel?{...v.sel}:null; t.selMode=v.selMode||'mute'; t.off=v.off||0; t.speed=v.speed||1; t.pitch=v.pitch||0; t.pp=null; t.sp=null; t.po=null; t.pc=null;
+  t.fxs=v.fxs.length?v.fxs.map(f=>({...f})):[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t);
+  t.name=v.name||t.name; $('.tn',t.el).textContent=t.name;
+  t.kind='rec'; t.bass=null; t.bdraft=null; t.voice=null;
+  setKindUI(t); setTab(t,'tf'); syncTrackUI(t); updOffUI(t); updSpeedUI(t); drawWave(t); startSrc(t); lockUI(); updLive(); scheduleSave();
+  msg('Retour au son enregistré de « '+t.name+' ».');
 }
 function addBassTrack(kind){
   kind=kind==='synth'?'synth':'bass';
@@ -1667,6 +1713,7 @@ function addBassTrack(kind){
 // ----- onglets du menu de piste
 function setTab(t,tab){
   if(tab==='bass'&&!isGen(t)) tab='son';
+  if(tab==='tf'&&isGen(t)) tab='bass';
   t.tab=tab;
   t.el.querySelectorAll('.ttabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   t.el.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==tab);
@@ -1683,6 +1730,8 @@ function setKindUI(t){
   const bt=$('.bgo',t.el); if(bt&&!t.buf) bt.textContent=syn?'✓ Créer la mélodie':'✓ Créer la basse';
   const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Style':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
+  { const tf=$('.ttabs button[data-tab="tf"]',t.el); if(tf) tf.hidden=bass; if(bass&&t.tab==='tf') t.tab='bass'; }
+  updVoiceUI(t);
   $('.ttabs button[data-tab="bass"]',t.el).hidden=!bass;
   if(bass&&!t.tab) t.tab='bass';
   setTab(t,t.tab||(bass?'bass':'son'));
@@ -1804,8 +1853,9 @@ function buildTrackUI(t){
   <div class="tbody" hidden>
   <div class="row" style="margin-top:12px"><span class="lbl" data-help="vol">Volume</span><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}" style="flex:1"></div>
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
-  <div class="seg ttabs" style="margin-top:14px"><button data-tab="bass" hidden>🎸 Basse</button><button data-tab="son">🎚 Son</button><button data-tab="cut">✂ Découpe</button><button data-tab="fx">✨ Effets</button><button data-tab="trk">⚙ Piste</button></div>
+  <div class="seg ttabs" style="margin-top:14px"><button data-tab="bass" hidden>🎸 Basse</button><button data-tab="son">🎚 Son</button><button data-tab="cut">✂ Découpe</button><button data-tab="fx">✨ Effets</button><button data-tab="trk">⚙ Piste</button><button data-tab="tf">🪄 Transformer</button></div>
   <div class="pane" data-pane="bass" hidden>
+    <div class="row wrap tfback" hidden style="margin-top:12px"><button class="tfvoice">🎙 Revenir au son enregistré</button><button class="tfswap"></button></div>
     <details class="field mel2b" style="margin-top:12px"><summary class="lbl" style="font-size:18px">🎤 Transformer une mélodie chantée en basse</summary>
       <p class="hint" data-help="mel2b">Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves.</p>
       <div class="row wrap"><span class="lbl w2">Piste</span><select class="msrc" style="width:auto" aria-label="Piste chantée"></select><select class="mq" style="width:auto" aria-label="Calage des notes"><option value="0.25" selected>notes calées à la double-croche</option><option value="0.5">calées à la croche</option><option value="1">calées au temps</option></select></div>
@@ -1866,6 +1916,11 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="fx">Effets (tu peux en empiler)</span></div>
       <div class="fxlist"></div>
       <div class="row"><button class="fxadd">+ Ajouter un effet</button></div></div>
+  </div>
+  <div class="pane" data-pane="tf" hidden>
+    <p class="hint" style="margin-top:12px">Transforme ce que tu as enregistré sur cette piste (chant, fredonnement, sifflement…) en notes jouées par un instrument. <b>Le son d'origine est gardé</b> : tu pourras y revenir à tout moment.</p>
+    <div class="row wrap"><span class="lbl w2" data-help="tf">Notes calées</span><select class="tfq" style="width:auto" aria-label="Calage des notes"><option value="0.25" selected>à la double-croche</option><option value="0.5">à la croche</option><option value="1">au temps</option></select></div>
+    <div class="row wrap"><button class="tfb primary">🎸 En ligne de basse</button><button class="tfm primary">🎹 En mélodie (avec style)</button></div>
   </div>
   <div class="pane" data-pane="trk" hidden>
   <div class="row reconly" style="margin-top:12px"><span class="lbl" data-help="src">Type de son</span><select class="srcsel" aria-label="Type de son piste ${t.id+1}" style="flex:1">${SRC_LIST.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
@@ -2059,7 +2114,7 @@ function drawTsel(t,dr){
   g.fillStyle='rgba(255,138,0,.20)'; g.fillRect(sx,0,ex-sx,h);
   g.fillStyle='#FF8A00'; g.fillRect(sx-1.5*dpr,0,3*dpr,h); g.fillRect(ex-1.5*dpr,0,3*dpr,h);
 }
-function uniqueTrackName(base){ const n=new Set(tracks.map(x=>x.name)); if(!n.has(base)) return base; let k=2; while(n.has(base+' '+k)) k++; return base+' '+k; }
+function uniqueTrackName(base,self){ base=String(base).slice(0,24); const n=new Set(tracks.filter(x=>x!==self).map(x=>x.name)); if(!n.has(base)) return base; let k=2; while(n.has(base+' '+k)) k++; return base+' '+k; }
 function renameTrack(t,v){
   v=String(v||'').trim().slice(0,24);
   if(!v||v===t.name){ $('.tnin',t.el).value=t.name; return; }
@@ -2559,7 +2614,7 @@ function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent
 function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 function mainData(){
   return {v:2,name:projName,go:gridOff,liveQ,scenes:scenes.map(sc=>sc?sc.map(x=>({i:tracks.indexOf(x.t),m:x.mute})).filter(x=>x.i>=0):null),meter,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
-    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,of:t.off||0,sn:t.snap!==false,spd:t.speed||1,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
+    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,smd:t.selMode,of:t.off||0,sn:t.snap!==false,spd:t.speed||1,vo:t.voice?{sr:t.voice.buf.sampleRate,sel:t.voice.sel?[t.voice.sel.s,t.voice.sel.e]:null,smd:t.voice.selMode,of:t.voice.off,spd:t.voice.speed,pt:t.voice.pitch,fxs:t.voice.fxs.map(f=>({t:f.type,a:f.amt})),nm:t.voice.name}:null,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
 }
 function summary(){ return {id:projId,name:projName,updated:Date.now(),beats:loopLen?beats:0,bpm:loopLen?+(beats*60/loopSec()).toFixed(1):bpm,ntr:tracks.filter(t=>t.buf).length,dur:loopLen?+loopSec().toFixed(1):0}; }
 async function saveProj(){
@@ -2569,6 +2624,7 @@ async function saveProj(){
   try{
     const db=await idb();
     const main=mainData(), audio=withAudio?tracks.map(t=>t.buf?t.buf.getChannelData(0).slice():null):null;
+    if(audio) tracks.forEach((t,i)=>{ if(t.voice){ audio[100+i]=t.voice.buf.getChannelData(0).slice(); audio[200+i]=t.voice.play; } });
     const sm=summary(), i=projIndex.list.findIndex(p=>p.id===projId);
     if(i>=0) projIndex.list[i]=sm; else projIndex.list.push(sm);
     projIndex.cur=projId;
@@ -2602,7 +2658,7 @@ function resetProject(){
 function applyProject(d,audio){
   const pcmOf=(s,i)=>d.v===2?(audio&&audio[i]):s.pcm;
   const used=(s,i)=>{ const p=pcmOf(s,i); return !!(p&&p.length)||(s.fxs||[]).some(f=>f.t&&f.t!=='none')||(s.fx&&s.fx!=='none')||(s.eq||[]).some(v=>+v)||!!s.pt||(s.vol!=null&&s.vol!==0.8)||!!s.pan||!!s.mute||!!s.solo||(s.st&&s.st!=='beatbox')||s.k==='bass'||s.k==='synth'||!!s.nm; };
-  let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&used(s,i)) need=i+1; });
+  let need=1; (d.tracks||[]).forEach((s,i)=>{ if(s&&i<MAXTRACKS&&used(s,i)) need=i+1; });
   while(tracks.length<need&&tracks.length<MAXTRACKS) addTrack();
   if(!devLoaded){ if(d.normOn!=null) normOn=d.normOn!==false; if(d.comp!=null) comp=d.comp; if(d.ingain) ingain=d.ingain; }
   meter=d.meter===3?3:4; bpm=d.bpm||90; snap=d.snap!==false; mixMode=!!d.mixMode; mvol=d.mvol??0.9; fin=typeof d.fin==='number'?d.fin:(d.fin?1:0);
@@ -2622,6 +2678,10 @@ function applyProject(d,audio){
     t.eqv=(Array.isArray(s.eq)&&s.eq.length===3)?s.eq.map(x=>clamp(+x||0,-12,12)):[0,0,0]; t.eq.lo.gain.value=t.eqv[0]; t.eq.mid.gain.value=t.eqv[1]; t.eq.hi.gain.value=t.eqv[2];
     const pcm=pcmOf(s,i);
     if(pcm&&pcm.length&&pcm.length===loopLen){ const b=ctx.createBuffer(1,pcm.length,s.sr||SR); b.copyToChannel(pcm,0); t.buf=b; }
+    t.voice=null;
+    if(s.vo&&audio&&audio[100+i]&&audio[100+i].length){ const vp=audio[100+i], vb=ctx.createBuffer(1,vp.length,s.vo.sr||SR); vb.copyToChannel(vp,0);
+      t.voice={buf:vb,play:audio[200+i]||vp,sel:Array.isArray(s.vo.sel)?{s:s.vo.sel[0],e:s.vo.sel[1]}:null,selMode:s.vo.smd||'mute',off:+s.vo.of||0,speed:+s.vo.spd||1,pitch:+s.vo.pt||0,fxs:(s.vo.fxs||[]).map(f=>({type:f.t,amt:+f.a||0.5})),name:s.vo.nm||t.name}; }
+    updVoiceUI(t);
     if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats+1e-6&&s.sel[1]-s.sel[0]>=0.02) t.sel={s:s.sel[0],e:Math.min(beats,s.sel[1])};
     t.off=clamp(+s.of||0,-60,60); t.snap=s.sn!==false; updOffUI(t); t.speed=clamp(+s.spd||1,0.5,2); updSpeedUI(t);
     t.selMode=['mute','loop','2','3','4'].includes(s.smd)?s.smd:'mute';

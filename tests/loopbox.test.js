@@ -734,6 +734,47 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(near(fz(P.lastBuf(),0.3,1.7),440,6),'+1 octave : '+fz(P.lastBuf(),0.3,1.7).toFixed(1));
     ok(P.$$('.trk')[3]===undefined||true,'');
   });
+
+  // ---------------- transformer n'importe quelle piste (v37) ----------------
+  await test('transformer une piste enregistrée en basse, en mélodie, et revenir au son d\'origine',async()=>{
+    const idb=new FI.IDBFactory();
+    const P=await boot({idb}); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,singVoice(L,beat,[[0,2,57],[2,4,60],[5,8,64]]));
+    const voice0=P.lastBuf().getChannelData(0).slice();
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); await sleep(10);
+    const tfTab=t2.querySelector('.ttabs button[data-tab="tf"]');
+    ok(tfTab&&!tfTab.hidden,'onglet Transformer absent'); tfTab.click();
+    ok(!t2.querySelector('.pane[data-pane="tf"]').hidden,'volet Transformer');
+    P.$('#dplay').click(); await sleep(20);
+    t2.querySelector('.tfb').click(); await sleep(80);
+    ok(/kbass/.test(t2.className)&&t2.querySelector('.tn').textContent==='Piste 2 (basse)','basse : '+t2.className+' / '+t2.querySelector('.tn').textContent);
+    ok(/^La → Do → — → Mi/.test(t2.querySelector('.btlinfo').textContent),'blocs : '+t2.querySelector('.btlinfo').textContent);
+    ok(near(fz(P.lastBuf(),0.3,1.7),55,2),'La1 attendu : '+fz(P.lastBuf(),0.3,1.7).toFixed(1));
+    ok(!t2.querySelector('.tfback').hidden&&/Changer en mélodie/.test(t2.querySelector('.tfswap').textContent),'boutons de retour');
+    ok(t2.querySelector('.ttabs button[data-tab="tf"]').hidden,'l\'onglet Transformer doit disparaître sur une piste transformée');
+    ok(/transformée en ligne de basse/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    // en mélodie
+    t2.querySelector('.tfswap').click(); await sleep(80);
+    ok(/ksynth/.test(t2.className)&&t2.querySelector('.tn').textContent==='Piste 2 (mélodie)','mélodie : '+t2.className+' / '+t2.querySelector('.tn').textContent);
+    ok(/Lo-fi/.test(t2.querySelector('.fxbadge').textContent)||/Réverb/.test(t2.querySelector('.fxbadge').textContent),'effets du style : '+t2.querySelector('.fxbadge').textContent);
+    // annuler revient à la basse
+    P.$('#undo').click(); await sleep(40);
+    ok(/kbass/.test(t2.className),'↶ devrait revenir à la basse : '+t2.className);
+    P.$('#redo').click(); await sleep(40);
+    ok(/ksynth/.test(t2.className),'↷ devrait revenir à la mélodie : '+t2.className);
+    // sauvegarde puis rechargement : le son d'origine est retrouvé
+    await sleep(900);
+    const Q=await boot({idb}); await sleep(400);
+    const q2=Q.$$('.trk')[1]; q2.querySelector('.tog').click(); await sleep(20);
+    ok(/ksynth/.test(q2.className)&&!q2.querySelector('.tfback').hidden,'rechargement : '+q2.className);
+    Q.$('#dplay').click(); await sleep(20);
+    q2.querySelector('.tfvoice').click(); await sleep(40);
+    ok(!/ksynth|kbass/.test(q2.className)&&q2.querySelector('.tn').textContent==='Piste 2','retour au son enregistré : '+q2.className+' / '+q2.querySelector('.tn').textContent);
+    { const back=Q.lastPlayed().getChannelData(0); let mx=0; for(let i=0;i<voice0.length;i++) mx=Math.max(mx,Math.abs(back[i]-voice0[i])); ok(back.length===voice0.length&&mx<1e-6,'la voix d\'origine devrait revenir à l\'identique : écart max '+mx); }
+    ok(!q2.querySelector('.ttabs button[data-tab="tf"]').hidden,'l\'onglet Transformer doit revenir');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
