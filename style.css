@@ -147,3 +147,6 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 @media (min-width:720px){ .bpal{grid-template-columns:repeat(12,1fr);} }
 .bpal button{padding:4px 2px;min-height:44px;font-size:17px;background:hsl(var(--h),55%,30%);border-color:transparent;color:#fff;}
 .bpal button.on{background:hsl(var(--h),70%,50%);outline:3px solid #fff;outline-offset:-3px;}
+
+.trk.ksynth .rec{display:none;}
+.trk.ksynth .tog::after{content:"🎹";margin-left:4px;}

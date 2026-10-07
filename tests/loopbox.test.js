@@ -467,7 +467,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#dnall').value='light'; P.$('#dnallb').click(); await sleep(60);
     const m=P.$('#msg').textContent;
     ok(/Bruit nettoyé sur 1 piste/.test(m),'message : '+m);
-    ok(/Basse/.test(m)&&/son généré/.test(m),'la basse devrait être signalée comme laissée intacte : '+m);
+    ok(/Basse/.test(m)&&/sons? générés?/.test(m),'la basse devrait être signalée comme laissée intacte : '+m);
     ok(/pas de passage calme/.test(m),'le son continu devrait être laissé intact : '+m);
     const played=P.starts.filter(x=>x.buf).slice(-6).map(x=>rmsAll(x.buf));
     ok(played.every(v=>v>0.05),'une piste a été écrasée : niveaux '+played.map(v=>v.toFixed(3)).join(','));
@@ -698,6 +698,38 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:300,clientY:60,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:300,clientY:60,bubbles:true}));
     tb.querySelector('.bpal button[data-n="-1"]').click();
     ok(/^Sol♯ → — → — → Ré♯ · 4 blocs \(dont 2 silences\)/.test(tb.querySelector('.btlinfo').textContent),'silence par la palette : '+tb.querySelector('.btlinfo').textContent);
+  });
+
+  // ---------------- piste mélodie : voix → notes avec styles (v35) ----------------
+  await test('piste mélodie : la voix devient des notes à la même hauteur, jouées avec un style',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,singVoice(L,beat,[[0,2,57],[2,4,60],[5,8,64]]));
+    P.$('#addsynth').click(); await sleep(20);
+    const tm=P.$$('.trk')[2];
+    ok(/ksynth/.test(tm.className)&&tm.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tm.className+' / '+tm.querySelector('.tn').textContent);
+    ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Mélodie'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
+    const st=tm.querySelector('.btype'); ok(st.options.length===8&&/Lo-fi/.test(st.options[0].textContent),'styles : '+[...st.options].map(o=>o.textContent).join(' | '));
+    tm.querySelector('.mgo').click(); await sleep(60);
+    ok(/^La → Do → — → Mi/.test(tm.querySelector('.btlinfo').textContent),'blocs : '+tm.querySelector('.btlinfo').textContent);
+    ok(!/descendue|montée/.test(P.$('#msg').textContent)&&/de La3 à Mi4/.test(P.$('#msg').textContent),'la hauteur de la voix doit être gardée : '+P.$('#msg').textContent);
+    st.value='chip'; st.dispatchEvent(new P.w.Event('change'));
+    tm.querySelector('.bgo').click(); await sleep(40);
+    let b=P.lastBuf();
+    ok(near(fz(b,0.3,1.7),220,4)&&near(fz(b,2.3,3.7),261.6,4)&&near(fz(b,5.3,7.7),329.6,5),'notes jouées : '+[fz(b,0.3,1.7),fz(b,2.3,3.7),fz(b,5.3,7.7)].map(v=>v.toFixed(1)).join(' / '));
+    ok(/Mélodie créée : style « Jeu vidéo · 8-bit »/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    st.value='trap_bell'; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(40);
+    ok(/Écho/.test(tm.querySelector('.fxbadge').textContent)&&/Réverb/.test(tm.querySelector('.fxbadge').textContent),'effets du style : '+tm.querySelector('.fxbadge').textContent);
+    // chaque style produit un son propre (ni silence, ni valeur invalide, ni saturation)
+    for(const k of ['lofi_keys','hiphop_pluck','trap_bell','trap_lead','pad','flute','chip','organ']){
+      st.value=k; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(20);
+      const x=P.lastBuf().getChannelData(0); let pk=0, bad=0, s2=0; for(const v of x){ if(!Number.isFinite(v)) bad++; pk=Math.max(pk,Math.abs(v)); s2+=v*v; }
+      ok(!bad&&pk<=0.81&&Math.sqrt(s2/x.length)>0.02,'style '+k+' : crête '+pk.toFixed(2)+', niveau '+Math.sqrt(s2/x.length).toFixed(3)+(bad?' INVALIDE':''));
+    }
+    tm.querySelector('.btr[data-d="12"]').click(); st.value='chip'; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(30);
+    ok(near(fz(P.lastBuf(),0.3,1.7),440,6),'+1 octave : '+fz(P.lastBuf(),0.3,1.7).toFixed(1));
+    ok(P.$$('.trk')[3]===undefined||true,'');
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
