@@ -711,7 +711,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const tm=P.$$('.trk')[2];
     ok(/ksynth/.test(tm.className)&&tm.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tm.className+' / '+tm.querySelector('.tn').textContent);
     ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Mélodie'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
-    const st=tm.querySelector('.btype'); ok(st.options.length===8&&/Lo-fi/.test(st.options[0].textContent),'styles : '+[...st.options].map(o=>o.textContent).join(' | '));
+    const st=tm.querySelector('.btype'); ok(st.options.length===9&&/Son simple/.test(st.options[0].textContent)&&st.value==='clean','styles : '+[...st.options].map(o=>o.textContent).join(' | '));
     ok(tm.querySelector('.bgo').textContent==='✓ Créer la mélodie'&&!/graves/.test(tm.querySelector('.mel2b .hint').textContent),'libellés de la piste mélodie : '+tm.querySelector('.bgo').textContent+' | '+tm.querySelector('.mel2b .hint').textContent);
     tm.querySelector('.mgo').click(); await sleep(60);
     ok(/^La → Do → — → Mi/.test(tm.querySelector('.btlinfo').textContent),'blocs : '+tm.querySelector('.btlinfo').textContent);
@@ -725,7 +725,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     st.value='trap_bell'; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(40);
     ok(/Écho/.test(tm.querySelector('.fxbadge').textContent)&&/Réverb/.test(tm.querySelector('.fxbadge').textContent),'effets du style : '+tm.querySelector('.fxbadge').textContent);
     // chaque style produit un son propre (ni silence, ni valeur invalide, ni saturation)
-    for(const k of ['lofi_keys','hiphop_pluck','trap_bell','trap_lead','pad','flute','chip','organ']){
+    for(const k of ['clean','lofi_keys','hiphop_pluck','trap_bell','trap_lead','pad','flute','chip','organ']){
       st.value=k; st.dispatchEvent(new P.w.Event('change')); tm.querySelector('.bgo').click(); await sleep(20);
       const x=P.lastBuf().getChannelData(0); let pk=0, bad=0, s2=0; for(const v of x){ if(!Number.isFinite(v)) bad++; pk=Math.max(pk,Math.abs(v)); s2+=v*v; }
       ok(!bad&&pk<=0.81&&Math.sqrt(s2/x.length)>0.02,'style '+k+' : crête '+pk.toFixed(2)+', niveau '+Math.sqrt(s2/x.length).toFixed(3)+(bad?' INVALIDE':''));
@@ -758,7 +758,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     // en mélodie
     t2.querySelector('.tfswap').click(); await sleep(80);
     ok(/ksynth/.test(t2.className)&&t2.querySelector('.tn').textContent==='Piste 2 (mélodie)','mélodie : '+t2.className+' / '+t2.querySelector('.tn').textContent);
-    ok(/Lo-fi/.test(t2.querySelector('.fxbadge').textContent)||/Réverb/.test(t2.querySelector('.fxbadge').textContent),'effets du style : '+t2.querySelector('.fxbadge').textContent);
+    ok(t2.querySelector('.btype').value==='clean'&&!/Lo-fi|Réverb|Écho/.test(t2.querySelector('.fxbadge').textContent),'mélodie : son simple sans effet attendu : '+t2.querySelector('.btype').value+' / '+t2.querySelector('.fxbadge').textContent);
     // annuler revient à la basse
     P.$('#undo').click(); await sleep(40);
     ok(/kbass/.test(t2.className),'↶ devrait revenir à la basse : '+t2.className);
@@ -791,6 +791,44 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(near(fz(b,0.2,0.8),65.4,2),'bloc 1 inchangé (Do2) : '+fz(b,0.2,0.8).toFixed(1));
     ok(near(fz(b,4.2,4.8),41.2,2),'bloc 2 une octave plus grave (Mi1) : '+fz(b,4.2,4.8).toFixed(1));
     ok(near(fz(b,6.2,6.8),98,3),'bloc 3 inchangé (Sol2) : '+fz(b,6.2,6.8).toFixed(1));
+  });
+
+  // voix réaliste : vibrato, glissés entre notes collées, voix un peu fausse, harmonique forte, consonnes, souffle
+  function voice(notes,beatSec,nbeats,opt={}){
+    const L=Math.round(nbeats*beatSec*SR), x=new Float32Array(L); let ph=0, sd=12345; const rnd=()=>{ sd=(sd*16807)%2147483647; return sd/2147483647*2-1; };
+    const det=opt.det??0.25, vib=opt.vib??0.5, glide=opt.glide??0.07;
+    let prevM=null, prevEnd=-1;
+    for(let i=0;i<L;i++){
+      const tb=i/SR/beatSec, nt=notes.find(n=>tb>=n[0]&&tb<n[1]);
+      let v=0.008*rnd();
+      if(nt&&nt[2]!=null){
+        const tIn=(tb-nt[0])*beatSec, tOut=(nt[1]-tb)*beatSec, idx=notes.indexOf(nt), pv=idx>0?notes[idx-1]:null;
+        let m=nt[2]+det;
+        if(pv&&pv[2]!=null&&Math.abs(pv[1]-nt[0])<1e-9&&tIn<glide) m=pv[2]+det+(nt[2]-pv[2])*(tIn/glide);
+        if(tIn>0.15) m+=vib*Math.sin(2*Math.PI*5.5*(tIn-0.15));
+        const f=440*Math.pow(2,(m-69)/12); ph+=f/SR;
+        const legIn=pv&&pv[2]!=null&&Math.abs(pv[1]-nt[0])<1e-9;
+        const env=Math.min(1,legIn?1:tIn/0.03)*Math.min(1,tOut/0.04)*(1-0.15*Math.min(1,tIn/1.5));
+        const P=2*Math.PI*ph;
+        v+=0.35*env*(0.5*Math.sin(P)+1.0*Math.sin(2*P)+0.6*Math.sin(3*P)+0.3*Math.sin(4*P)+0.2*Math.sin(5*P));
+        if(!legIn&&tIn<0.015) v+=0.15*rnd();
+      }
+      x[i]=v;
+    }
+    return x;
+  }
+  
+  await test('mélodie : une vraie voix (vibrato, glissés, un peu fausse) donne les bonnes notes, à sa hauteur',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, bs=L/8/SR;
+    P.$('#addtrk').click(); await sleep(10);
+    const notes=[[0,.5,52],[.5,1,55],[1,1.5,57],[1.5,2,55],[2,3,52],[3,4,50],[4,6,48],[6,8,52]];
+    const x0=voice(notes,bs,8), x=new Float32Array(L); x.set(x0.subarray(0,Math.min(L,x0.length)));
+    await P.importFile(1,{numberOfChannels:1,length:L,sampleRate:SR,duration:L/SR,getChannelData:()=>x});
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="tf"]').click();
+    t2.querySelector('.tfq').value='0.5'; t2.querySelector('.tfm').click(); await sleep(80);
+    ok(/^Mi → Sol → La → Sol → Mi → Ré → Do → Mi · 8 blocs/.test(t2.querySelector('.btlinfo').textContent),'notes repérées : '+t2.querySelector('.btlinfo').textContent);
+    ok(/de Do3 à La3/.test(P.$('#msg').textContent)&&/à la hauteur de ta voix/.test(P.$('#msg').textContent),'hauteur gardée : '+P.$('#msg').textContent);
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));

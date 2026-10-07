@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='38';
+const APPVER='39';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1081,7 +1081,7 @@ const HELP={
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
   tf:"<b>Transformer la piste</b> : l'appli repère les notes que tu as chantées, fredonnées ou sifflées sur cette piste, les cale sur la boucle (double-croche, croche ou temps) et les fait jouer par un instrument. <b>En ligne de basse</b> : descendue dans les graves. <b>En mélodie</b> : gardée à ta hauteur, avec un style (lo-fi, hip-hop, trap…). Le son d'origine est conservé avec le projet : « 🎙 Revenir au son enregistré » le récupère, et tu peux passer de basse à mélodie et inversement. ↶ annule.",
-  synth:"<b>Piste mélodie</b> : comme la piste de basse, mais pour jouer une mélodie avec un instrument. Chante ou fredonne ta ligne sur une piste normale, puis « Repérer les notes » : l'appli la transforme en notes (à la même hauteur que ta voix) et la joue avec le <b>style</b> choisi : lo-fi (piano électrique), hip-hop (pluck), rap / trap (cloche ou lead), nappe, flûte, 8-bit ou orgue. Chaque style pose ses effets sur la piste (lo-fi, écho, réverbération…), modifiables ensuite dans ✨ Effets.",
+  synth:"<b>Piste mélodie</b> : comme la piste de basse, mais pour jouer une mélodie avec un instrument. Chante ou fredonne ta ligne sur une piste normale, puis « Repérer les notes » : l'appli la transforme en notes (à la même hauteur que ta voix) et la joue d'abord avec un <b>son simple, sans effet</b>, à la hauteur exacte de ta voix. Tu peux ensuite changer le ton (« Transposer », ▼ ▲ octave par bloc) ou choisir un <b>style</b> avec ses effets : lo-fi (piano électrique), hip-hop (pluck), rap / trap (cloche ou lead), nappe, flûte, 8-bit ou orgue. Chaque style pose ses effets sur la piste (lo-fi, écho, réverbération…), modifiables ensuite dans ✨ Effets.",
   mel2b:"<b>Mélodie chantée → basse</b> : enregistre-toi en chantant ou en fredonnant la ligne (une note à la fois, aussi aiguë que tu veux), sur une piste normale. Choisis cette piste ici : l'appli repère chaque note et sa durée, les cale sur la grille choisie (double-croche, croche ou temps), met des silences là où tu ne chantes pas, et descend le tout dans les graves (par octaves, donc les notes restent justes). Le rythme passe sur « Suivre les notes ». Corrige ensuite un bloc avec la palette, ou décale toute la basse avec « Transposer ».",
   boct:"<b>▼ / ▲ octave</b> : rend le bloc choisi une octave plus grave ou plus aiguë (même note, Mi2 → Mi1 par exemple), sans toucher aux autres blocs. La hauteur exacte du bloc est affichée à côté (Mi2, Sol1…).",
   btrans:"<b>Transposer</b> : monte ou descend toute la basse d'un demi-ton ou d'une octave. Utile si ta voix ne descend pas assez bas : chante plus haut, puis descends d'une ou deux octaves ici.",
@@ -1275,6 +1275,7 @@ const MELODIES={same:'Même note (celle du bloc)',oct:"Avec l'octave (aiguë une
 const LEGACY_PAT={tonique:['noire','same'],octaves:['croches','oct'],marche:['noire','walk'],funk:['funk','oct'],hiphop:['hiphop','fifth'],pulse:['doubles','same']};
 // styles de la piste mélodie : un son + les effets qui vont avec
 const STYLES={
+  clean:['Son simple, sans effet (comme ta voix)','soft',[]],
   lofi_keys:['Lo-fi · piano électrique doux','rhodes',['lofi','reverb']],
   hiphop_pluck:['Hip-hop · pluck','pluck',['echo']],
   trap_bell:['Rap / trap · cloche','bell',['echo','reverb']],
@@ -1286,7 +1287,7 @@ const STYLES={
 };
 const isGen=t=>t.kind==='bass'||t.kind==='synth';
 const BASS_TYPES={sub:'Sub (rond, très grave)',elec:'Électrique (pincée)',acid:'Acid (filtrée, nerveuse)',b808:'808 (grave qui chute)'};
-const INSTR={rhodes:1,pluck:1,bell:1,lead:1,pad:1,flute:1,chip:1,organ:1};
+const INSTR={soft:1,rhodes:1,pluck:1,bell:1,lead:1,pad:1,flute:1,chip:1,organ:1};
 function synthNote(out,st,dur,f,vel,type,f2){
   if(INSTR[type]) return instrNote(out,st,dur,f,vel,type,f2);
   const L=out.length, rel=0.03, n=Math.round((dur+rel)*SR), gl=f2&&f2!==f?Math.log(f2/f):0;
@@ -1338,13 +1339,14 @@ function instrNote(out,st,dur,f,vel,type,f2){
     }
     else if(type==='flute'){ sd=(sd*16807)%2147483647; nz=0.9*nz+0.1*(sd/2147483647*2-1); v=Math.sin(TW*ph)+0.05*Math.sin(2*TW*ph)+0.6*nz*Math.exp(-t/0.15); A=0.06; env=1; }
     else if(type==='chip'){ v=(ph<0.25?1:-1)*0.6; A=0.002; env=Math.exp(-t/2); }
+    else if(type==='soft'){ v=0.85*(2/Math.PI)*Math.asin(Math.sin(TW*ph))+0.12*Math.sin(2*TW*ph); A=0.015; env=t<0.08?1:0.92; }
     else { v=Math.sin(TW*ph)+0.6*Math.sin(2*TW*ph)+0.4*Math.sin(3*TW*ph)+0.25*Math.sin(4*TW*ph)+0.15*Math.sin(6*TW*ph); v*=0.45; A=0.01; env=1; }
     if(t<A) env*=t/A;
     if(t>dur) env*=Math.max(0,1-(t-dur)/rel);
     out[(st+i)%L]+=v*env*vel*0.5;
   }
 }
-function defaultBass(nb,kind){ return kind==='synth'?{kind:'synth',rhy:'melodie',mel:'same',type:'rhodes',style:'lofi_keys',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,m:60,glide:false}]}:{rhy:'noire',mel:'same',type:'sub',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,glide:false}]}; }
+function defaultBass(nb,kind){ return kind==='synth'?{kind:'synth',rhy:'melodie',mel:'same',type:'soft',style:'clean',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,m:60,glide:false}]}:{rhy:'noire',mel:'same',type:'sub',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,glide:false}]}; }
 function nbOf(t){ return loopLen?beats:(+$('.bbeats',t.el).value||8); }
 // les blocs couvrent toujours toute la boucle, sans trou ni chevauchement
 function normSegs(segs,nb){
@@ -1438,36 +1440,58 @@ function pitchTrack(x){
   }
   return {frames:fr,rmsMax,hop:H/sr};
 }
-function melodyToSegs(x,nb,q,kind){
-  const {frames,rmsMax,hop}=pitchTrack(x), beatSec=loopSec()/beats;
-  const mid=frames.map(f=>(f.f&&f.f>60&&f.f<1100&&f.conf>0.8&&f.rms>Math.max(0.004,rmsMax*0.08))?69+12*Math.log2(f.f/440):null);
-  const med=mid.map((v,i)=>{ if(v==null) return null; const w=[]; for(let k=i-2;k<=i+2;k++) if(k>=0&&k<mid.length&&mid[k]!=null) w.push(mid[k]); w.sort((a,b)=>a-b); return w[Math.floor(w.length/2)]; });
-  const notes=[]; let cur=null;
-  for(let i=0;i<med.length;i++){
-    const v=med[i]==null?null:Math.round(med[i]), t=frames[i].t;
-    if(cur&&v===cur.m){ cur.t1=t; continue; }
-    let stable=0; for(let k=i;k<Math.min(med.length,i+3);k++){ const w=med[k]==null?null:Math.round(med[k]); if(w===v) stable++; }
-    if(stable<3&&cur){ cur.t1=t; continue; }
-    if(cur) notes.push(cur);
-    cur=v==null?null:{m:v,t0:t,t1:t};
+// repérage des notes chantées : une note ne change que si la voix s'éloigne nettement et durablement (le vibrato et les glissés ne créent plus de fausses notes)
+function voiceNotes(x){
+  const {frames,rmsMax,hop}=pitchTrack(x), thr=Math.max(0.004,rmsMax*0.08);
+  let p=frames.map(f=>(f.f&&f.f>60&&f.f<1100&&f.conf>0.8&&f.rms>thr)?69+12*Math.log2(f.f/440):null);
+  p=p.map((v,i)=>{ if(v==null) return null; const w=[]; for(let k=i-8;k<=i+8;k++) if(k!==i&&k>=0&&k<p.length&&p[k]!=null) w.push(p[k]); if(w.length<4) return v; w.sort((a,b)=>a-b); const md=w[w.length>>1]; let u=v; while(u-md>9) u-=12; while(md-u>9) u+=12; return u; });
+  p=p.map((v,i)=>{ if(v==null) return null; const w=[p[i-1],v,p[i+1]].filter(z=>z!=null).sort((a,b)=>a-b); return w[w.length>>1]; });
+  const notes=[]; let cur=null, nulls=0, dev=0, devStart=-1;
+  const med=a=>{ const w=a.slice().sort((x,y)=>x-y); return w[w.length>>1]; };
+  // centre de la note : sans les 9 dernières trames ; écart jugé sur une moyenne glissante de 9 trames (≈ 0,1 s) qui gomme le vibrato
+  const center=fr=>med(fr.length>12?fr.slice(Math.max(0,fr.length-40),fr.length-9):fr);
+  const close=()=>{ if(cur&&cur.fr.length>=3){ notes.push({m:Math.round(med(cur.fr)),t0:cur.t0,t1:cur.t1}); } cur=null; dev=0; };
+  for(let i=0;i<p.length;i++){
+    const v=p[i], t=frames[i].t;
+    if(v==null){ nulls++; if(cur&&nulls>=4) close(); continue; }
+    nulls=0;
+    if(!cur){ cur={fr:[v],ix:[i],t0:t,t1:t}; dev=0; continue; }
+    cur.fr.push(v); cur.ix.push(i); cur.t1=t;
+    if(cur.fr.length<14){ continue; }
+    const win=cur.fr.slice(-9), avg=win.reduce((a,b)=>a+b,0)/win.length, c=center(cur.fr);
+    if(Math.abs(avg-c)>0.6){
+      if(dev===0) devStart=cur.fr.length-6; dev++;
+      if(dev>=4){
+        const k=Math.max(3,devStart), nf=cur.fr.slice(k), ni=cur.ix.slice(k);
+        cur.fr=cur.fr.slice(0,k); cur.t1=frames[cur.ix[k-1]].t;
+        const t0=frames[ni[0]].t; close(); cur={fr:nf,ix:ni,t0,t1:t};
+      }
+    } else dev=0;
   }
-  if(cur) notes.push(cur);
-  const segs=[];
+  close();
+  // notes éclair de passage (glissé de la voix entre deux notes collées) : rattachées à la note suivante
+  for(let i=notes.length-2;i>=1;i--){ const a=notes[i-1], b=notes[i], c=notes[i+1];
+    if(b.t1-b.t0<0.12&&b.t0-a.t1<0.06&&c.t0-b.t1<0.06&&(b.m-a.m)*(c.m-b.m)>=0) { c.t0=b.t0; notes.splice(i,1); } }
+  return {notes,hop};
+}
+function melodyToSegs(x,nb,q,kind){
+  const {notes,hop}=voiceNotes(x), beatSec=loopSec()/beats, segs=[];
   notes.forEach(nt=>{
-    let s0=Math.round(nt.t0/beatSec/q)*q, e0=Math.round((nt.t1+hop)/beatSec/q)*q;
-    s0=clamp(s0,0,nb); e0=clamp(e0,0,nb);
-    if(segs.length&&s0<segs[segs.length-1].e) s0=segs[segs.length-1].e;
-    if(e0-s0<q-1e-9) return;
+    let s0=clamp(Math.round(nt.t0/beatSec/q)*q,0,nb), e0=clamp(Math.round((nt.t1+hop)/beatSec/q)*q,0,nb);
     const l=segs[segs.length-1];
+    if(l&&s0<l.e) s0=l.e;
+    if(e0-s0<q-1e-9) return;
+    if(l&&s0>l.e&&s0-l.e<q-1e-9) l.e=s0;
     if(l&&l.m===nt.m&&Math.abs(l.e-s0)<1e-9) l.e=e0; else segs.push({s:s0,e:e0,m:nt.m});
   });
   if(!segs.length) return null;
-  const ms=segs.map(x=>x.m).sort((a,b)=>a-b), medM=ms[Math.floor(ms.length/2)], shift=kind==='synth'?(medM<52?12*Math.ceil((52-medM)/12):medM>84?-12*Math.ceil((medM-84)/12):0):12*Math.round((36-medM)/12);
+  const ms=segs.map(z=>z.m).sort((a,b)=>a-b), medM=ms[Math.floor(ms.length/2)], shift=kind==='synth'?0:12*Math.round((36-medM)/12);
   const out=[]; let pos=0;
-  segs.forEach(x=>{ if(x.s>pos+1e-9) out.push({s:pos,e:x.s,n:null}); const m=x.m+shift; out.push({s:x.s,e:x.e,n:((m%12)+12)%12,m}); pos=x.e; });
+  segs.forEach(z=>{ if(z.s>pos+1e-9) out.push({s:pos,e:z.s,n:null}); const m=z.m+shift; out.push({s:z.s,e:z.e,n:((m%12)+12)%12,m}); pos=z.e; });
   if(pos<nb-1e-9) out.push({s:pos,e:nb,n:null});
   return {segs:out,count:segs.length,shift,lo:ms[0]+shift,hi:ms[ms.length-1]+shift,orig:[ms[0],ms[ms.length-1]]};
 }
+
 function fillMelSrc(t){
   const sel=$('.msrc',t.el); if(!sel) return;
   const list=tracks.filter(x=>x!==t&&x.buf&&!isGen(x)), cur=sel.value;
@@ -1506,13 +1530,13 @@ function renderBass(o,L,nb){
 function makeBass(o){ return renderBass(o,loopLen,beats); }
 function readBassOpts(t){
   const el=t.el, d=ensureDraft(t);
-  const tv=$('.btype',el).value, syn=t.kind==='synth', st=syn?(STYLES[tv]?tv:'lofi_keys'):undefined;
+  const tv=$('.btype',el).value, syn=t.kind==='synth', st=syn?(STYLES[tv]?tv:'clean'):undefined;
   return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
 }
 function showBassOpts(t){
   const el=t.el; t.bdraft=null; t.bsel=0;
   const o=normBass(t.bass,nbOf(t),t.kind); t.bdraft=o;
-  $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'lofi_keys'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
+  $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'clean'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
   drawBassTimeline(t);
 }
 function drawBassTimeline(t){
@@ -1690,13 +1714,13 @@ function transformTrack(t,kind){
   t.kind=kind; t.bass=defaultBass(beats,kind); t.bass.segs=r.segs; t.bass.rhy='melodie'; if(kind==='synth') t.bass.style=null;
   t.bdraft=null; t.bsel=0;
   t.sel=null; t.selMode='mute'; t.off=0; t.speed=1; t.pitch=0; t.pp=null; t.sp=null; t.po=null; t.pc=null;
-  if(kind==='bass'){ t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t); }
+  t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t);
   const base=t.voice.name||t.name;
   t.name=uniqueTrackName(base+(kind==='synth'?' (mélodie)':' (basse)'),t); $('.tn',t.el).textContent=t.name;
   setKindUI(t); showBassOpts(t);
   genBass(t,true);
   setTab(t,'bass'); updVoiceUI(t); updOffUI(t); updSpeedUI(t); syncTrackUI(t); updLive();
-  msg('« '+base+' » transformée en '+(kind==='synth'?'mélodie':'ligne de basse')+' : '+r.count+' note'+(r.count>1?'s':'')+', de '+noteName(r.lo)+' à '+noteName(r.hi)+'. Le son enregistré est gardé : « 🎙 Revenir au son enregistré » dans l\'onglet '+(kind==='synth'?'Mélodie':'Basse')+'. ↶ pour annuler.');
+  msg('« '+base+' » transformée en '+(kind==='synth'?'mélodie':'ligne de basse')+' : '+r.count+' note'+(r.count>1?'s':'')+', de '+noteName(r.lo)+' à '+noteName(r.hi)+(kind==='synth'?', à la hauteur de ta voix, avec un son simple sans effet. Change le ton avec « Transposer » ou ▼ ▲ octave, ou choisis un style avec effets dans « Style »':'')+'. Le son enregistré est gardé : « 🎙 Revenir au son enregistré » dans l\'onglet '+(kind==='synth'?'Mélodie':'Basse')+'. ↶ pour annuler.');
 }
 function revertVoice(t){
   if(!t.voice||recObj) return;
@@ -1742,7 +1766,7 @@ function setKindUI(t){
   const sm=$('.mel2b summary',t.el); if(sm) sm.textContent=syn?'🎤 Transformer une mélodie chantée en notes':'🎤 Transformer une mélodie chantée en basse';
   const mh=$('.mel2b .hint',t.el); if(mh){ mh.textContent=syn?"Chante ou fredonne ta mélodie sur une piste normale, puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les joue avec le style choisi, à la hauteur de ta voix.":"Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves."; mh.dataset.help=syn?'synth':'mel2b'; }
   const bt=$('.bgo',t.el); if(bt&&!t.buf) bt.textContent=syn?'✓ Créer la mélodie':'✓ Créer la basse';
-  const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Style':'Son';
+  const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Style (son et effets)':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
   { const tf=$('.ttabs button[data-tab="tf"]',t.el); if(tf) tf.hidden=bass; if(bass&&t.tab==='tf') t.tab='bass'; }
   updVoiceUI(t);
