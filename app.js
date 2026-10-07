@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='37';
+const APPVER='38';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1083,6 +1083,7 @@ const HELP={
   tf:"<b>Transformer la piste</b> : l'appli repère les notes que tu as chantées, fredonnées ou sifflées sur cette piste, les cale sur la boucle (double-croche, croche ou temps) et les fait jouer par un instrument. <b>En ligne de basse</b> : descendue dans les graves. <b>En mélodie</b> : gardée à ta hauteur, avec un style (lo-fi, hip-hop, trap…). Le son d'origine est conservé avec le projet : « 🎙 Revenir au son enregistré » le récupère, et tu peux passer de basse à mélodie et inversement. ↶ annule.",
   synth:"<b>Piste mélodie</b> : comme la piste de basse, mais pour jouer une mélodie avec un instrument. Chante ou fredonne ta ligne sur une piste normale, puis « Repérer les notes » : l'appli la transforme en notes (à la même hauteur que ta voix) et la joue avec le <b>style</b> choisi : lo-fi (piano électrique), hip-hop (pluck), rap / trap (cloche ou lead), nappe, flûte, 8-bit ou orgue. Chaque style pose ses effets sur la piste (lo-fi, écho, réverbération…), modifiables ensuite dans ✨ Effets.",
   mel2b:"<b>Mélodie chantée → basse</b> : enregistre-toi en chantant ou en fredonnant la ligne (une note à la fois, aussi aiguë que tu veux), sur une piste normale. Choisis cette piste ici : l'appli repère chaque note et sa durée, les cale sur la grille choisie (double-croche, croche ou temps), met des silences là où tu ne chantes pas, et descend le tout dans les graves (par octaves, donc les notes restent justes). Le rythme passe sur « Suivre les notes ». Corrige ensuite un bloc avec la palette, ou décale toute la basse avec « Transposer ».",
+  boct:"<b>▼ / ▲ octave</b> : rend le bloc choisi une octave plus grave ou plus aiguë (même note, Mi2 → Mi1 par exemple), sans toucher aux autres blocs. La hauteur exacte du bloc est affichée à côté (Mi2, Sol1…).",
   btrans:"<b>Transposer</b> : monte ou descend toute la basse d'un demi-ton ou d'une octave. Utile si ta voix ne descend pas assez bas : chante plus haut, puis descends d'une ou deux octaves ici.",
   trk:"<b>Une piste</b>, c'est une couche de ton morceau. <b>● REC</b> enregistre (■ STOP pour finir) ; la forme d'onde montre ce qui est enregistré. Touche le <b>nom de la piste</b> (▸) pour ouvrir ses réglages : type de son, volume, <b>Muet</b> (la coupe), <b>Solo</b> (n'écoute qu'elle), panoramique, tonalité, effets, annuler et effacer. Un 🔇 ou un 🎧 à côté du nom te rappelle qu'elle est en muet ou en solo.",
   vol:"<b>Volume</b> de cette piste. Vers la droite : plus fort. Vers la gauche : plus doux. Sers-t'en pour équilibrer tes pistes entre elles.",
@@ -1523,7 +1524,9 @@ function drawBassTimeline(t){
   $('.bsplit',t.el).disabled=cur.e-cur.s<2; $('.bdel',t.el).disabled=segs.length<2;
   $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
   t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',b.dataset.n==='-1'?cur.n==null:+b.dataset.n===cur.n));
-  $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+(cur.s+1)+' → '+cur.e;
+  const fb=x=>String(Math.round(x*100)/100).replace('.',','), rts=segRoots(segs,t.kind);
+  $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+fb(cur.s+1)+' → '+fb(cur.e)+(cur.n!=null?' · '+noteName(rts[sel]):' · silence');
+  t.el.querySelectorAll('.boct').forEach(b=>b.disabled=cur.n==null);
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':(t.kind==='synth'?'✓ Créer la mélodie':'✓ Créer la basse');
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr); if(!w||!hh) return;
   c.width=w; c.height=hh;
@@ -1590,6 +1593,17 @@ function initBassTimeline(t){
     else { const old=segRoots(d.segs,t.kind)[t.bsel||0]; x.n=v; x.m=(x.m!=null||old!=null)?nearOct(rootOf(v),old!=null?old:rootOf(v)):undefined; if(x.m==null) delete x.m; }
     bassChanged(t); $('.bst',t.el).textContent=''; });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
+  // une octave plus grave / plus aiguë pour le bloc choisi seulement (les autres blocs ne bougent pas)
+  t.el.querySelectorAll('.boct').forEach(b=>b.onclick=()=>{
+    const d=ensureDraft(t), i=t.bsel||0, roots=segRoots(d.segs,t.kind);
+    if(roots[i]==null) return;
+    const m=roots[i]+(+b.dataset.d), lo=t.kind==='synth'?36:24, hi=t.kind==='synth'?96:64;
+    if(m<lo||m>hi){ msg('Limite atteinte : ce bloc irait trop '+(+b.dataset.d<0?'grave':'aigu')+'.'); return; }
+    d.segs.forEach((x,k)=>{ if(roots[k]!=null){ x.m=roots[k]; x.n=((roots[k]%12)+12)%12; } });
+    d.segs[i].m=m; d.segs[i].n=((m%12)+12)%12;
+    bassChanged(t);
+    msg('Bloc '+(i+1)+' : '+noteName(roots[i])+' → '+noteName(m)+'. Les autres blocs ne bougent pas.');
+  });
   $('.mgo',t.el).onclick=()=>melToBass(t);
   $('.tfb',t.el).onclick=()=>transformTrack(t,'bass');
   $('.tfm',t.el).onclick=()=>transformTrack(t,'synth');
@@ -1864,7 +1878,7 @@ function buildTrackUI(t){
     <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
     <p class="hint" style="margin:6px 0 0">✂ <b>Touche la règle</b> (les numéros de temps) pour couper à cet endroit, ou pour enlever une coupe. <b>Touche un bloc</b> pour le choisir, puis touche sa note ci-dessous.</p>
     <canvas class="btl" style="width:100%;height:104px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
-    <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button></div>
+    <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button><button class="boct" data-d="-12" data-help="boct">▼ octave</button><button class="boct" data-d="12">▲ octave</button></div>
     <div class="bpal">${NOTE_FR.map((n,i)=>`<button data-n="${i}" style="--h:${NOTE_HUE[i]}">${n}</button>`).join('')}<button data-n="-1" style="--h:0;filter:saturate(0)">∅ Silence</button></div>
     <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
     <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>

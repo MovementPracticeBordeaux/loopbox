@@ -775,6 +775,23 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     { const back=Q.lastPlayed().getChannelData(0); let mx=0; for(let i=0;i<voice0.length;i++) mx=Math.max(mx,Math.abs(back[i]-voice0[i])); ok(back.length===voice0.length&&mx<1e-6,'la voix d\'origine devrait revenir à l\'identique : écart max '+mx); }
     ok(!q2.querySelector('.ttabs button[data-tab="tf"]').hidden,'l\'onglet Transformer doit revenir');
   });
+
+  await test('basse : rendre un seul bloc plus grave d\'une octave, sans toucher aux autres',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    tap(400,15); tb.querySelector('.bpal button[data-n="4"]').click(); tap(600,15); tb.querySelector('.bpal button[data-n="7"]').click(); await sleep(5);
+    ok(/^Do → Mi → Sol/.test(tb.querySelector('.btlinfo').textContent),'préparation : '+tb.querySelector('.btlinfo').textContent);
+    tap(500,60); await sleep(5);
+    ok(/· Mi2$/.test(tb.querySelector('.bselinfo').textContent),'hauteur affichée : '+tb.querySelector('.bselinfo').textContent);
+    tb.querySelector('.boct[data-d="-12"]').click(); await sleep(5);
+    ok(/· Mi1$/.test(tb.querySelector('.bselinfo').textContent),'après ▼ : '+tb.querySelector('.bselinfo').textContent);
+    tb.querySelector('.bgo').click(); await sleep(30);
+    const b=P.lastBuf();
+    ok(near(fz(b,0.2,0.8),65.4,2),'bloc 1 inchangé (Do2) : '+fz(b,0.2,0.8).toFixed(1));
+    ok(near(fz(b,4.2,4.8),41.2,2),'bloc 2 une octave plus grave (Mi1) : '+fz(b,4.2,4.8).toFixed(1));
+    ok(near(fz(b,6.2,6.8),98,3),'bloc 3 inchangé (Sol2) : '+fz(b,6.2,6.8).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
