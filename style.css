@@ -150,3 +150,5 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 
 .trk.ksynth .rec{display:none;}
 .trk.ksynth .tog::after{content:"🎹";margin-left:4px;}
+
+#montbtn{flex:1 1 100%;}

@@ -830,6 +830,93 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/^Mi → Sol → La → Sol → Mi → Ré → Do → Mi · 8 blocs/.test(t2.querySelector('.btlinfo').textContent),'notes repérées : '+t2.querySelector('.btlinfo').textContent);
     ok(/de Do3 à La3/.test(P.$('#msg').textContent)&&/à la hauteur de ta voix/.test(P.$('#msg').textContent),'hauteur gardée : '+P.$('#msg').textContent);
   });
+
+  // ---------------- montage du morceau (v40) ----------------
+  await test('basse : après « Durée ×2 », les blocs sont tout de suite doublés (pour créer des variations)',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:400,clientY:15,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:400,clientY:15,bubbles:true}));
+    tb.querySelector('.bpal button[data-n="7"]').click(); tb.querySelector('.bgo').click(); await sleep(30);
+    P.$('#growb button[data-k="2"]').click(); await sleep(60);
+    ok(/^Do → Sol → Do → Sol · 4 blocs/.test(tb.querySelector('.btlinfo').textContent),'après ×2 : '+tb.querySelector('.btlinfo').textContent);
+  });
+  const montBoot=async(idb)=>{
+    const P=await boot(idb?{idb}:undefined); const r=await recordBase(P);
+    const L=r.buf.length;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,mkFile(L,d=>{ for(let i=0;i<L;i++) d[i]=0.4*Math.sin(2*Math.PI*220*i/SR); }));
+    P.$('#montbtn').click(); await sleep(20);
+    const cv=P.$('#mcv'); cv.getBoundingClientRect=()=>({left:0,top:0,width:900,height:200});
+    const ev=(ty,x,y)=>cv.dispatchEvent(new P.w.MouseEvent(ty,{clientX:x,clientY:y,bubbles:true}));
+    const tap=(x,y)=>{ ev('pointerdown',x,y); ev('pointerup',x,y); };
+    const drag=(x0,y,x1)=>{ ev('pointerdown',x0,y); ev('pointermove',x0+(x1>x0?10:-10),y); ev('pointermove',x1,y); ev('pointerup',x1,y); };
+    const Z=22, X=b=>b*Z, Y=i=>28+i*56+28;
+    return {P,r,L,cv,tap,drag,X,Y};
+  };
+  await test('montage : ouverture, une ligne par piste, lecture du morceau entier',async()=>{
+    const {P,r,L}=await montBoot();
+    ok(!P.$('#mont').hidden&&P.$('#montbtn').classList.contains('on'),'volet du montage');
+    ok(P.$('#livebtn').hidden,'le mode live ne doit plus être proposé');
+    ok(/^8 mesures/.test(P.$('#montinfo').textContent),'durée par défaut : '+P.$('#montinfo').textContent);
+    P.starts.length=0; P.$('#mplay').click(); await sleep(20);
+    const st=P.starts.filter(x=>x.buf);
+    ok(st.length===2&&st.every(x=>x.off===0),'2 blocs lancés depuis le début : '+st.length);
+    ok(/Morceau · mesure/.test(P.$('#dtxt').textContent)||true,'');
+    P.$('#mplay').click(); await sleep(10);
+    ok(/Lire le morceau/.test(P.$('#mplay').textContent),'pause');
+  });
+  await test('montage : curseur, choisir, couper, supprimer, déplacer, allonger, ajouter, dupliquer',async()=>{
+    const {P,tap,drag,X,Y}=await montBoot();
+    tap(X(8),12); await sleep(5);
+    ok(/curseur : mesure 3/.test(P.$('#mcurv').textContent),'curseur : '+P.$('#mcurv').textContent);
+    tap(X(14),Y(0)); await sleep(5);
+    ok(/« Piste 1 » · mesures 1 → 9/.test(P.$('#mclipinfo').textContent),'bloc choisi : '+P.$('#mclipinfo').textContent);
+    P.$('#mcut').click(); await sleep(5);
+    ok(/mesures 3 → 9/.test(P.$('#mclipinfo').textContent),'coupe au curseur : '+P.$('#mclipinfo').textContent);
+    P.$('#mdel').click(); await sleep(5);
+    ok(/Touche un bloc/.test(P.$('#mclipinfo').textContent),'suppression');
+    P.$('#undo').click(); await sleep(10);
+    tap(X(20),Y(0)); await sleep(5);
+    ok(/mesures 3 → 9/.test(P.$('#mclipinfo').textContent),'↶ doit rendre le bloc supprimé : '+P.$('#mclipinfo').textContent);
+    P.$('#mdel').click(); await sleep(5);
+    // déplacer le bloc de la piste 2 d'une mesure
+    drag(X(14),Y(1),X(18)); await sleep(5);
+    ok(/« Piste 2 » · mesures 2 → 10/.test(P.$('#mclipinfo').textContent),'déplacement : '+P.$('#mclipinfo').textContent);
+    // raccourcir par le bord droit (fin à la mesure 10 → 8)
+    drag(X(36)-3,Y(1),X(28)-3); await sleep(5);
+    ok(/mesures 2 → 8/.test(P.$('#mclipinfo').textContent),'bord droit : '+P.$('#mclipinfo').textContent);
+    // ajouter un bloc sur une zone vide de la piste 1
+    tap(X(17),Y(0)); await sleep(5);
+    ok(/« Piste 1 » · mesures 5 → 7/.test(P.$('#mclipinfo').textContent),'ajout : '+P.$('#mclipinfo').textContent);
+    P.$('#mdup').click(); await sleep(5);
+    ok(/mesures 7 → 9/.test(P.$('#mclipinfo').textContent),'duplication : '+P.$('#mclipinfo').textContent);
+    // lecture depuis le début : la piste 1 joue 3 blocs (0-8, 16-24, 24-32) ; la piste 2 un seul (4-28)
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    const bd=60/95.9, st=P.starts.filter(x=>x.buf).map(x=>Math.round((x.when-P.starts.filter(y=>y.buf)[0].when)/bd*10)/10).sort((a,b)=>a-b);
+    ok(st.length===4,'blocs joués : '+st.join(','));
+  });
+  await test('montage : ton d\'un bloc (variation), fin du morceau, sauvegarde et export',async()=>{
+    const idb=new FI.IDBFactory();
+    const {P,tap,X,Y}=await montBoot(idb);
+    tap(X(14),Y(1)); P.$('#mtpp').click(); P.$('#mtpp').click(); await sleep(60);
+    ok(/ton \+2/.test(P.$('#mclipinfo').textContent),'ton : '+P.$('#mclipinfo').textContent);
+    P.starts.length=0; P.$('#mplay').click(); await sleep(30);
+    const fr=P.starts.filter(x=>x.buf).map(x=>freqOf(x.buf));
+    ok(fr.some(f=>near(f,246.9,4)),'le bloc devrait sonner 2 demi-tons plus haut (246,9 Hz) : '+fr.map(f=>f.toFixed(0)).join(','));
+    P.$('#mplay').click();
+    P.$('#mendm').click(); P.$('#mendm').click(); await sleep(5);
+    ok(/^6 mesures/.test(P.$('#montinfo').textContent),'fin −2 mesures : '+P.$('#montinfo').textContent);
+    P.$('#mendfit').click(); await sleep(5);
+    ok(/^8 mesures/.test(P.$('#montinfo').textContent),'fin = dernier bloc : '+P.$('#montinfo').textContent);
+    await P.$('#mexp').onclick(); await sleep(80);
+    ok(/morceau\.wav$/.test(P.download||''),'export : '+P.download);
+    await sleep(900);
+    const Q=await boot({idb}); await sleep(400);
+    Q.$('#montbtn').click(); await sleep(20);
+    const cv=Q.$('#mcv'); cv.getBoundingClientRect=()=>({left:0,top:0,width:900,height:200});
+    cv.dispatchEvent(new Q.w.MouseEvent('pointerdown',{clientX:X(14),clientY:Y(1),bubbles:true})); cv.dispatchEvent(new Q.w.MouseEvent('pointerup',{clientX:X(14),clientY:Y(1),bubbles:true}));
+    ok(/ton \+2/.test(Q.$('#mclipinfo').textContent)&&/^8 mesures/.test(Q.$('#montinfo').textContent),'rechargement : '+Q.$('#mclipinfo').textContent+' | '+Q.$('#montinfo').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

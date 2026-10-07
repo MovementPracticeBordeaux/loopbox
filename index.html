@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=39">
+<link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 <header>
@@ -62,7 +62,7 @@
     <button id="metro" class="on" data-help="metro">🔔 Métronome</button>
     <button id="snap" class="on" data-help="snap">🎯 Auto-caler</button>
     <button id="mix" data-help="mix">Prise : remplace</button>
-    <button id="livebtn" aria-expanded="false">🎛 Mode live</button>
+    <button id="montbtn" class="primary" aria-expanded="false" data-help="mont">🎬 Montage du morceau</button><button id="livebtn" hidden aria-expanded="false">🎛 Mode live</button>
   </div>
   <details class="msub" style="margin-top:12px"><summary style="font-size:17px">Réglages du métronome</summary>
     <div class="row"><span class="lbl w">Volume</span><input type="range" id="mvolume" min="0" max="1" step="0.05" value="0.6" aria-label="Volume du métronome"></div>
@@ -86,6 +86,17 @@
   <div class="seg" id="growb" style="margin-top:10px"><button data-k="1">×1</button><button data-k="2">×2</button><button data-k="3">×3</button><button data-k="4">×4</button><button data-k="8">×8</button></div>
 </section>
 
+<section class="card" id="mont" hidden>
+  <div class="row" style="margin-top:0"><b class="tn" data-help="mont">🎬 Montage du morceau</b><span id="montinfo" class="lbl" style="margin-left:auto"></span></div>
+  <div class="row wrap"><button id="mplay" class="primary">▶ Lire le morceau</button><button id="mstop" aria-label="Arrêter et revenir au début">■ Début</button><span id="mcurv" class="lbl"></span></div>
+  <canvas id="mcv" style="width:100%;display:block;margin-top:10px;border-radius:12px;background:rgba(255,255,255,.04);touch-action:none"></canvas>
+  <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="msnap" checked style="width:22px;height:22px"> caler sur les mesures</label></div>
+  <div class="field"><div class="row"><span class="lbl" data-help="mclip">Bloc choisi</span><span id="mclipinfo" class="lbl" style="margin-left:auto"></span></div>
+    <div class="row wrap"><button id="mcut">✂ Couper au curseur</button><button id="mdup">⧉ Dupliquer</button><button id="mdel">🗑 Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div></div>
+  <div class="field"><div class="row"><span class="lbl" data-help="mend">Fin du morceau</span><span id="mendv" class="lbl" style="margin-left:auto"></span></div>
+    <div class="row wrap"><button id="mendm">− 1 mesure</button><button id="mendp">+ 1 mesure</button><button id="mendfit">Fin = dernier bloc</button></div></div>
+  <div class="row wrap"><button id="mexp" class="primary">⬇ Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
+</section>
 <section class="card" id="live" hidden>
   <div class="row wrap" style="margin-top:0"><b class="tn" data-help="live">Mode live</b><div class="seg" id="lq" style="margin-left:auto"><button data-q="bar" class="on">À la mesure</button><button data-q="loop">À la boucle</button><button data-q="now">Tout de suite</button></div></div>
   <div class="pads" id="pads"></div>
@@ -143,6 +154,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>
