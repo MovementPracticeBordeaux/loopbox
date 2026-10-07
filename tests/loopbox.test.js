@@ -917,6 +917,50 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     cv.dispatchEvent(new Q.w.MouseEvent('pointerdown',{clientX:X(14),clientY:Y(1),bubbles:true})); cv.dispatchEvent(new Q.w.MouseEvent('pointerup',{clientX:X(14),clientY:Y(1),bubbles:true}));
     ok(/ton \+2/.test(Q.$('#mclipinfo').textContent)&&/^8 mesures/.test(Q.$('#montinfo').textContent),'rechargement : '+Q.$('#mclipinfo').textContent+' | '+Q.$('#montinfo').textContent);
   });
+
+  await test('montage : dupliquer et supprimer une partie du morceau sur toutes les pistes',async()=>{
+    const {P,tap,X,Y}=await montBoot();
+    tap(X(8),12); P.$('#msecs').click(); tap(X(16),12); P.$('#msece').click(); await sleep(5);
+    ok(/mesures 3 → 5/.test(P.$('#msecv').textContent),'partie : '+P.$('#msecv').textContent);
+    P.$('#msecdup').click(); await sleep(10);
+    ok(/^10 mesures/.test(P.$('#montinfo').textContent),'durée après duplication : '+P.$('#montinfo').textContent);
+    ok(/mesures 5 → 7/.test(P.$('#msecv').textContent),'la copie doit être sélectionnée : '+P.$('#msecv').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    const st=P.starts.filter(x=>x.buf);
+    ok(st.length===6,'blocs joués : '+st.length+' (attendu 3 par piste)');
+    const t0=Math.min(...st.map(x=>x.when)), bd=60/95.9, pos=[...new Set(st.map(x=>Math.round((x.when-t0)/bd)))].sort((a,b)=>a-b);
+    ok(pos.join(',')==='0,16,24','départs des blocs (temps) : '+pos.join(','));
+    ok(st.every(x=>Math.abs(x.off)<1e-6||Math.abs(x.off-0)<1e-6),'la copie doit reprendre au début de la boucle');
+    P.$('#mplay').click(); await sleep(5);
+    P.$('#msecdel').click(); await sleep(10);
+    ok(/^8 mesures/.test(P.$('#montinfo').textContent),'durée après suppression : '+P.$('#montinfo').textContent);
+    P.$('#undo').click(); await sleep(10);
+    ok(/^10 mesures/.test(P.$('#montinfo').textContent),'↶ : '+P.$('#montinfo').textContent);
+  });
+  await test('montage : créer une variation d\'un bloc (copie de piste qui ne joue que ce bloc)',async()=>{
+    const {P,tap,X,Y}=await montBoot();
+    tap(X(8),12); tap(X(16),Y(1)); P.$('#mcut').click(); await sleep(5);
+    ok(/« Piste 2 » · mesures 3 → 9/.test(P.$('#mclipinfo').textContent),'bloc coupé : '+P.$('#mclipinfo').textContent);
+    P.$('#mvar').click(); await sleep(20);
+    ok(P.$$('.trk').length===3&&P.$$('.trk')[2].querySelector('.tn').textContent==='Piste 2 (variation)','piste de variation : '+P.$$('.trk').map(x=>x.querySelector('.tn').textContent).join(' | '));
+    ok(/« Piste 2 \(variation\) » · mesures 3 → 9/.test(P.$('#mclipinfo').textContent),'le bloc joue la variation : '+P.$('#mclipinfo').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    ok(P.starts.filter(x=>x.buf).length===3,'blocs joués : '+P.starts.filter(x=>x.buf).length+' (piste 1, piste 2 jusqu\'à la mesure 3, variation ensuite)');
+    P.$('#mplay').click(); await sleep(5);
+    P.$('#undo').click(); await sleep(20);
+    ok(P.$$('.trk').length===2,'↶ doit retirer la variation : '+P.$$('.trk').length);
+  });
+
+  await test('dupliquer une piste puis ↶ retire vraiment la copie',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="trk"]').click();
+    t1.querySelector('.tdup').click(); await sleep(20);
+    ok(P.$$('.trk').length===2,'copie : '+P.$$('.trk').length);
+    P.$('#undo').click(); await sleep(20);
+    ok(P.$$('.trk').length===1,'après ↶ : '+P.$$('.trk').length+' pistes');
+    P.$('#addtrk').click(); await sleep(10); P.$('#undo').click(); await sleep(10);
+    ok(P.$$('.trk').length===2,'une piste vide ajoutée à la main ne doit pas disparaître avec ↶');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

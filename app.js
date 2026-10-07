@@ -886,6 +886,9 @@ function restoreState(sn){
   if(sn.mvol!=null){ mvol=sn.mvol; fin=sn.fin; chain.vol.gain.value=mvol; chain.setFin(fin); $('#mvol').value=mvol; showFin(); }
   masterTake=sn.mt?{...sn.mt}:null; loopHist=null;
   const map=new Map(sn.tr.map(x=>[x.t,x]));
+  // une copie de piste créée après cet état (dupliquer, variation) disparaît vraiment quand on l'annule
+  while(tracks.length>1){ const t=tracks[tracks.length-1]; if(map.has(t)||!t.fromDup) break; if(recObj&&recObj.i===t.id) break; disposeTrack(t); tracks.pop(); }
+  updTrackBtns(); updFold();
   tracks.forEach(t=>{
     const x=map.get(t);
     t.buf=x?x.buf:null;
@@ -1082,6 +1085,8 @@ const HELP={
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
+  msec:"<b>Partie du morceau</b> : place le curseur (touche la règle) puis « Début = curseur », avance le curseur puis « Fin = curseur ». La partie est surlignée en orange. <b>Dupliquer cette partie</b> la recopie juste après, <b>sur toutes les pistes à la fois</b> (piste principale, basse, mélodie…), et décale la suite du morceau. <b>Supprimer cette partie</b> l'enlève partout et rapproche la suite. Pratique pour construire couplet, refrain, couplet… puis faire varier une des copies.",
+  mvar:"<b>Créer une variation de ce bloc</b> : le bloc choisi joue désormais une copie de sa piste (par exemple « Basse (variation) »), ajoutée à la liste des pistes. Modifie cette copie (autres notes, autre style, autres effets…) : seul ce bloc change, le reste du morceau garde la piste d'origine. Pour qu'un autre bloc joue aussi la variation, fais-le glisser sur sa ligne.",
   mont:"<b>Montage du morceau</b> : compose un morceau du début à la fin, comme sur un logiciel de montage vidéo. Chaque piste a sa ligne ; chaque bloc joue la boucle de la piste (elle se répète tant que le bloc dure). <b>Touche la règle</b> (numéros de mesures) pour placer le curseur. <b>Touche une ligne vide</b> pour ajouter un bloc d'un tour de boucle. <b>Fais glisser un bloc</b> pour le déplacer, <b>son bord droit ou gauche</b> pour l'allonger ou le raccourcir. Avec un bloc choisi : couper au curseur, dupliquer, supprimer, ou changer son ton (variation : refrain un ton plus haut…). Glisse sur une zone vide pour faire défiler. La ligne rouge marque la fin du morceau. ▶ en bas joue le morceau quand le montage est ouvert.",
   mclip:"<b>Bloc choisi</b> : « Couper au curseur » coupe le bloc à l'endroit du curseur orange (touche la règle pour le placer). « Dupliquer » recopie le bloc juste après. « ♭ / ♯ » change le ton de ce bloc seulement, pour créer des variations (la basse ou la mélodie sont recalculées note à note).",
   mend:"<b>Fin du morceau</b> : la ligne rouge. Tout ce qui est après n'est ni joué ni exporté. « Fin = dernier bloc » la place à la fin du dernier bloc.",
@@ -2181,6 +2186,7 @@ function duplicateTrack(t){
   if(tracks.length>=MAXTRACKS){ msg('Nombre maximum de pistes atteint ('+MAXTRACKS+').'); return; }
   pushHist();
   const n=addTrack(); if(!n) return;
+  n.fromDup=true;
   n.vol=t.vol; n.panv=t.panv; n.mute=t.mute; n.solo=false; n.srcType=t.srcType;
   n.fxs=t.fxs.map(f=>({type:f.type,amt:f.amt})); n.eqv=t.eqv.slice();
   n.eq.lo.gain.value=n.eqv[0]; n.eq.mid.gain.value=n.eqv[1]; n.eq.hi.gain.value=n.eqv[2];
@@ -2255,13 +2261,13 @@ $('#lq').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; liveQ=b
 // ======================= 🎬 MONTAGE DU MORCEAU =======================
 // Le morceau est une ligne de temps (en temps) avec, pour chaque piste, des blocs qui jouent la boucle de la piste :
 // déplacer, couper, allonger / raccourcir (la boucle se répète), dupliquer, supprimer, changer le ton d'un bloc.
-let song={end:0,clips:[],known:[],cur:0,sel:-1,zoom:22,view:0,snap:true};
+let song={end:0,clips:[],known:[],cur:0,sel:-1,zoom:22,view:0,snap:true,rs:null,re:null};
 let songPlay=null;
 const songCache=new Map();
 const SG_RH=28, SG_LH=56;
 function songTracks(){ return tracks.filter(t=>t.buf); }
 function trackByUid(u){ return tracks.find(t=>t.uid===u); }
-function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; songCache.clear(); }
+function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; songCache.clear(); }
 function songSnapData(){ return {end:song.end,clips:song.clips.map(c=>({...c})),known:song.known.slice()}; }
 function songApplyData(d){ song.end=d&&d.end>0?d.end:0; song.clips=d&&Array.isArray(d.clips)?d.clips.filter(c=>c&&c.u&&c.len>0).map(c=>({u:c.u,s:Math.max(0,+c.s||0),len:+c.len,off:+c.off||0,tp:clamp(Math.round(+c.tp||0),-12,12)})):[]; song.known=d&&Array.isArray(d.known)?d.known.slice():song.clips.map(c=>c.u); if(song.sel>=song.clips.length) song.sel=-1; }
 // première ouverture : chaque piste avec du son joue sur 4 tours de boucle ; les nouvelles pistes sont ajoutées sur toute la durée
@@ -2335,6 +2341,7 @@ function drawSong(){
   const g=cv.getContext('2d'); g.clearRect(0,0,w,h);
   const ppb=song.zoom*dpr, X=b=>(b-song.view)*ppb, RH=SG_RH*dpr, LH=SG_LH*dpr;
   g.fillStyle='rgba(255,255,255,.07)'; g.fillRect(0,0,w,RH);
+  if(song.rs!=null){ const a=X(song.rs), b=song.re!=null?X(song.re):a+2*dpr; g.fillStyle='rgba(255,138,0,.13)'; g.fillRect(a,0,b-a,h); g.fillStyle='rgba(255,138,0,.55)'; g.fillRect(a,0,b-a,RH*0.25); g.fillRect(a-1*dpr,0,2*dpr,h); if(song.re!=null) g.fillRect(b-1*dpr,0,2*dpr,h); }
   g.font=Math.round(RH*0.5)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; g.textBaseline='middle'; g.textAlign='left';
   const every=ppb*meter<34*dpr?(ppb*meter*2<34*dpr?4:2):1;
   const b0=Math.max(0,Math.floor(song.view/meter)*meter), b1=song.view+w/ppb;
@@ -2378,6 +2385,7 @@ function updSongUI(){
   const p=songPos(); if($('#mcut')) $('#mcut').disabled=!(c&&p>c.s+1e-6&&p<c.s+c.len-1e-6);
   $('#mplay').textContent=songPlay?'❚❚ Pause':'▶ Lire le morceau';
   $('#mcurv').textContent='curseur : mesure '+fb(Math.max(0,p))+' · '+fmtSongTime(Math.max(0,p));
+  updSecUI();
 }
 // --- gestes ---
 (function(){
@@ -2425,12 +2433,64 @@ function updSongUI(){
   cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end);
 })();
 function songSelClip(){ return song.clips[song.sel]; }
+// morceaux de blocs : la partie d'un bloc comprise entre a et b (le son continue au bon endroit de la boucle)
+function clipPart(c,a,b){ const s0=Math.max(c.s,a), e0=Math.min(c.s+c.len,b); if(e0-s0<1e-6) return null; return {...c,s:s0,len:e0-s0,off:mod(c.off+(s0-c.s),beats)}; }
+function songSecOk(){ return song.rs!=null&&song.re!=null&&song.re-song.rs>1e-6; }
+function updSecUI(){
+  const e=$('#msecv'); if(!e) return;
+  const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
+  e.textContent=songSecOk()?'mesures '+fb(song.rs)+' → '+fb(song.re):(song.rs!=null?'début : mesure '+fb(song.rs)+', place la fin':'place le curseur, puis début et fin');
+  ['#msecdup','#msecdel'].forEach(id=>{ const b=$(id); if(b) b.disabled=!songSecOk(); });
+  const v=$('#mvar'); if(v) v.disabled=!songSelClip()||tracks.length>=MAXTRACKS;
+}
+// dupliquer une partie sur toutes les pistes : la copie s'insère juste après, la suite du morceau est décalée
+function songSecDup(){
+  if(!songSecOk()) return;
+  const a=song.rs, b=song.re, L=b-a;
+  songAct(()=>{
+    const out=[];
+    song.clips.forEach(c=>{ const p1=clipPart(c,-1e9,b), p2=clipPart(c,b,1e9), mid=clipPart(c,a,b);
+      if(p1) out.push(p1); if(p2) out.push({...p2,s:p2.s+L}); if(mid) out.push({...mid,s:mid.s+L}); });
+    song.clips=out; song.end+=L; song.sel=-1; song.rs=b; song.re=b+L;
+    msg('Partie dupliquée sur toutes les pistes : la copie (mesures '+String(Math.round(b/meter*100)/100+1).replace('.',',')+' → '+String(Math.round((b+L)/meter*100)/100+1).replace('.',',')+') est sélectionnée, la suite du morceau a été décalée. Crée une variation d\'un de ses blocs pour la faire évoluer.');
+  });
+}
+function songSecDel(){
+  if(!songSecOk()) return;
+  const a=song.rs, b=song.re, L=b-a;
+  songAct(()=>{
+    const out=[];
+    song.clips.forEach(c=>{ const p1=clipPart(c,-1e9,a), p2=clipPart(c,b,1e9); if(p1) out.push(p1); if(p2) out.push({...p2,s:p2.s-L}); });
+    song.clips=out; song.end=Math.max(meter,song.end-L); song.sel=-1; song.re=null; song.cur=Math.min(song.cur,song.end);
+    msg('Partie supprimée sur toutes les pistes, la suite du morceau a été rapprochée.');
+  });
+}
+// variation : le bloc choisi joue une copie de sa piste, qu'on peut modifier sans toucher au reste du morceau
+function songMakeVar(){
+  const c=songSelClip(); if(!c||recObj) return;
+  const t=trackByUid(c.u); if(!t) return;
+  if(tracks.length>=MAXTRACKS){ msg('Nombre maximum de pistes atteint ('+MAXTRACKS+').'); return; }
+  const before=tracks.length;
+  duplicateTrack(t);
+  if(tracks.length===before) return;
+  const n=tracks[tracks.length-1];
+  if(!song.known.includes(n.uid)) song.known.push(n.uid);
+  n.name=uniqueTrackName(t.name.replace(/ \\(variation( \\d+)?\\)$/,'')+' (variation)',n); $('.tn',n.el).textContent=n.name;
+  c.u=n.uid; song.clips=song.clips.filter(x=>x===c||x.u!==n.uid);
+  songCache.delete(n.uid); scheduleSave(true); songRestartIfPlaying(); drawSong();
+  msg('Variation créée : « '+n.name+' » ne joue que ce bloc. Modifie ses notes, ses effets ou son son dans sa piste (en bas) : le reste du morceau garde « '+t.name+' ». ↶ pour annuler.');
+}
 function songAct(fn){ if(!loopLen||recObj) return; pushHist(); fn(); scheduleSave(true); songRestartIfPlaying(); drawSong(); }
 $('#montbtn').onclick=()=>{
   const m=$('#mont'); m.hidden=!m.hidden; $('#montbtn').classList.toggle('on',!m.hidden); $('#montbtn').setAttribute('aria-expanded',String(!m.hidden));
   if(!m.hidden){ songPrepare(); drawSong(); try{ m.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} if(!loopLen) msg('Le montage s\'utilise une fois la boucle créée.'); }
   else songStop();
 };
+$('#msecs').onclick=()=>{ song.rs=Math.max(0,songSnap(songPos())); if(song.re!=null&&song.re<=song.rs) song.re=null; drawSong(); };
+$('#msece').onclick=()=>{ const p=songSnap(songPos()); if(song.rs==null||p<=song.rs){ msg('Place d\'abord le début de la partie, puis le curseur plus loin pour la fin.'); return; } song.re=Math.min(p,song.end); drawSong(); };
+$('#msecdup').onclick=songSecDup;
+$('#msecdel').onclick=songSecDel;
+$('#mvar').onclick=songMakeVar;
 $('#mplay').onclick=()=>{ if(songPlay) songStop(); else songStart(song.cur); };
 $('#mstop').onclick=()=>{ songStop(true); song.cur=0; drawSong(); };
 $('#mzoomin').onclick=()=>{ song.zoom=Math.min(120,song.zoom*1.5); drawSong(); };
