@@ -1016,6 +1016,38 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#mfxlist').querySelector('button').click(); await sleep(5);
     ok(P.$('#mfxlist').children.length===1,'retrait d\'un son');
   });
+
+  // ---------------- caler un jeu au tempo irrégulier (v42) ----------------
+  const driftPlayer=(L,K,lead,amp)=>{ let d=[]; for(let k=0;k<K;k++) d.push(1+amp*Math.sin(2*Math.PI*k/K+0.7)); const sm=d.reduce((a,b)=>a+b,0); d=d.map(x=>x*L/sm);
+    const bt=[lead]; for(let k=1;k<K;k++) bt.push(bt[k-1]+d[k-1]);
+    return mkFile(L,x=>{ let sd=3; const rnd=()=>{ sd=(sd*16807)%2147483647; return sd/2147483647*2-1; };
+      bt.forEach((b,k)=>{ const p0=Math.round(b), kick=k%2===0; let ph=0;
+        for(let i=0;i<Math.round(0.3*SR);i++){ const t=i/SR, j=(p0+i)%L; if(kick){ ph+=(50+80*Math.exp(-t/0.03))/SR; x[j]+=0.8*Math.sin(2*Math.PI*ph)*Math.exp(-t/0.12); } else x[j]+=0.5*rnd()*Math.exp(-t/0.06); }
+        const hp=Math.round((b+(k+1<K?bt[k+1]:L+lead))/2); for(let i=0;i<Math.round(0.04*SR);i++) x[(hp+i)%L]+=0.12*rnd()*Math.exp(-i/SR/0.012); }); }); };
+  const loudHits=b=>{ const x=b.getChannelData(0), L=x.length, o=[]; let prev=-1e9; for(let i=0;i<L;i++) if(Math.abs(x[i])>0.3&&i-prev>Math.round(0.2*SR)){ o.push(i); prev=i; } return o; };
+  await test('caler un jeu au tempo irrégulier : chaque coup revient sur son temps, sans changer la durée ni couper',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,driftPlayer(L,8,144,0.2));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    const orig=P.lastBuf(), h0=loudHits(orig), dev0=h0.map((x,k)=>(x-(144+k*beat))/beat);
+    ok(h0.length===8&&Math.max(...dev0.map(Math.abs))>0.3,'préparation : jeu bien décalé (écarts '+dev0.map(v=>Math.round(v*100)+'%').join(',')+')');
+    t2.querySelector('.wpb').click(); await sleep(400);
+    const out=P.lastBuf(), h=loudHits(out);
+    ok(out.length===L,'durée changée : '+out.length);
+    ok(h.length===8,'coups après calage : '+h.length);
+    ok(h.every((x,k)=>Math.abs(x-(144+k*beat))<=Math.round(0.015*SR)),'écarts après calage (ms) : '+h.map((x,k)=>Math.round((x-(144+k*beat))/SR*1000)).join(','));
+    ok(/Tempo du musicien repéré/.test(P.$('#msg').textContent)&&/Chaque temps est maintenant calé/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    const en=b=>{ const x=b.getChannelData(0); let s=0; for(const v of x) s+=v*v; return s; };
+    ok(Math.abs(10*Math.log10(en(out)/en(orig)))<1.5,'énergie du son changée de '+(10*Math.log10(en(out)/en(orig))).toFixed(1)+' dB (rien ne doit être coupé)');
+    P.$('#undo').click(); await sleep(20); P.$('#dplay').click(); await sleep(30);
+    ok(loudHits(P.lastPlayed()).join()===h0.join(),'↶ doit rendre le jeu d\'origine : '+loudHits(P.lastPlayed()).join()+' / '+h0.join());
+    P.$('#dplay').click(); await sleep(10);
+    t2.querySelector('.wpe').value='M'; t2.querySelector('.wpb').click(); await sleep(400);
+    const hm=loudHits(P.lastBuf());
+    ok([0,4].every(k=>Math.abs(hm[k]-(144+k*beat))<=Math.round(0.015*SR)),'repères à la mesure : débuts de mesure calés ('+[0,4].map(k=>Math.round((hm[k]-(144+k*beat))/SR*1000)).join(',')+' ms)');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

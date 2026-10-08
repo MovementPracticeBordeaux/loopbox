@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='41';
+const APPVER='42';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1083,7 +1083,8 @@ const HELP={
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
-  bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
+  bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
+  slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
   mtrans:"<b>Transitions du bloc</b> : comment le bloc choisi commence et se termine. <b>Entrée</b> : fondu (le son monte), filtre qui s'ouvre (sourd puis clair), montée par les aigus (le grave arrive peu à peu). <b>Sortie</b> : fondu, filtre qui se ferme, ralenti (le son ralentit et descend comme une cassette qu'on arrête), écho qui s'éteint (le son s'arrête et ses échos continuent), hachage (le son se répète en petits morceaux). Choisis aussi la durée (1 temps à 2 mesures).",
   mblank:"<b>Insérer un blanc</b> : ajoute un silence de la durée choisie à l'endroit du curseur, sur toutes les pistes ; la suite du morceau recule d'autant. Pour un blanc sans rien décaler, choisis une partie et « Rendre muette ».",
@@ -1773,6 +1774,7 @@ function setTab(t,tab){
 }
 function setKindUI(t){
   const bass=isGen(t), syn=t.kind==='synth';
+  t.el.classList.toggle('kbass',t.kind==='bass'); t.el.classList.toggle('ksynth',syn);
   const tb=$('.ttabs button[data-tab="bass"]',t.el); if(tb) tb.textContent=syn?'🎹 Mélodie':'🎸 Basse';
   const sel=$('.btype',t.el);
   if(sel&&sel.dataset.k!==(syn?'s':'b')){ sel.dataset.k=syn?'s':'b'; const src=syn?Object.keys(STYLES).map(k=>[k,STYLES[k][0]]):Object.keys(BASS_TYPES).map(k=>[k,BASS_TYPES[k]]); sel.innerHTML=src.map(([k,l])=>`<option value="${k}">${l}</option>`).join(''); }
@@ -1843,6 +1845,97 @@ function autoAlign(t,q){
   const med=ds[Math.floor(ds.length/2)], spread=(ds[Math.floor(ds.length*0.8)]-ds[Math.floor(ds.length*0.2)])/2;
   setOffset(t,med/SR);
   msg('Piste « '+t.name+' » décalée de '+fmtMs(t.off)+' : ses sons tombent maintenant sur '+(q===1?'les temps':q===2?'les croches':'les doubles-croches')+', sans rien couper'+(spread/SR>0.025?' (sons assez irréguliers : affine avec ±1 ms si besoin)':'')+'. ↶ pour revenir.');
+}
+// ---------- caler un jeu au tempo irrégulier (« warp ») ----------
+// force des attaques, trame par trame (5 ms), sur une boucle (circulaire)
+function onsetEnvelope(x,hop){
+  const L=x.length, F=Math.floor(L/hop), e=new Float32Array(F), env=new Float32Array(F);
+  for(let j=0;j<F;j++){ let s=0; const a=j*hop; for(let i=0;i<hop;i++){ const v=x[a+i]; s+=v*v; } e[j]=Math.log(1+2000*Math.sqrt(s/hop)); }
+  let mx=0; for(let j=0;j<F;j++){ const v=Math.max(0,e[j]-Math.max(e[mod(j-1,F)],e[mod(j-2,F)])); env[j]=v; if(v>mx) mx=v; }
+  if(mx>0) for(let j=0;j<F;j++) env[j]/=mx;
+  const sm=new Float32Array(F); for(let j=0;j<F;j++) sm[j]=0.5*env[j]+0.25*env[mod(j-1,F)]+0.25*env[mod(j+1,F)];
+  return sm;
+}
+// retrouve les K temps du musicien sur la boucle, même si son tempo varie (programmation dynamique : forte attaque + écart régulier)
+function trackBeatsVar(x,K,go){
+  const L=x.length, hop=256, env=onsetEnvelope(x,hop), F=env.length, Bf=F/K, lam=6;
+  if(F<K*4) return null;
+  // temps 1 : la plus forte attaque près du début de la grille
+  const g0=Math.round(go/hop); let f0=g0, best=-1;
+  for(let d=-Math.round(0.3*Bf);d<=Math.round(0.3*Bf);d++){ const f=mod(g0+d,F), v=env[f]-0.3*Math.abs(d)/Bf; if(v>best){ best=v; f0=g0+d; } }
+  const lo=Math.max(1,Math.round(0.6*Bf)), hi=Math.round(1.5*Bf), pen=new Float32Array(hi+1);
+  for(let i=lo;i<=hi;i++){ const r=Math.log(i/Bf); pen[i]=lam*r*r; }
+  const N=F+hi, S=[], P=[];
+  let prev=new Float32Array(N).fill(-1e9); prev[0]=env[mod(f0,F)];
+  for(let k=1;k<K;k++){
+    const cur=new Float32Array(N).fill(-1e9), back=new Int32Array(N).fill(-1);
+    for(let f=k*lo;f<N;f++){ let bv=-1e9, bi=-1;
+      for(let i=lo;i<=hi;i++){ const g=f-i; if(g<0) break; const v=prev[g]-pen[i]; if(v>bv){ bv=v; bi=g; } }
+      if(bi>=0){ cur[f]=bv+env[mod(f0+f,F)]; back[f]=bi; } }
+    S.push(cur); P.push(back); prev=cur;
+  }
+  // le dernier temps doit rejoindre le temps 1 de la boucle suivante
+  let bf=-1, bv=-1e9;
+  for(let f=0;f<N;f++){ const i=F-f; if(i<lo||i>hi) continue; const v=prev[f]-pen[i]; if(v>bv){ bv=v; bf=f; } }
+  if(bf<0) return null;
+  const rel=new Array(K); rel[K-1]=bf; for(let k=K-1;k>=1;k--) rel[k-1]=P[k-1][rel[k]];
+  if(rel.some(v=>v==null||v<0)) return null;
+  // position exacte : l'attaque la plus proche (à 15 ms près), sinon la trame
+  // attaques cherchées aussi sur la boucle décalée d'une demi-longueur (une attaque au tout début reste visible)
+  const h2=L>>1, xs=new Float32Array(L); for(let i=0;i<L;i++) xs[i]=x[(i+h2)%L];
+  const on=detectOnsets(x,L).map(o=>o.n).concat(detectOnsets(xs,L).map(o=>(o.n+h2)%L));
+  return rel.map(r=>{ const c=(f0+r)*hop+hop/2; let bp=c, bd=Math.round(0.015*SR); on.forEach(n=>{ const d=Math.abs(mod(n-c+L/2,L)-L/2); if(d<bd){ bd=d; bp=n; } }); return bp; });
+}
+// étire ou resserre chaque intervalle entre deux temps du musicien pour qu'il dure exactement un temps du morceau, sans changer la note
+function warpLoop(x,beatsAbs,K,go,every){
+  const L=x.length, p0=beatsAbs[0];
+  const xr=new Float32Array(L); for(let i=0;i<L;i++) xr[i]=x[mod(i+p0,L)];
+  let a=beatsAbs.map(p=>mod(p-p0,L)); for(let k=1;k<K;k++) if(a[k]<=a[k-1]) a[k]=a[k-1]+1;
+  const B=L/K, A=[], T=[];
+  for(let k=0;k<K;k++) if(k%every===0){ A.push(a[k]); T.push(k*B); }
+  A.push(L); T.push(L);
+  const map=u=>{ let k=0; while(k<A.length-2&&u>=A[k+1]) k++; return T[k]+(u-A[k])*(T[k+1]-T[k])/(A[k+1]-A[k]); };
+  // découpe aux attaques (le son entre deux attaques est étiré d'un bloc, les attaques restent nettes)
+  const pre=Math.round(0.005*SR), atkLen=pre+Math.round(0.03*SR), W=Math.round(SR*0.032/2)*2, Hs=W/2, fo=Math.round(0.003*SR);
+  const cuts=[0]; detectOnsets(xr,L).map(o=>Math.max(0,o.n-pre)).forEach(c=>{ if(c-cuts[cuts.length-1]>pre*2&&c<L-pre*2) cuts.push(c); });
+  cuts.push(L);
+  const yr=new Float32Array(L);
+  for(let i=0;i<cuts.length-1;i++){
+    const u=cuts[i], v=cuts[i+1], n=v-u, U=Math.round(map(u)), V=i===cuts.length-2?L:Math.round(map(v)), m=V-U;
+    if(m<=0) continue;
+    const seg=new Float32Array(m), atk=Math.min(n,atkLen);
+    if(m<=atk||n-atk<2*W||m-atk<2*W){ seg.set(xr.subarray(u,u+Math.min(n,m))); if(m>n){ const f=Math.min(fo,n); for(let j=0;j<f;j++) seg[n-1-j]*=j/f; } }
+    else { const tail=wsolaLinear(xr.subarray(u+atk-Hs,v),m-atk+Hs,SR);
+      for(let j=0;j<atk;j++){ const w=j<atk-Hs?1:0.5+0.5*Math.cos(Math.PI*(j-(atk-Hs))/Hs); seg[j]=xr[u+j]*w; }
+      for(let j=0;j<tail.length&&atk-Hs+j<m;j++) seg[atk-Hs+j]+=tail[j]; }
+    if(i<cuts.length-2){ const f=Math.min(fo,m); for(let j=0;j<f;j++) seg[m-1-j]*=j/f; }
+    yr.set(seg,U);
+  }
+  const y=new Float32Array(L); for(let j=0;j<L;j++) y[mod(j+Math.round(go),L)]=clamp(yr[j],-1,1);
+  return {y,dev:a.map((v,k)=>(v-k*B)/B)};
+}
+function warpTrack(t){
+  if(!t.buf||!loopLen||recObj) return;
+  if(isGen(t)){ msg('Une piste de basse ou de mélodie est déjà calée sur le tempo.'); return; }
+  const every=$('.wpe',t.el).value==='M'?meter:1;
+  const baked=(t.speed||1)!==1, d=(baked?spedBuf(t):t.buf).getChannelData(0), L=d.length;
+  if(L!==loopLen){ msg('Cette piste n\'a pas la longueur de la boucle.'); return; }
+  const k=Math.round((t.off||0)*SR), x=new Float32Array(L); for(let i=0;i<L;i++) x[mod(i+k,L)]=d[i];
+  msg('Analyse du tempo du musicien…');
+  setTimeout(()=>{
+    const bt=trackBeatsVar(x,beats,gridOff||0);
+    if(!bt){ msg('Je n\'arrive pas à suivre le rythme de cette piste (pas assez d\'attaques nettes). Essaie « Décaler la piste » ou « Recaler chaque son ».'); return; }
+    const r=warpLoop(x,bt,beats,gridOff||0,every);
+    pushHist();
+    const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(r.y,0);
+    t.buf=nb; t.off=0; t.po=null; t.pc=null;
+    if(baked){ t.speed=1; t.pitch=0; t.pp=null; t.sp=null; }
+    if(masterTake&&masterTake.i===t.id) masterTake=null;
+    updOffUI(t); updSpeedUI(t); drawWave(t); drawTsel(t); startSrc(t); lockUI(); scheduleSave();
+    const iv=[]; for(let i=0;i<beats;i++){ const a=bt[i], b=i+1<beats?bt[i+1]:bt[0]+L; iv.push(mod(b-a,L)/(L/beats)); }
+    const lo=Math.round((Math.min(...iv)-1)*100), hi=Math.round((Math.max(...iv)-1)*100);
+    msg('Tempo du musicien repéré : ses temps duraient de '+(lo>0?'+':'')+lo+' % à '+(hi>0?'+':'')+hi+' % d\'un temps du morceau. '+(every===1?'Chaque temps':'Chaque mesure')+' est maintenant calé'+(every===1?'':'e')+' sur la grille ('+beats+' temps), sans changer la note ni couper de son. ↶ pour revenir.');
+  },30);
 }
 function quantizeTrack(t,q,strength){
   if(!t.buf||!loopLen||recObj) return;
@@ -1952,6 +2045,8 @@ function buildTrackUI(t){
     <div class="row wrap"><button class="tsall">Tout garder</button><button class="tsloop primary">✂ Faire de cette partie la boucle</button><button class="tsalign">⇤ Placer la partie au début de la boucle</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl" data-help="trep">Le reste de la piste</span><span class="trl lbl" style="margin-left:auto"></span></div>
     <div class="seg trep" style="margin-top:8px"><button data-m="mute">Silence</button><button data-m="loop">Répéter en boucle</button><button data-m="2">×2</button><button data-m="3">×3</button><button data-m="4">×4</button></div></div>
+    <div class="field reconly"><div class="row"><span class="lbl" data-help="warp">Caler un jeu au tempo irrégulier</span></div>
+      <div class="row wrap" style="margin-top:6px"><select class="wpe" style="width:auto" aria-label="Repères du calage"><option value="1" selected>repère à chaque temps</option><option value="M">repère à chaque mesure (plus souple)</option></select><button class="wpb primary">🎯 Caler sur le tempo du morceau</button></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="slip">Décaler la piste dans le temps</span><span class="offv val" style="margin-left:auto">0 ms</span></div>
       <div class="row wrap" style="margin-top:6px"><button class="ofb" data-d="-10">−10 ms</button><button class="ofb" data-d="-1">−1 ms</button><button class="ofb" data-d="1">+1 ms</button><button class="ofb" data-d="10">+10 ms</button><button class="ofz">0</button></div>
       <div class="row wrap"><button class="ofauto primary">🎯 Caler la piste sur le rythme (sans couper)</button></div></div>
@@ -2031,6 +2126,7 @@ function buildTrackUI(t){
   $('.spauto',el).onclick=()=>adaptSpeed(t);
   el.querySelectorAll('.ofb').forEach(b=>b.onclick=()=>setOffset(t,(t.off||0)+(+b.dataset.d)/1000));
   $('.ofz',el).onclick=()=>setOffset(t,0);
+  $('.wpb',el).onclick=()=>warpTrack(t);
   $('.ofauto',el).onclick=()=>autoAlign(t,+$('.qgrid',el).value);
   $('.qbtn',el).onclick=()=>quantizeTrack(t,+$('.qgrid',el).value,+$('.qstr',el).value);
   $('.revb',el).onclick=()=>reverseTrack(t);
