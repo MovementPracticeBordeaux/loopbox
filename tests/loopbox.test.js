@@ -1124,6 +1124,61 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(Math.abs(first(P.lastPlayed())-c2)<=3&&t2.querySelector('.offv').textContent==='0 ms','« Tout garder » doit rendre la piste d\'origine : 1er son à '+first(P.lastPlayed())+', décalage '+t2.querySelector('.offv').textContent);
     P.$('#dplay').click();
   });
+
+  // ---------------- calage d'une partie déjà découpée et mise en boucle (v44) ----------------
+  const songBoot=async()=>{
+    const P=await boot(); const S=song(60,100,0.08,2.0);
+    await P.importFile(0,{numberOfChannels:1,length:S.x.length,sampleRate:SR,duration:S.x.length/SR,getChannelData:()=>S.x});
+    const t1=P.$('.trk'); for(let i=0;i<20;i++) t1.querySelector('.impn[data-w="b"][data-d="1"]').click();
+    t1.querySelector('.impuse').click(); await sleep(200);
+    t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    for(let i=0;i<8;i++) t1.querySelector('.ts2').click();
+    const nb=+P.$('#growlbl').textContent.match(/\d+/)[0];
+    for(let i=0;i<nb-16;i++) t1.querySelector('.ts3').click();
+    return {P,t1,nb};
+  };
+  const gridDev=(b,nbeats)=>{ const x=b.getChannelData(0), L=x.length, beat=L/nbeats, o=[]; let prev=-1e9; for(let i=0;i<L;i++) if(Math.abs(x[i])>0.33&&i-prev>Math.round(0.25*SR)){ o.push(i); prev=i; }
+    return o.map(p=>{ const k=Math.round((p-144)/beat); return Math.abs(p-144-k*beat)/SR*1000; }); };
+  await test('calage d\'une piste dont une partie tourne en boucle : la partie reste, et elle est calée',async()=>{
+    const {P,t1,nb}=await songBoot();
+    ok(/Temps 9 → 16 sur/.test(t1.querySelector('.tsl').textContent),'préparation : '+t1.querySelector('.tsl').textContent);
+    P.$('#dplay').click(); await sleep(20);
+    t1.querySelector('.trep button[data-m="loop"]').click(); await sleep(30);
+    t1.querySelector('.wpb').click(); await sleep(1500);
+    ok(/Temps 9 → 16 sur/.test(t1.querySelector('.tsl').textContent),'la partie doit rester choisie : '+t1.querySelector('.tsl').textContent);
+    ok(t1.querySelector('.trep button.on')&&t1.querySelector('.trep button.on').dataset.m==='loop','elle doit toujours tourner en boucle');
+    ok(/Ta partie est gardée/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    const d=gridDev(P.lastPlayed(),nb);
+    ok(d.length>=nb-2&&d.filter(v=>v<=20).length>=d.length-1,'ce qui est joué : '+d.filter(v=>v<=20).length+'/'+d.length+' coups à ≤ 20 ms de la grille (max '+Math.max(...d).toFixed(0)+' ms)');
+    P.$('#dplay').click();
+  });
+  await test('partie devenue la boucle puis calée : la boucle garde ses 8 temps, chaque coup sur la grille',async()=>{
+    const {P,t1}=await songBoot();
+    P.$('#dplay').click(); await sleep(20);
+    t1.querySelector('.tsloop').click(); await sleep(30);
+    ok(/^8 temps/.test(P.$('#growlbl').textContent),'boucle : '+P.$('#growlbl').textContent);
+    t1.querySelector('.wpb').click(); await sleep(800);
+    ok(/^8 temps/.test(P.$('#growlbl').textContent)&&!/ne correspondait pas/.test(P.$('#msg').textContent),'la boucle ne doit pas passer à 9 temps : '+P.$('#growlbl').textContent+' | '+P.$('#msg').textContent);
+    const d=gridDev(P.lastPlayed(),8);
+    ok(d.length>=7&&d.every(v=>v<=20),'coups après calage (ms) : '+d.map(v=>v.toFixed(0)).join(','));
+    P.$('#dplay').click();
+  });
+  await test('plusieurs pistes : partie calée au début de la boucle, puis calage du tempo → elle reste au début',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,driftPlayer(L,8,144,0.2));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    for(let i=0;i<2;i++) t2.querySelector('.ts2').click();
+    for(let i=0;i<2;i++) t2.querySelector('.ts3').click();
+    P.$('#dplay').click(); await sleep(20);
+    t2.querySelector('.tsloop').click(); await sleep(30);
+    t2.querySelector('.wpb').click(); await sleep(500);
+    ok(/Temps 3 → 6 sur 8/.test(t2.querySelector('.tsl').textContent)&&t2.querySelector('.trep button.on').dataset.m==='loop','partie gardée : '+t2.querySelector('.tsl').textContent);
+    const h=loudHits(P.lastPlayed());
+    ok(h.length===8&&h.every((x,k)=>Math.abs(x-(144+k*beat))<=Math.round(0.02*SR)),'la partie doit démarrer au début et tomber sur chaque temps : '+h.map((x,k)=>Math.round((x-(144+k*beat))/SR*1000)).join(',')+' ms');
+    P.$('#dplay').click();
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='43';
+const APPVER='44';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1953,7 +1953,8 @@ function warpLoop(x,beatsAbs,K,go,every){
     yr.set(seg,U);
   }
   const y=new Float32Array(L); for(let j=0;j<L;j++) y[mod(j+Math.round(go),L)]=clamp(yr[j],-1,1);
-  return {y,dev:a.map((v,k)=>(v-k*B)/B)};
+  const mapPos=u=>mod(map(mod(u-p0,L))+Math.round(go),L);
+  return {y,dev:a.map((v,k)=>(v-k*B)/B),mapPos};
 }
 function warpTrack(t){
   if(!t.buf||!loopLen||recObj) return;
@@ -1961,14 +1962,15 @@ function warpTrack(t){
   const every=$('.wpe',t.el).value==='M'?meter:1;
   const baked=(t.speed||1)!==1, d=(baked?spedBuf(t):t.buf).getChannelData(0), L=d.length;
   if(L!==loopLen){ msg('Cette piste n\'a pas la longueur de la boucle.'); return; }
-  const k=Math.round((t.off||0)*SR), x=new Float32Array(L); for(let i=0;i<L;i++) x[mod(i+k,L)]=d[i];
+  const anc=!!(t.anc&&t.sel), k=anc?0:Math.round((t.off||0)*SR), x=new Float32Array(L); for(let i=0;i<L;i++) x[mod(i+k,L)]=d[i];
+  const sel0=t.sel?{...t.sel}:null, mode0=t.selMode||'mute', beats0=beats;
   msg('Analyse du tempo du musicien…');
   setTimeout(()=>{
     let fixed='';
     { const h2=Math.round((gridOff||0)), xl=new Float32Array(L); for(let i=0;i<L;i++) xl[i]=x[(i+h2)%L];
       const fb=followBeats(xl);
       if(fb){ const K2=Math.round(L/SR/fb.T); const alone=!tracks.some(o=>o!==t&&o.buf);
-        if(K2>=2&&Math.abs(K2-beats)/beats>0.08){
+        if(K2>=2&&Math.abs(K2-beats)>=Math.max(2,0.08*beats)){
           if(alone){ pushHist(); fixed=' La grille ne correspondait pas au jeu ('+beats+' temps au lieu de '+K2+') : corrigée.'; beats=K2; baseBeats=Math.max(1,Math.round(K2/rep)); masterTake=null; buildDots(); }
           else { msg('Attention : ce jeu compte environ '+K2+' temps dans la boucle, la grille en a '+beats+'. Le calage risque d\'être faux : vérifie le tempo du morceau.'); }
         } } }
@@ -1978,12 +1980,23 @@ function warpTrack(t){
     if(!fixed) pushHist();
     const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(r.y,0);
     t.buf=nb; t.off=0; t.po=null; t.pc=null;
+    let selTxt='';
+    if(sel0){
+      const bl0=L/beats0, bl1=L/beats, fx=v=>t.snap!==false&&Math.abs(v-Math.round(v))<0.2?Math.round(v):Math.round(v*1000)/1000;
+      let s1=r.mapPos(mod(sel0.s*bl0+k,L))/bl1, e1=sel0.e>=beats0-1e-6?beats:(r.mapPos(mod(sel0.e*bl0+k,L)-1)+1)/bl1;
+      if(t.snap!==false){ const n0=Math.max(1,Math.round(sel0.e-sel0.s)); s1=clamp(Math.round(s1),0,Math.max(0,beats-n0)); e1=Math.min(beats,s1+n0); }
+      else { s1=clamp(fx(s1),0,beats-0.02); e1=clamp(fx(e1),0.02,beats); if(e1<=s1) e1=Math.min(beats,s1+Math.max(0.25,sel0.e-sel0.s)); }
+      t.sel={s:s1,e:e1}; t.selMode=mode0; t.anc=anc;
+      if(anc){ const lim=Math.max(0.5,loopSec()); t.off=clamp(Math.round(-(s1*loopSec()/beats)*SR)/SR,-lim,lim); }
+      const f2=v=>String(Math.round(v*100)/100).replace('.',',');
+      selTxt=' Ta partie est gardée (temps '+f2(s1+1)+' → '+f2(e1)+')'+(mode0==='loop'?' et tourne toujours en boucle':'')+'.';
+    } else t.anc=false;
     if(baked){ t.speed=1; t.pitch=0; t.pp=null; t.sp=null; }
     if(masterTake&&masterTake.i===t.id) masterTake=null;
     updOffUI(t); updSpeedUI(t); drawWave(t); drawTsel(t); startSrc(t); lockUI(); scheduleSave();
     const iv=[]; for(let i=0;i<beats;i++){ const a=bt[i], b=i+1<beats?bt[i+1]:bt[0]+L; iv.push(mod(b-a,L)/(L/beats)); }
     const lo=Math.round((Math.min(...iv)-1)*100), hi=Math.round((Math.max(...iv)-1)*100);
-    msg('Tempo du musicien repéré : ses temps duraient de '+(lo>0?'+':'')+lo+' % à '+(hi>0?'+':'')+hi+' % d\'un temps du morceau. '+(every===1?'Chaque temps':'Chaque mesure')+' est maintenant calé'+(every===1?'':'e')+' sur la grille ('+beats+' temps), sans changer la note ni couper de son.'+fixed+' ↶ pour revenir.');
+    msg('Tempo du musicien repéré : ses temps duraient de '+(lo>0?'+':'')+lo+' % à '+(hi>0?'+':'')+hi+' % d\'un temps du morceau. '+(every===1?'Chaque temps':'Chaque mesure')+' est maintenant calé'+(every===1?'':'e')+' sur la grille ('+beats+' temps), sans changer la note ni couper de son.'+selTxt+fixed+' ↶ pour revenir.');
   },30);
 }
 function quantizeTrack(t,q,strength){
@@ -2239,19 +2252,30 @@ function selToLoop(t){
   if(tracks.some(x=>x!==t&&x.buf)){ msg("D'autres pistes contiennent du son : pour ne pas les décaler, utilise « Placer la partie au début de la boucle »."); return; }
   const L=t.buf.length, bl=L/beats, s0=t.sel.s, e0=t.sel.e;
   const baked=(t.speed||1)!==1, src=(baked?spedBuf(t):t.buf).getChannelData(0);
-  const a=Math.round(s0*bl), z=Math.min(L,Math.round(e0*bl)), len=z-a;
+  let a=Math.round(s0*bl), z=Math.min(L,Math.round(e0*bl)), nMus=0;
+  // repères aimantés : on coupe sur les vrais temps du musicien (son tempo peut varier), pas sur la grille moyenne
+  if(t.snap!==false){
+    const fb=followBeats(src);
+    if(fb&&fb.beats.length>=3){
+      const B=fb.beats, near=p=>{ let bi=-1, bd=0.5*bl; B.forEach((q,i)=>{ const d=Math.abs(q-p); if(d<bd){ bd=d; bi=i; } }); return bi; };
+      const ia=near(a), n0=Math.max(1,Math.round(e0-s0)), iz=ia+n0;
+      if(ia>=0&&iz<B.length){ a=B[ia]; z=B[iz]; nMus=n0; }
+      else if(ia>=0&&iz===B.length&&L-B[B.length-1]>=0.85*fb.T*SR){ a=B[ia]; z=L; nMus=n0; }
+    }
+  }
+  const len=z-a;
   if(len<Math.round(0.25*SR)){ msg('Partie trop courte pour en faire une boucle.'); return; }
   pushHist();
   const data=src.slice(a,z); applyFades(data);
   const nb=ctx.createBuffer(1,len,SR); nb.copyToChannel(data,0);
-  const nbeats=Math.max(1,Math.round(e0-s0));
+  const nbeats=Math.max(1,nMus||Math.round(e0-s0));
   t.buf=nb; t.sel=null; t.selMode='mute'; t.off=0; t.po=null;
   if(baked){ t.speed=1; t.pitch=0; t.pp=null; t.sp=null; }
   loopLen=len; beats=nbeats; baseLen=len; baseBeats=nbeats; rep=1; gridOff=0; masterTake=null;
   if(running){ playFrom(0); } else t0=ctx.currentTime;
   nextBeat=Math.ceil((ctx.currentTime+0.15-t0)/beatDur());
   syncTrackUI(t); updOffUI(t); updSpeedUI(t); drawWave(t); buildDots(); lockUI(); scheduleSave();
-  msg('La boucle commence maintenant au début choisi et dure '+nbeats+' temps ('+(len/SR).toFixed(2).replace('.',',')+' s). ↶ pour revenir.');
+  msg('La boucle commence maintenant au début choisi et dure '+nbeats+' temps ('+(len/SR).toFixed(2).replace('.',',')+' s)'+(nMus?', coupée sur les vrais temps du musicien':'')+'. ↶ pour revenir.');
 }
 // plusieurs pistes : on fait glisser la partie pour qu'elle démarre au début de la boucle (sans toucher à la durée)
 // autres pistes : la partie démarre au début de la boucle de base et se répète sur toute sa durée (en un seul geste)
