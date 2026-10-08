@@ -1179,6 +1179,43 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(h.length===8&&h.every((x,k)=>Math.abs(x-(144+k*beat))<=Math.round(0.02*SR)),'la partie doit démarrer au début et tomber sur chaque temps : '+h.map((x,k)=>Math.round((x-(144+k*beat))/SR*1000)).join(',')+' ms');
     P.$('#dplay').click();
   });
+
+  await test('une piste qu\'on n\'entend pas affiche pourquoi (Muet, Solo, volume, partie silencieuse)',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(1,mkFile(L,d=>{ for(let i=0;i<Math.round(2*beat);i++) d[i]=0.3*Math.sin(2*Math.PI*220*i/SR); }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); await sleep(10);
+    P.$('#dplay').click(); await sleep(60);
+    const tag=()=>t2.querySelector('.tag').textContent;
+    ok(tag()==='','piste audible : rien ne doit s\'afficher ('+tag()+')');
+    t2.querySelector('.m').click(); await sleep(60);
+    ok(/Muet/.test(tag()),'muet : '+tag()); t2.querySelector('.m').click(); await sleep(60);
+    P.$$('.trk')[0].querySelector('.s').click(); await sleep(60);
+    ok(/Solo/.test(tag()),'solo d\'une autre piste : '+tag()); P.$$('.trk')[0].querySelector('.s').click(); await sleep(60);
+    const v=t2.querySelector('.vol'); v.value='0'; v.dispatchEvent(new P.w.Event('input')); await sleep(60);
+    ok(/volume à zéro/.test(tag()),'volume : '+tag()); v.value='0.8'; v.dispatchEvent(new P.w.Event('input')); await sleep(60);
+    t2.querySelector('.ttabs button[data-tab="cut"]').click();
+    for(let i=0;i<4;i++) t2.querySelector('.ts2').click(); await sleep(80);
+    ok(/partie gardée ne contient pas de son/.test(tag()),'partie silencieuse : '+tag());
+    t2.querySelector('.tsall').click(); await sleep(80);
+    ok(tag()==='','de nouveau audible : '+tag());
+    P.$('#dplay').click();
+  });
+
+  await test('montage : toutes les pistes y apparaissent (une piste vide est signalée, une nouvelle piste reçoit son bloc tout de suite)',async()=>{
+    const {P,X,Y,L}=await montBoot();
+    P.$('#addtrk').click(); await sleep(20);
+    const t3=P.$$('.trk')[2]; t3.querySelector('.tog').click(); t3.querySelector('.ttabs button[data-tab="trk"]').click(); t3.querySelector('.tnin').value='transition piano'; t3.querySelector('.tnok').click(); await sleep(20);
+    ok(/« transition piano » est vide/.test(P.$('#mlanehint').textContent)&&!P.$('#mlanehint').hidden,'piste vide signalée : '+P.$('#mlanehint').textContent);
+    await P.importFile(2,mkFile(L,d=>{ for(let i=0;i<L;i++) d[i]=0.3*Math.sin(2*Math.PI*262*i/SR); })); await sleep(30);
+    ok(P.$('#mlanehint').hidden,'une fois remplie, plus de message : '+P.$('#mlanehint').textContent);
+    const cv=P.$('#mcv'); cv.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:X(14),clientY:Y(2),bubbles:true})); cv.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:X(14),clientY:Y(2),bubbles:true}));
+    ok(/« transition piano » · mesures 1 →/.test(P.$('#mclipinfo').textContent),'la piste doit avoir son bloc sans relancer la lecture : '+P.$('#mclipinfo').textContent);
+    P.starts.length=0; P.$('#mplay').click(); await sleep(20);
+    ok(P.starts.filter(x=>x.buf).length===3,'les 3 pistes doivent jouer : '+P.starts.filter(x=>x.buf).length);
+    P.$('#mplay').click();
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="style.css?v=45">
 </head>
 <body>
 <header>
@@ -90,6 +90,7 @@
   <div class="row" style="margin-top:0"><b class="tn" data-help="mont">🎬 Montage du morceau</b><span id="montinfo" class="lbl" style="margin-left:auto"></span></div>
   <div class="row wrap"><button id="mplay" class="primary">▶ Lire le morceau</button><button id="mstop" aria-label="Arrêter et revenir au début">■ Début</button><span id="mcurv" class="lbl"></span></div>
   <canvas id="mcv" style="width:100%;display:block;margin-top:10px;border-radius:12px;background:rgba(255,255,255,.04);touch-action:none"></canvas>
+  <p id="mlanehint" class="hint" hidden style="color:#FFB020"></p>
   <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="msnap" checked style="width:22px;height:22px"> caler sur les mesures</label></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mclip">Bloc choisi</span><span id="mclipinfo" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="mcut">✂ Couper au curseur</button><button id="mdup">⧉ Dupliquer</button><button id="mdel">🗑 Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div>
@@ -165,6 +166,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>

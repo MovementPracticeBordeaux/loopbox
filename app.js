@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='44';
+const APPVER='45';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -2341,7 +2341,7 @@ function renameTrack(t,v){
   v=String(v||'').trim().slice(0,24);
   if(!v||v===t.name){ $('.tnin',t.el).value=t.name; return; }
   touchSettings(); t.name=v; commitSettings();
-  $('.tn',t.el).textContent=v; $('.tnin',t.el).value=v; updLive(); scheduleSave(true);
+  $('.tn',t.el).textContent=v; $('.tnin',t.el).value=v; updLive(); try{ drawSong(); }catch(e){} scheduleSave(true);
 }
 function reindexTracks(){
   tracks.forEach((x,k)=>{ x.id=k; wrap.appendChild(x.el); });
@@ -2440,6 +2440,7 @@ let songPlay=null;
 const songCache=new Map();
 const SG_RH=28, SG_LH=56;
 function songTracks(){ return tracks.filter(t=>t.buf); }
+function songLanes(){ return tracks.slice(); }
 function trackByUid(u){ return tracks.find(t=>t.uid===u); }
 function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; song.fx=[]; songCache.clear(); }
 function songSnapData(){ return {end:song.end,clips:song.clips.map(c=>({...c})),fx:song.fx.map(f=>({...f})),known:song.known.slice()}; }
@@ -2567,7 +2568,8 @@ function songPeaks(t){
 }
 function drawSong(){
   const box=$('#mont'); if(!box||box.hidden) return;
-  const cv=$('#mcv'), lanes=songTracks(), H=SG_RH+Math.max(1,lanes.length)*SG_LH+6;
+  if(loopLen) songPrepare();
+  const cv=$('#mcv'), lanes=songLanes(), H=SG_RH+Math.max(1,lanes.length)*SG_LH+6;
   cv.style.height=H+'px';
   const dpr=window.devicePixelRatio||1, w=Math.floor(cv.clientWidth*dpr), h=Math.floor(H*dpr);
   updSongUI();
@@ -2589,6 +2591,8 @@ function drawSong(){
   lanes.forEach((t,i)=>{
     const y0=RH+i*LH;
     g.fillStyle=i%2?'rgba(255,255,255,.025)':'rgba(255,255,255,.05)'; g.fillRect(0,y0,w,LH);
+    if(!t.buf){ g.fillStyle='rgba(255,255,255,.45)'; g.font=Math.round(14*dpr)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; g.textBaseline='middle'; g.textAlign='left'; g.fillText('« '+t.name+' » : piste vide (rien d\'enregistré ni importé)',10*dpr,y0+LH/2); return; }
+    if(!song.clips.some(c=>c.u===t.uid)){ g.fillStyle='rgba(255,255,255,.45)'; g.font=Math.round(14*dpr)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; g.textBaseline='middle'; g.textAlign='left'; g.fillText('« '+t.name+' » : aucun bloc — touche cette ligne pour en ajouter un',10*dpr,y0+LH/2); }
     const pk=songPeaks(t);
     song.clips.forEach((c,k)=>{
       if(c.u!==t.uid) return;
@@ -2622,6 +2626,7 @@ function updSongUI(){
   $('#mplay').textContent=songPlay?'❚❚ Pause':'▶ Lire le morceau';
   $('#mcurv').textContent='curseur : mesure '+fb(Math.max(0,p))+' · '+fmtSongTime(Math.max(0,p));
   updSecUI(); updFxList();
+  { const e=$('#mlanehint'); if(e){ const l=[]; tracks.forEach(t=>{ if(!t.buf) l.push('« '+t.name+' » est vide (rien d\'enregistré ni importé).'); else if(!song.clips.some(c=>c.u===t.uid)) l.push('« '+t.name+' » n\'a aucun bloc : touche sa ligne pour en ajouter un.'); }); e.textContent=l.join(' '); e.hidden=!l.length; } }
   { const on=!!c; ['#mtin','#mtinl','#mtout','#mtoutl'].forEach(id=>{ const e=$(id); if(e) e.disabled=!on; });
     if(c){ $('#mtin').value=c.ti||'none'; $('#mtout').value=c.to||'none'; if(c.til) $('#mtinl').value=String(c.til); if(c.tol) $('#mtoutl').value=String(c.tol); } }
 }
@@ -2633,11 +2638,12 @@ function updSongUI(){
   cv.addEventListener('pointerdown',ev=>{
     if(!loopLen) return;
     songPrepare();
-    const p=at(ev), b=song.view+p.x/song.zoom, lanes=songTracks();
+    const p=at(ev), b=song.view+p.x/song.zoom, lanes=songLanes();
     try{ cv.setPointerCapture(ev.pointerId); }catch(e){}
     if(p.y<SG_RH){ drag={k:'cur'}; song.cur=clamp(Math.round(b),0,song.end); if(songPlay) songStart(song.cur); drawSong(); return; }
     const li=Math.floor((p.y-SG_RH)/SG_LH), t=lanes[li];
-    if(!t){ drag={k:'pan',x0:p.x,v0:song.view,moved:false}; return; }
+    if(t&&!t.buf){ msg('« '+t.name+' » est vide : enregistre ou importe un son sur cette piste pour l\'utiliser dans le montage.'); }
+    if(!t||!t.buf){ drag={k:'pan',x0:p.x,v0:song.view,moved:false}; return; }
     let idx=-1; for(let k=song.clips.length-1;k>=0;k--){ const c=song.clips[k]; if(c.u===t.uid&&b>=c.s&&b<=c.s+c.len){ idx=k; break; } }
     if(idx>=0){
       const c=song.clips[idx], ex=Math.abs(p.x-(c.s+c.len-song.view)*song.zoom), sx=Math.abs(p.x-(c.s-song.view)*song.zoom), wpx=c.len*song.zoom;
@@ -2867,13 +2873,27 @@ function drawWave(t){
   for(let i=0;i<bins;i++){ const hh=Math.max(1,pk[i]/mx*h*0.9); g.fillRect(i*2,(h-hh)/2,1.5*dpr>2?2:1.5,hh); }
   if(t.sel&&loopLen&&!repd){ g.fillStyle='rgba(11,11,13,.7)'; const sx=t.sel.s/beats*w, ex=t.sel.e/beats*w; g.fillRect(0,0,sx,h); g.fillRect(ex,0,w-ex,h); }
 }
+// pourquoi une piste ne s'entend pas (affiché sur la piste, pour ne jamais rester sans explication)
+function silentWhy(t){
+  if(!t.buf||(recObj&&recObj.i===t.id)) return '';
+  if(t.mute) return 'muette : « Muet » est activé';
+  if(tracks.some(x=>x.solo)&&!t.solo) return 'muette : une autre piste est en « Solo »';
+  if(t.vol<0.01) return 'muette : volume à zéro';
+  if(songPlay&&!song.clips.some(c=>c.u===t.uid&&c.s<song.end)) return 'muette : aucun bloc dans le montage';
+  const b=running&&t.src?t.src.buffer:null;
+  if(b){
+    if(t._pkB!==b){ const x=b.getChannelData(0); let m=0; for(let i=0;i<x.length;i+=4){ const v=x[i]<0?-x[i]:x[i]; if(v>m) m=v; } t._pkB=b; t._pk=m; }
+    if(t._pk<0.002) return t.sel?'muette : la partie gardée ne contient pas de son':'muette : le son de la piste est silencieux';
+  }
+  return '';
+}
 function uiTrack(t,now){
   let st='empty', label=t.buf?'':'vide';
   if(recObj&&recObj.i===t.id){
     if(now<recObj.tp){ st='armed'; label='Décompte '+Math.max(1,Math.ceil((recObj.tp-now)/beatDur())); }
     else if(recObj.stopT!==null){ st='rec'; label='Finalisation…'; }
     else{ st='rec'; label='● REC '+(now-recObj.tp).toFixed(1)+' s'+(recObj.master?' · ■ pour fermer la boucle':''); }
-  } else if(t.buf) st='ready';
+  } else if(t.buf){ st='ready'; const why=silentWhy(t); if(why){ label='⚠ '+why; st='ready silent'; } }
   const cls='card trk '+st+(t.kind==='bass'?' kbass':t.kind==='synth'?' ksynth':'');
   if(t.cache.cls!==cls){ t.el.className=cls; t.cache.cls=cls; }
   if(t.cache.label!==label){ t.tag.textContent=label; t.cache.label=label; }
