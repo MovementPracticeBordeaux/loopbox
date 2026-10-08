@@ -1246,6 +1246,25 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     await check(P,61.735*Math.pow(2,2/12),'hauteur +2');
     P.$('#dstop').click();
   });
+
+  await test('basse : choisir des notes dans la palette ne fait jamais dériver l\'octave (Do et Si restent à leur place)',async()=>{
+    const {P,tb}=await bassBoot();
+    const info=()=>tb.querySelector('.bselinfo').textContent.split('· ')[1];
+    const tour=()=>{ const o=[]; for(let n=0;n<12;n++){ tb.querySelector('.bpal button[data-n="'+n+'"]').click(); o.push(info()); } return o.join(' '); };
+    const a=tour(), b=tour(), c=tour();
+    ok(a===b&&b===c,'les mêmes notes doivent donner les mêmes hauteurs à chaque tour : '+a+' / '+c);
+    ok(/^Do2 .* Si1$/.test(a),'registre de la basse : '+a);
+    const cv=tb.querySelector('.btl'); cv.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ cv.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); cv.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    tb.querySelector('.bpal button[data-n="9"]').click();
+    tap(200,15); tb.querySelector('.bpal button[data-n="11"]').click(); const s2=info();
+    tap(400,15); tb.querySelector('.bpal button[data-n="0"]').click(); const s3=info();
+    tap(600,15); tb.querySelector('.bpal button[data-n="11"]').click(); const s4=info();
+    ok(s2==='Si1'&&s3==='Do2'&&s4==='Si1','ligne La → Si → Do → Si : '+[s2,s3,s4].join(' '));
+    tb.querySelector('.bgo').click(); await sleep(30);
+    const b2=P.lastBuf(), bl=b2.length/8;
+    ok(near(fz(b2,4.1,4.8),65.4,3)&&near(fz(b2,6.1,6.8),61.7,3),'notes jouées Do2 puis Si1 : '+fz(b2,4.1,4.8).toFixed(1)+' / '+fz(b2,6.1,6.8).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='47';
+const APPVER='48';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1426,9 +1426,12 @@ function normSegs(segs,nb){
   return sg.filter(x=>x.e>x.s);
 }
 // note exacte de chaque bloc : celle enregistrée (m), sinon l'octave la plus proche du bloc précédent
+// registre permis (octave ▼▲, transposer) et registre normal (choix dans la palette)
+const genRange=k=>k==='synth'?[36,96]:[24,52], genPick=k=>k==='synth'?[48,84]:[28,52];
+const foldInto=(m,lo,hi)=>{ while(m>hi) m-=12; while(m<lo) m+=12; return m; };
 function segRoots(segs,kind){
   const roots=[]; let prev=null, hi=kind==='synth'?84:52, lo=kind==='synth'?48:28, base=n=>kind==='synth'?60+n:rootOf(n);
-  segs.forEach(x=>{ if(x.n==null){ roots.push(null); return; } let m; if(x.m!=null) m=x.m; else { m=prev!=null?nearOct(base(x.n),prev):base(x.n); while(m>hi) m-=12; while(m<lo) m+=12; } roots.push(m); prev=m; });
+  segs.forEach(x=>{ if(x.n==null){ roots.push(null); return; } let m; if(x.m!=null){ const g=genRange(kind); m=foldInto(x.m,g[0],g[1]); } else { m=prev!=null?nearOct(base(x.n),prev):base(x.n); while(m>hi) m-=12; while(m<lo) m+=12; } roots.push(m); prev=m; });
   return roots;
 }
 const noteName=m=>NOTE_FR[((m%12)+12)%12]+(Math.floor(m/12)-1);
@@ -1579,7 +1582,7 @@ function melToBass(t){
 function transposeBass(t,dd){
   const d=ensureDraft(t), roots=segRoots(d.segs,t.kind);
   const ms=roots.filter(x=>x!=null); if(!ms.length) return;
-  const lo=t.kind==='synth'?36:24, hi=t.kind==='synth'?96:64;
+  const lo=genRange(t.kind)[0], hi=genRange(t.kind)[1];
   if(Math.min(...ms)+dd<lo||Math.max(...ms)+dd>hi){ msg('Limite atteinte : '+(t.kind==='synth'?'la mélodie':'la basse')+' irait trop '+(dd<0?'grave':'aigu')+'.'); return; }
   d.segs.forEach((x,i)=>{ if(roots[i]==null) return; x.m=roots[i]+dd; x.n=((x.m%12)+12)%12; });
   bassChanged(t);
@@ -1692,7 +1695,11 @@ function initBassTimeline(t){
   t.el.querySelectorAll('.bpal button').forEach(b=>b.onclick=()=>{
     const d=ensureDraft(t), x=d.segs[t.bsel||0], v=+b.dataset.n;
     if(v<0){ x.n=null; x.m=undefined; }
-    else { const old=segRoots(d.segs,t.kind)[t.bsel||0]; x.n=v; x.m=(x.m!=null||old!=null)?nearOct(rootOf(v),old!=null?old:rootOf(v)):undefined; if(x.m==null) delete x.m; }
+    else { const i=t.bsel||0, rts=segRoots(d.segs,t.kind); let ref=null;
+      for(let k=i-1;k>=0&&ref==null;k--) ref=rts[k];
+      for(let k=i+1;k<rts.length&&ref==null;k++) ref=rts[k];
+      const base=t.kind==='synth'?60+v:rootOf(v), pr=genPick(t.kind);
+      x.n=v; x.m=foldInto(ref!=null?nearOct(base,ref):base,pr[0],pr[1]); }
     bassChanged(t); $('.bst',t.el).textContent='';
     if(v>=0) auditionNote(t,segRoots(d.segs,t.kind)[t.bsel||0]); });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
@@ -1700,7 +1707,7 @@ function initBassTimeline(t){
   t.el.querySelectorAll('.boct').forEach(b=>b.onclick=()=>{
     const d=ensureDraft(t), i=t.bsel||0, roots=segRoots(d.segs,t.kind);
     if(roots[i]==null) return;
-    const m=roots[i]+(+b.dataset.d), lo=t.kind==='synth'?36:24, hi=t.kind==='synth'?96:64;
+    const m=roots[i]+(+b.dataset.d), lo=genRange(t.kind)[0], hi=genRange(t.kind)[1];
     if(m<lo||m>hi){ msg('Limite atteinte : ce bloc irait trop '+(+b.dataset.d<0?'grave':'aigu')+'.'); return; }
     d.segs.forEach((x,k)=>{ if(roots[k]!=null){ x.m=roots[k]; x.n=((roots[k]%12)+12)%12; } });
     d.segs[i].m=m; d.segs[i].n=((m%12)+12)%12;
