@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='42';
+const APPVER='43';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -285,12 +285,13 @@ function playBufCore(t){
   if(!t.sel&&!t.fadeIn&&!t.fadeOut) return b;
   const mode=t.sel?(t.selMode||'mute'):'mute';
   const s=t.sel?t.sel.s:0, e=t.sel?t.sel.e:beats, fI=t.fadeIn||0, fO=t.fadeOut||0, c=t.pc;
-  if(c&&c.b===b&&c.s===s&&c.e===e&&c.n===beats&&c.fI===fI&&c.fO===fO&&c.mode===mode) return c.out;
+  if(c&&c.b===b&&c.s===s&&c.e===e&&c.n===beats&&c.fI===fI&&c.fO===fO&&c.mode===mode&&c.sn===(t.snap!==false)) return c.out;
   const L=b.length, src=b.getChannelData(0), bl=L/beats;
-  const a=s>0?Math.max(0,Math.round(s*bl)-Math.round(0.03*SR)):0, z=e<beats?Math.round(e*bl):L;
+  const preRoll=t.snap===false?0:Math.round(0.03*SR);
+  const a=s>0?Math.max(0,Math.round(s*bl)-preRoll):0, z=e<beats?Math.round(e*bl):L;
   const seg=new Float32Array(Math.max(0,z-a));
   for(let i=0;i<seg.length;i++) seg[i]=src[a+i];
-  const fi=fI>0?Math.round(fI*bl):(s>0?Math.round(0.005*SR):0);
+  const fi=fI>0?Math.round(fI*bl):(s>0?Math.round((t.snap===false?0.002:0.005)*SR):0);
   for(let i=0;i<fi&&i<seg.length;i++) seg[i]*=i/fi;
   const fo=fO>0?Math.round(fO*bl):(e<beats?Math.round(0.01*SR):0);
   for(let i=1;i<=fo&&seg.length-i>=0;i++) seg[seg.length-i]*=(i-1)/fo;
@@ -303,7 +304,7 @@ function playBufCore(t){
     for(let i=0;i<n;i++){ let v=seg[i]; if(n<seg.length&&n-i<=tail) v*=(n-i)/tail; const j=(st+i)%L; out[j]=clamp(out[j]+v,-1,1); }
   });
   const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(out,0);
-  t.pc={b,s,e,n:beats,fI,fO,mode,out:nb}; return nb;
+  t.pc={b,s,e,n:beats,fI,fO,mode,sn:t.snap!==false,out:nb}; return nb;
 }
 // ---------- égaliseur par piste ----------
 const EQ_PRESETS=[['flat','Plat',[0,0,0]],['punch','Punch',[5,-2,3]],['clair','Clair',[-2,1,6]],['voix','Voix nette',[-6,4,2]],['chaud','Chaud',[4,1,-4]]];
@@ -791,6 +792,36 @@ function applyImport(t,mono,mode){
   drawWave(t); startSrc(t); lockUI(); scheduleSave();
   msg('');
 }
+// suivi des temps d'un jeu au tempo variable (non bouclé) : tempo moyen par autocorrélation, puis chemin des temps par programmation dynamique
+function followBeats(x){
+  const hop=256, F=Math.floor(x.length/hop); if(F<200) return null;
+  const e=new Float32Array(F), env=new Float32Array(F);
+  for(let j=0;j<F;j++){ let s=0; const a=j*hop; for(let i=0;i<hop;i++){ const v=x[a+i]; s+=v*v; } e[j]=Math.log(1+2000*Math.sqrt(s/hop)); }
+  for(let j=2;j<F;j++) env[j]=Math.max(0,e[j]-Math.max(e[j-1],e[j-2]));
+  let m=0; for(let j=0;j<F;j++) m+=env[j]; m/=F; let sd=0; for(let j=0;j<F;j++) sd+=(env[j]-m)**2; sd=Math.sqrt(sd/F)||1;
+  const en=new Float32Array(F); for(let j=0;j<F;j++) en[j]=(env[j]-m)/sd;
+  const fps=SR/hop, lmin=Math.floor(fps*60/200), lmax=Math.ceil(fps*60/55), ac=new Float32Array(lmax+2);
+  for(let l=lmin;l<=lmax+1;l++){ let s=0; for(let j=0;j+l<F;j++) s+=en[j]*en[j+l]; ac[l]=s/(F-l); }
+  let best=-1e9, P=0;
+  for(let l=lmin;l<=lmax;l++){ const bpm=60*fps/l, w=Math.exp(-0.5*Math.pow(Math.log2(bpm/110)/0.9,2)); const sc=w*(ac[l]+0.5*(2*l<=lmax+1?ac[2*l]:0)); if(sc>best){ best=sc; P=l; } }
+  // affinage du tempo moyen (lissage parabolique)
+  if(P>lmin&&P<lmax){ const a=ac[P-1],b=ac[P],c=ac[P+1], d=a-2*b+c; if(d<0) P=P+0.5*(a-c)/d; }
+  const alpha=35, lo=Math.max(1,Math.round(P*0.6)), hi=Math.round(P*1.6), S=new Float32Array(F), back=new Int32Array(F).fill(-1);
+  for(let t=0;t<F;t++){ let bv=0, bi=-1; for(let d=lo;d<=hi&&t-d>=0;d++){ const v=S[t-d]-alpha*Math.pow(Math.log(d/P),2); if(bi<0||v>bv){ bv=v; bi=t-d; } } S[t]=en[t]+(bi>=0&&bv>0?bv:0); back[t]=bi>=0&&bv>0?bi:-1; }
+  let tE=F-1, bs=-1e9; for(let t=Math.max(0,F-Math.round(P));t<F;t++) if(S[t]>bs){ bs=S[t]; tE=t; }
+  const fr=[]; for(let t=tE;t>=0;t=back[t]){ fr.push(t); if(back[t]<0) break; } fr.reverse();
+  // début : pas de temps avant la première vraie attaque
+  const on=detectOnsets(x,x.length).map(o=>o.n);
+  if(!on.length) return null;
+  const first=on[0];
+  const snapB=c=>{ let bp=c, bd=Math.round(0.03*SR), hit=false; on.forEach(n=>{ const d=Math.abs(n-c); if(d<bd){ bd=d; bp=n; hit=true; } }); return {p:bp,hit}; };
+  const sb=fr.map(t=>snapB(t*hop+hop/2)).filter(b=>b.p>=first-Math.round(0.03*SR));
+  while(sb.length&&!sb[sb.length-1].hit) sb.pop();
+  const beats=sb.map(b=>b.p);
+  if(beats.length<4) return null;
+  const T=(beats[beats.length-1]-beats[0])/(beats.length-1)/SR;
+  return {beats,T,period:P*hop/SR};
+}
 function importFirst(i,raw){
   pushHist();
   if(running) stopTransport();
@@ -806,7 +837,17 @@ function importFirst(i,raw){
       if(sc>best){ best=sc; an=a; }
     }
   }
-  if(an){
+  // jeu au tempo variable : on suit chaque temps du musicien (la détection « tempo fixe » échoue ou se trompe)
+  let fb=null;
+  if(snap){ fb=followBeats(raw); if(fb&&fb.beats.length<5) fb=null; }
+  let vary=0;
+  if(fb){ const iv=[]; for(let k=1;k<fb.beats.length;k++) iv.push(fb.beats[k]-fb.beats[k-1]); iv.sort((a,b)=>a-b); vary=iv[Math.floor(iv.length*0.9)]/iv[Math.floor(iv.length*0.1)]-1; }
+  if(fb&&(!an||vary>0.06||Math.abs(Math.log(an.T/fb.T))>0.05)){
+    const last=fb.beats[fb.beats.length-1], n=fb.beats.length-1+((raw.length-last)>=0.85*fb.T*SR?1:0), o1=fb.beats[0], pre=Math.round(0.003*SR);
+    masterTake={i,ref:tracks[i],raw,tp,anchor:o1,pre:Math.min(pre,o1),T:fb.T,s:0,n,rep:1,det:true};
+    buildFromSel();
+    msg('Rythme détecté : '+n+' temps à '+(60/fb.T).toFixed(1).replace('.',',')+' BPM en moyenne.'+(vary>0.06?' Le tempo du musicien varie (jusqu\'à '+Math.round(vary*100)+' % d\'écart entre ses temps) : pour caler chaque temps sur la grille, utilise « 🎯 Caler sur le tempo du morceau » (onglet ✂ Découpe de la piste).':''));
+  } else if(an){
     const pre=Math.round(0.003*SR);
     masterTake={i,ref:tracks[i],raw,tp,anchor:an.o1,pre:Math.min(pre,an.o1),T:an.T,s:0,n:an.n,rep:1,det:true};
     buildFromSel();
@@ -856,7 +897,7 @@ function setRep(k){
 }
 function snapState(){
   return {song:songSnapData(),loopLen,beats,baseLen,baseBeats,rep,gridOff,mvol,fin,mt:masterTake?{...masterTake}:null,
-    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,speed:t.speed||1,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
+    tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,anc:!!t.anc,speed:t.speed||1,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
       fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut,kind:t.kind||'rec',bass:t.bass?JSON.parse(JSON.stringify(t.bass)):null,voice:t.voice||null}))};
 }
 function touchSettings(){ if(!H.pend) H.pend=snapState(); }
@@ -892,7 +933,7 @@ function restoreState(sn){
   tracks.forEach(t=>{
     const x=map.get(t);
     t.buf=x?x.buf:null;
-    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.speed=(x&&x.speed)||1; t.sp=null; t.po=null; t.pc=null; updOffUI(t); updSpeedUI(t);
+    t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.anc=!!(x&&x.anc); t.speed=(x&&x.speed)||1; t.sp=null; t.po=null; t.pc=null; updOffUI(t); updSpeedUI(t);
     { const k=(x&&x.kind)||'rec', bs=x&&x.bass?JSON.parse(JSON.stringify(x.bass)):null, vo=(x&&x.voice)||null; if(k!==t.kind||JSON.stringify(bs)!==JSON.stringify(t.bass)||vo!==t.voice){ t.kind=k; t.bass=bs; t.voice=vo; t.bdraft=null; if(t.el){ setKindUI(t); if(isGen(t)) showBassOpts(t); } } }
     const p=x?x.pitch:0; if(p!==t.pitch){ t.pitch=p; if(!p) t.pp=null; }
     if(x){
@@ -1823,7 +1864,7 @@ function setOffset(t,v){
   const lim=Math.max(0.5,loopLen?loopSec():0.5);
   v=clamp(Math.round(v*SR)/SR,-lim,lim);
   if(v===t.off) return;
-  touchSettings(); t.off=v; commitSettings(); t.po=null;
+  touchSettings(); t.off=v; t.anc=false; commitSettings(); t.po=null;
   startSrc(t); drawWave(t); updOffUI(t); scheduleSave(true);
 }
 function updOffUI(t){ const e=$('.offv',t.el); if(e) e.textContent=fmtMs(t.off||0); }
@@ -1923,10 +1964,18 @@ function warpTrack(t){
   const k=Math.round((t.off||0)*SR), x=new Float32Array(L); for(let i=0;i<L;i++) x[mod(i+k,L)]=d[i];
   msg('Analyse du tempo du musicien…');
   setTimeout(()=>{
+    let fixed='';
+    { const h2=Math.round((gridOff||0)), xl=new Float32Array(L); for(let i=0;i<L;i++) xl[i]=x[(i+h2)%L];
+      const fb=followBeats(xl);
+      if(fb){ const K2=Math.round(L/SR/fb.T); const alone=!tracks.some(o=>o!==t&&o.buf);
+        if(K2>=2&&Math.abs(K2-beats)/beats>0.08){
+          if(alone){ pushHist(); fixed=' La grille ne correspondait pas au jeu ('+beats+' temps au lieu de '+K2+') : corrigée.'; beats=K2; baseBeats=Math.max(1,Math.round(K2/rep)); masterTake=null; buildDots(); }
+          else { msg('Attention : ce jeu compte environ '+K2+' temps dans la boucle, la grille en a '+beats+'. Le calage risque d\'être faux : vérifie le tempo du morceau.'); }
+        } } }
     const bt=trackBeatsVar(x,beats,gridOff||0);
     if(!bt){ msg('Je n\'arrive pas à suivre le rythme de cette piste (pas assez d\'attaques nettes). Essaie « Décaler la piste » ou « Recaler chaque son ».'); return; }
     const r=warpLoop(x,bt,beats,gridOff||0,every);
-    pushHist();
+    if(!fixed) pushHist();
     const nb=ctx.createBuffer(1,L,SR); nb.copyToChannel(r.y,0);
     t.buf=nb; t.off=0; t.po=null; t.pc=null;
     if(baked){ t.speed=1; t.pitch=0; t.pp=null; t.sp=null; }
@@ -1934,7 +1983,7 @@ function warpTrack(t){
     updOffUI(t); updSpeedUI(t); drawWave(t); drawTsel(t); startSrc(t); lockUI(); scheduleSave();
     const iv=[]; for(let i=0;i<beats;i++){ const a=bt[i], b=i+1<beats?bt[i+1]:bt[0]+L; iv.push(mod(b-a,L)/(L/beats)); }
     const lo=Math.round((Math.min(...iv)-1)*100), hi=Math.round((Math.max(...iv)-1)*100);
-    msg('Tempo du musicien repéré : ses temps duraient de '+(lo>0?'+':'')+lo+' % à '+(hi>0?'+':'')+hi+' % d\'un temps du morceau. '+(every===1?'Chaque temps':'Chaque mesure')+' est maintenant calé'+(every===1?'':'e')+' sur la grille ('+beats+' temps), sans changer la note ni couper de son. ↶ pour revenir.');
+    msg('Tempo du musicien repéré : ses temps duraient de '+(lo>0?'+':'')+lo+' % à '+(hi>0?'+':'')+hi+' % d\'un temps du morceau. '+(every===1?'Chaque temps':'Chaque mesure')+' est maintenant calé'+(every===1?'':'e')+' sur la grille ('+beats+' temps), sans changer la note ni couper de son.'+fixed+' ↶ pour revenir.');
   },30);
 }
 function quantizeTrack(t,q,strength){
@@ -2112,7 +2161,7 @@ function buildTrackUI(t){
   $('.tsloop',el).onclick=()=>{ if(tracks.some(x=>x!==t&&x.buf)) loopPart(t); else selToLoop(t); };
   $('.tsalign',el).onclick=()=>alignSelStart(t);
   el.querySelectorAll('.tsn').forEach(b=>b.onclick=()=>{ const q=tsGet(), db=(+b.dataset.ms/1000)/(loopSec()/beats); if(b.dataset.w==='s') setTrackSel(t,q.s+db,q.e); else setTrackSel(t,q.s,q.e+db); });
-  $('.tsnap',el).onchange=e=>{ t.snap=e.target.checked; scheduleSave(true); };
+  $('.tsnap',el).onchange=e=>{ t.snap=e.target.checked; t.pc=null; t.po=null; startSrc(t); drawWave(t); scheduleSave(true); };
   el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>setSelMode(t,b.dataset.m));
   $('.del',el).onclick=()=>removeLastTrack();
   $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
@@ -2211,7 +2260,7 @@ function loopPart(t){
   let p=t.sel?{s:t.sel.s,e:t.sel.e}:partOf(t);
   if(!p||p.e-p.s>=beats-1e-6){ msg('Choisis d\'abord la partie à faire tourner avec les repères orange (plus courte que la boucle).'); return; }
   touchSettings();
-  t.sel={s:p.s,e:p.e}; t.selMode='loop';
+  t.sel={s:p.s,e:p.e}; t.selMode='loop'; t.anc=true;
   const lim=Math.max(0.5,loopSec()); t.off=clamp(Math.round(-(p.s*loopSec()/beats)*SR)/SR,-lim,lim);
   commitSettings(); t.pc=null; t.po=null;
   startSrc(t); drawWave(t); drawTsel(t); updOffUI(t); scheduleSave(true);
@@ -2221,7 +2270,7 @@ function loopPart(t){
 function alignSelStart(t){
   if(!t.buf||!t.sel||recObj) return;
   const v=-(t.sel.s*loopSec()/beats);
-  setOffset(t,v);
+  setOffset(t,v); t.anc=true;
   msg('La partie de « '+t.name+' » démarre maintenant au début de la boucle (décalage '+fmtMs(t.off)+', rien n\'est coupé). « 0 » dans « Décaler la piste » revient en arrière.');
 }
 function setTrackSel(t,s,e){
@@ -2232,7 +2281,9 @@ function setTrackSel(t,s,e){
   const ns=(Math.abs(s)<1e-6&&Math.abs(e-beats)<1e-6)?null:{s,e};
   if((!ns&&!t.sel)||(ns&&t.sel&&ns.s===t.sel.s&&ns.e===t.sel.e)){ drawTsel(t); return; }
   pushHist();
-  t.sel=ns; t.pc=null; drawWave(t);
+  t.sel=ns; t.pc=null;
+  if(t.anc){ if(ns){ const lim=Math.max(0.5,loopSec()); t.off=clamp(Math.round(-(ns.s*loopSec()/beats)*SR)/SR,-lim,lim); } else { t.off=0; t.anc=false; t.selMode='mute'; } t.po=null; updOffUI(t); }
+  drawWave(t);
   startSrc(t); drawWave(t); drawTsel(t); scheduleSave(true);
 }
 function drawTsel(t,dr){
@@ -2291,7 +2342,7 @@ function duplicateTrack(t){
   n.eq.lo.gain.value=n.eqv[0]; n.eq.mid.gain.value=n.eqv[1]; n.eq.hi.gain.value=n.eqv[2];
   n.fadeIn=t.fadeIn; n.fadeOut=t.fadeOut; n.kind=t.kind; n.bass=t.bass?JSON.parse(JSON.stringify(t.bass)):null; setKindUI(n); if(n.bass) showBassOpts(n);
   n.name=uniqueTrackName(t.name+' copie'); $('.tn',n.el).textContent=n.name;
-  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.off=t.off||0; n.snap=t.snap; n.speed=t.speed||1; if(t.sp&&t.sp.b===t.buf) n.sp=t.sp; updOffUI(n); updSpeedUI(n); n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
+  n.buf=t.buf; n.sel=t.sel?{...t.sel}:null; n.selMode=t.selMode; n.off=t.off||0; n.anc=!!t.anc; n.snap=t.snap; n.speed=t.speed||1; if(t.sp&&t.sp.b===t.buf) n.sp=t.sp; updOffUI(n); updSpeedUI(n); n.pitch=t.pitch; if(t.pp&&t.pp.b===t.buf) n.pp=t.pp;
   tracks.splice(tracks.indexOf(n),1); tracks.splice(tracks.indexOf(t)+1,0,n);
   reindexTracks();
   setFx(n); syncTrackUI(n); drawWave(n); applyGains(n); startSrc(n);
@@ -3151,7 +3202,7 @@ function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent
 function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 function mainData(){
   return {v:2,song:songSnapData(),name:projName,go:gridOff,liveQ,scenes:scenes.map(sc=>sc?sc.map(x=>({i:tracks.indexOf(x.t),m:x.mute})).filter(x=>x.i>=0):null),meter,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
-    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,u:t.uid,smd:t.selMode,of:t.off||0,sn:t.snap!==false,spd:t.speed||1,vo:t.voice?{sr:t.voice.buf.sampleRate,sel:t.voice.sel?[t.voice.sel.s,t.voice.sel.e]:null,smd:t.voice.selMode,of:t.voice.off,spd:t.voice.speed,pt:t.voice.pitch,fxs:t.voice.fxs.map(f=>({t:f.type,a:f.amt})),nm:t.voice.name}:null,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
+    tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,u:t.uid,smd:t.selMode,of:t.off||0,an:!!t.anc,sn:t.snap!==false,spd:t.speed||1,vo:t.voice?{sr:t.voice.buf.sampleRate,sel:t.voice.sel?[t.voice.sel.s,t.voice.sel.e]:null,smd:t.voice.selMode,of:t.voice.off,spd:t.voice.speed,pt:t.voice.pitch,fxs:t.voice.fxs.map(f=>({t:f.type,a:f.amt})),nm:t.voice.name}:null,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
 }
 function summary(){ return {id:projId,name:projName,updated:Date.now(),beats:loopLen?beats:0,bpm:loopLen?+(beats*60/loopSec()).toFixed(1):bpm,ntr:tracks.filter(t=>t.buf).length,dur:loopLen?+loopSec().toFixed(1):0}; }
 async function saveProj(){
@@ -3223,7 +3274,7 @@ function applyProject(d,audio){
       t.voice={buf:vb,play:audio[200+i]||vp,sel:Array.isArray(s.vo.sel)?{s:s.vo.sel[0],e:s.vo.sel[1]}:null,selMode:s.vo.smd||'mute',off:+s.vo.of||0,speed:+s.vo.spd||1,pitch:+s.vo.pt||0,fxs:(s.vo.fxs||[]).map(f=>({type:f.t,amt:+f.a||0.5})),name:s.vo.nm||t.name}; }
     updVoiceUI(t);
     if(t.buf&&Array.isArray(s.sel)&&s.sel.length===2&&s.sel[0]>=0&&s.sel[1]<=beats+1e-6&&s.sel[1]-s.sel[0]>=0.02) t.sel={s:s.sel[0],e:Math.min(beats,s.sel[1])};
-    t.off=clamp(+s.of||0,-60,60); t.snap=s.sn!==false; updOffUI(t); t.speed=clamp(+s.spd||1,0.5,2); updSpeedUI(t);
+    t.off=clamp(+s.of||0,-60,60); t.anc=!!s.an; t.snap=s.sn!==false; updOffUI(t); t.speed=clamp(+s.spd||1,0.5,2); updSpeedUI(t);
     t.selMode=['mute','loop','2','3','4'].includes(s.smd)?s.smd:'mute';
     setFx(t); syncTrackUI(t); drawWave(t);
   });

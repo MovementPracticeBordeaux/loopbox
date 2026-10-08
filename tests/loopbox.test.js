@@ -1048,6 +1048,82 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const hm=loudHits(P.lastBuf());
     ok([0,4].every(k=>Math.abs(hm[k]-(144+k*beat))<=Math.round(0.015*SR)),'repères à la mesure : débuts de mesure calés ('+[0,4].map(k=>Math.round((hm[k]-(144+k*beat))/SR*1000)).join(',')+' ms)');
   });
+
+  // ---------------- parcours réel : morceau au tempo variable (v43) ----------------
+  function song(sec,bpm0,drift,blank){
+    const N=Math.round(sec*SR), x=new Float32Array(N), beats=[]; let t=blank, k=0, sd=11;
+    const rnd=()=>{ sd=(sd*16807)%2147483647; return sd/2147483647*2-1; };
+    while(t<sec-1){ beats.push(t); const bpm=bpm0*(1+drift*Math.sin(2*Math.PI*t/23)+drift*0.5*Math.sin(2*Math.PI*t/7.3)); t+=60/bpm; k++; }
+    const hit=(p,kind,amp)=>{ const n=Math.round((kind==='k'?0.35:kind==='s'?0.2:0.05)*SR); let ph=0; for(let i=0;i<n&&p+i<N;i++){ const tt=i/SR; let v;
+        if(kind==='k'){ ph+=(50+80*Math.exp(-tt/0.03))/SR; v=Math.sin(2*Math.PI*ph)*Math.exp(-tt/0.12); } else if(kind==='s'){ v=rnd()*Math.exp(-tt/0.06); } else v=rnd()*Math.exp(-tt/0.012);
+        x[p+i]+=amp*v; } };
+    beats.forEach((b,i)=>{ const p=Math.round((b+0.008*rnd())*SR), nb=i+1<beats.length?beats[i+1]:b+0.6;
+      if(i%4===0||i%4===2) hit(p,'k',0.7); else hit(p,'s',0.45);
+      hit(p,'h',0.12); hit(Math.round((b+nb)/2*SR),'h',0.1);
+      // basse tenue
+      const f=55*Math.pow(2,[0,0,3,5][Math.floor(i/4)%4]/12); let ph=0; for(let j=0;j<Math.round((nb-b)*0.9*SR)&&p+j<N;j++){ ph+=f/SR; x[p+j]+=0.15*Math.sin(2*Math.PI*ph); } });
+    for(let i=0;i<N;i++) x[i]+=0.002*rnd();
+    return {x,beats};
+  }
+  
+  await test('parcours réel : long morceau au tempo variable → bon tempo à l\'import, puis chaque coup calé sur la grille',async()=>{
+    const P=await boot();
+    const S=song(60,100,0.08,2.0);
+    await P.importFile(0,{numberOfChannels:1,length:S.x.length,sampleRate:SR,duration:S.x.length/SR,getChannelData:()=>S.x});
+    const t1=P.$('.trk');
+    for(let i=0;i<20;i++) t1.querySelector('.impn[data-w="b"][data-d="1"]').click();
+    t1.querySelector('.impuse').click(); await sleep(200);
+    const m=P.$('#msg').textContent, nb=+((m.match(/(\d+) temps à/)||[])[1]||0), bpm=+(((m.match(/à ([\d,]+) BPM/)||[])[1]||'0').replace(',','.'));
+    ok(nb>=45&&nb<=48&&Math.abs(bpm-100.8)<2,'tempo à l\'import : '+m);
+    ok(/Le tempo du musicien varie/.test(m),'la variation de tempo doit être signalée');
+    const L=P.lastBuf().length, beat=L/nb, go=144;
+    const loud=b=>{ const x=b.getChannelData(0), o=[]; let prev=-1e9; for(let i=0;i<x.length;i++) if(Math.abs(x[i])>0.33&&i-prev>Math.round(0.25*SR)){ o.push(i); prev=i; } return o; };
+    const dev=b=>loud(b).map(x=>{ const k=Math.round((x-go)/beat); return Math.abs(x-go-k*beat)/SR*1000; });
+    const before=dev(P.lastBuf());
+    ok(Math.max(...before)>40,'préparation : sans calage, des coups doivent être à côté (max '+Math.max(...before).toFixed(0)+' ms)');
+    t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    t1.querySelector('.wpb').click(); await sleep(1500);
+    const after=dev(P.lastBuf());
+    ok(after.length>=nb-1&&after.filter(v=>v<=20).length>=after.length-1,'après calage : '+after.filter(v=>v<=20).length+'/'+after.length+' coups à ≤ 20 ms de la grille (max '+Math.max(...after).toFixed(0)+' ms) | '+P.$('#msg').textContent);
+  });
+  await test('partie isolée avec repères libres : rien d\'avant le repère de début ne s\'entend',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    const c1=Math.round(144+3*beat)-480, c2=Math.round(144+3.5*beat);
+    await P.importFile(1,mkFile(L,d=>{ for(let i=0;i<400;i++){ d[c1+i]=0.8*Math.exp(-i/80); d[c2+i]=0.8*Math.exp(-i/80); } }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    for(let i=0;i<3;i++) t2.querySelector('.ts2').click();
+    for(let i=0;i<4;i++) t2.querySelector('.ts3').click();
+    const sn=t2.querySelector('.tsnap'); sn.checked=false; sn.dispatchEvent(new P.w.Event('change'));
+    t2.querySelector('.tsn[data-w="s"][data-ms="1"]').click(); t2.querySelector('.tsn[data-w="s"][data-ms="-1"]').click(); await sleep(10);
+    P.$('#dplay').click(); await sleep(30);
+    const pk=(b,a,z)=>{ const x=b.getChannelData(0); let m=0; for(let i=Math.max(0,a);i<Math.min(x.length,z);i++) m=Math.max(m,Math.abs(x[i])); return m; };
+    const pl=P.lastPlayed();
+    ok(pk(pl,c1,c1+300)<0.01,'le son placé 10 ms avant le repère de début s\'entend encore : '+pk(pl,c1,c1+300).toFixed(2));
+    ok(pk(pl,c2,c2+50)>0.7,'le son dans la partie doit rester');
+    P.$('#dplay').click();
+  });
+  await test('partie qui tourne en boucle : elle suit le repère de début, et « Tout garder » remet la piste d\'origine',async()=>{
+    const P=await boot(); const r=await recordBase(P);
+    const L=r.buf.length, beat=L/8;
+    P.$('#addtrk').click(); await sleep(10);
+    const c2=Math.round(144+3.5*beat);
+    await P.importFile(1,mkFile(L,d=>{ for(let i=0;i<400;i++) d[c2+i]=0.8*Math.exp(-i/80); }));
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    for(let i=0;i<3;i++) t2.querySelector('.ts2').click();
+    for(let i=0;i<4;i++) t2.querySelector('.ts3').click();
+    P.$('#dplay').click(); await sleep(20);
+    t2.querySelector('.tsloop').click(); await sleep(30);
+    const first=b=>{ const x=b.getChannelData(0); for(let i=0;i<x.length;i++) if(Math.abs(x[i])>0.4) return i; return -1; };
+    ok(Math.abs(first(P.lastPlayed())-(144+0.5*beat))<=3,'1er son de la boucle à '+first(P.lastPlayed())+' (attendu '+Math.round(144+0.5*beat)+')');
+    const sn=t2.querySelector('.tsnap'); sn.checked=false; sn.dispatchEvent(new P.w.Event('change'));
+    t2.querySelector('.tsn[data-w="s"][data-ms="10"]').click(); await sleep(30);
+    ok(Math.abs(first(P.lastPlayed())-(144+0.5*beat-480))<=3,'après +10 ms sur le début, la boucle doit suivre : 1er son à '+first(P.lastPlayed())+' (attendu '+Math.round(144+0.5*beat-480)+')');
+    t2.querySelector('.tsall').click(); await sleep(30);
+    ok(Math.abs(first(P.lastPlayed())-c2)<=3&&t2.querySelector('.offv').textContent==='0 ms','« Tout garder » doit rendre la piste d\'origine : 1er son à '+first(P.lastPlayed())+', décalage '+t2.querySelector('.offv').textContent);
+    P.$('#dplay').click();
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
