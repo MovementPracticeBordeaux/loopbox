@@ -1228,6 +1228,24 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(near(freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}),98,3),'▲ octave : Sol2 attendu (98 Hz) : '+freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}).toFixed(1));
     ok(P.$('#lockhint').style.display==='none','écouter une note ne doit rien créer');
   });
+
+  await test('basse dans le morceau : reste juste après « Changer le tempo » et avec « Hauteur du son »',async()=>{
+    const ptrack=(x,a,z)=>{ const W=4096,o=[]; for(let st=a;st+W+1300<z;st+=4096){ let best=0,bl=0; for(let l=240;l<=1200;l++){ let s=0,e1=0,e2=0; for(let i=0;i<W;i+=2){ s+=x[st+i]*x[st+i+l]; e1+=x[st+i]**2; e2+=x[st+i+l]**2; } const r=s/Math.sqrt(e1*e2+1e-12); if(r>best){ best=r; bl=l; } } o.push(SR/bl); } return o; };
+    const check=async(P,f0,lab)=>{ P.$('#dstop').click(); await sleep(20); P.starts.length=0; P.$('#dplay').click(); await sleep(80);
+      const b=P.starts.filter(x=>x.buf&&x.buf.length>=SR*2).slice(-1)[0].buf, x=b.getChannelData(0), L=x.length;
+      const c=ptrack(x,Math.round(0.1*L/8),Math.round(0.85*L/8)).map(f=>1200*Math.log2(f/f0));
+      ok(Math.max(...c.map(Math.abs))<12,lab+' : écarts '+c.map(v=>v.toFixed(0)).join(',')+' centièmes'); };
+    const P=await boot(); await recordBase(P);
+    P.$('#addbass').click(); await sleep(20); const tb=P.$$('.trk')[1];
+    tb.querySelector('.bpal button[data-n="11"]').click(); tb.querySelector('.brhy').value='tenue'; tb.querySelector('.brhy').dispatchEvent(new P.w.Event('change'));
+    tb.querySelector('.bgo').click(); await sleep(40);
+    await check(P,61.735,'Si1 seul');
+    P.$('#tempoRow .tstep[data-d="5"]').click(); P.$('#tapply').click(); await sleep(2500);
+    await check(P,61.735,'après changement de tempo');
+    tb.querySelector('.ttabs button[data-tab="son"]').click(); const p=tb.querySelector('.pitch'); p.value='2'; p.dispatchEvent(new P.w.Event('change')); await sleep(100);
+    await check(P,61.735*Math.pow(2,2/12),'hauteur +2');
+    P.$('#dstop').click();
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

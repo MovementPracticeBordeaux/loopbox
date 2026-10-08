@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='46';
+const APPVER='47';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -190,8 +190,9 @@ async function changeTempo(nb){
     tracks.forEach(t=>{
       if(!t.buf) return;
       const keep=t.sel?{...t.sel}:null;
-      const data=stretchSliced(t.buf.getChannelData(0),newLen,t.buf.sampleRate);
-      const b=ctx.createBuffer(1,newLen,t.buf.sampleRate); b.copyToChannel(data,0);
+      let b;
+      if(isGen(t)&&t.bass) b=genRender(t,0,newLen,beats);
+      else { const data=stretchSliced(t.buf.getChannelData(0),newLen,t.buf.sampleRate); b=ctx.createBuffer(1,newLen,t.buf.sampleRate); b.copyToChannel(data,0); }
       t.buf=b; t.sel=keep; drawWave(t);
     });
     masterTake=null; loopLen=newLen; baseLen=newBase; gridOff=Math.round(gridOff*a);
@@ -207,7 +208,15 @@ function pitchFinish(data,sr){
   const nb=ctx.createBuffer(1,data.length,sr); nb.copyToChannel(data,0); return nb;
 }
 function setPitchStatus(t,txt){ const e=$('.pst',t.el); if(e) e.textContent=txt; }
+// basse / mélodie générée : on refabrique les notes (longueur et transposition exactes) au lieu de traiter le son
+function genRender(t,semi,L,nb){
+  if(!t.bass) return null;
+  const o=JSON.parse(JSON.stringify(t.bass)), sg=normSegs(o.segs,nb), rt=segRoots(sg,t.kind);
+  o.segs=sg.map((x,i)=>rt[i]==null?x:{...x,m:rt[i]+(semi||0),n:mod(rt[i]+(semi||0),12)});
+  const d=renderBass(o,L,nb).data, b=ctx.createBuffer(1,L,SR); b.copyToChannel(d,0); return b;
+}
 function pitchedBuf(t){
+  if(isGen(t)&&t.bass&&t.pitch&&t.buf){ const c=t.pp; if(c&&c.b===t.buf&&c.semi===t.pitch&&c.gen) return c.out; const out=genRender(t,t.pitch,t.buf.length,beats); t.pp={b:t.buf,semi:t.pitch,out,gen:true}; return out; }
   const b=t.buf; if(!b||!t.pitch) return b;
   const c=t.pp;
   if(c&&c.b===b&&c.semi===t.pitch) return c.out;
@@ -238,6 +247,7 @@ function schedulePitch(t){
 }
 function ensurePitchSync(t){
   if(!t.buf||!t.pitch) return;
+  if(isGen(t)&&t.bass){ pitchedBuf(t); return; }
   if(t.pp&&t.pp.b===t.buf&&t.pp.semi===t.pitch) return;
   t.pp={b:t.buf,semi:t.pitch,out:pitchFinish(pitchShiftSync(t.buf.getChannelData(0),t.pitch,t.buf.sampleRate),t.buf.sampleRate)}; t.pc=null;
 }
