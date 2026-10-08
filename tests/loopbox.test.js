@@ -1216,6 +1216,18 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(P.starts.filter(x=>x.buf).length===3,'les 3 pistes doivent jouer : '+P.starts.filter(x=>x.buf).length);
     P.$('#mplay').click();
   });
+
+  await test('basse : la note choisie dans la palette (ou changée d\'octave) se fait entendre aussitôt',async()=>{
+    const {P,tb}=await bassBoot();
+    P.starts.length=0; tb.querySelector('.bpal button[data-n="7"]').click(); await sleep(10);
+    let a=P.starts.filter(x=>x.buf).slice(-1)[0];
+    ok(a&&a.buf.length<SR*1.2,'aucune note jouée au choix de la palette');
+    ok(a&&near(freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}),49,2),'Sol1 attendu (49 Hz, le Sol le plus proche du Do2) : '+(a?freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}).toFixed(1):'-'));
+    tb.querySelector('.boct[data-d="12"]').click(); await sleep(10);
+    a=P.starts.filter(x=>x.buf).slice(-1)[0];
+    ok(near(freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}),98,3),'▲ octave : Sol2 attendu (98 Hz) : '+freqOf({getChannelData:()=>a.buf.getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))}).toFixed(1));
+    ok(P.$('#lockhint').style.display==='none','écouter une note ne doit rien créer');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

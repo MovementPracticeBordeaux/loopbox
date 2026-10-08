@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='45';
+const APPVER='46';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1123,7 +1123,7 @@ const HELP={
   stems:"<b>Pistes séparées</b> : exporte chaque piste dans son propre fichier WAV, tous rangés dans un .zip, pour les retravailler dans une autre appli. Chaque piste garde son volume, sa tonalité, ses effets et sa hauteur, mais pas le « Son final ». Toutes les pistes ont la même longueur et démarrent en même temps : elles se superposent parfaitement.",
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
-  btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette. ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
+  btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
   slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
@@ -1631,6 +1631,19 @@ function drawBassTimeline(t){
   });
 }
 function bassChanged(t,live){ drawBassTimeline(t); drawBassViz(t); if(live!==false&&preview&&preview.t===t) startPreview(t); }
+// écoute immédiate d'une note (palette, octave) avec le son choisi pour la piste
+let auditionSrc=null;
+function auditionNote(t,m){
+  if(m==null||!isFinite(m)) return;
+  try{ ctx.resume(); }catch(e){}
+  if(auditionSrc){ try{ auditionSrc.stop(); }catch(e){} auditionSrc=null; }
+  const o=readBassOpts(t), dur=0.55, n=Math.round((dur+0.45)*SR), d=new Float32Array(n);
+  synthNote(d,0,dur,440*Math.pow(2,(m-69)/12),1,o.type);
+  let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(d[i])); if(pk>0){ const g=0.6/pk; for(let i=0;i<n;i++) d[i]*=g; }
+  const b=ctx.createBuffer(1,n,SR); b.copyToChannel(d,0);
+  const s=ctx.createBufferSource(), g=ctx.createGain(); s.buffer=b; g.gain.value=Math.max(0.2,t.vol||0.8);
+  s.connect(g); g.connect(chain.inp); s.start(ctx.currentTime+0.01); auditionSrc=s;
+}
 function initBassTimeline(t){
   const c=$('.btl',t.el); let drag=null;
   const posAt=ev=>{ const r=c.getBoundingClientRect(); return clamp((ev.clientX-r.left)/(r.width||1),0,1)*nbOf(t); };
@@ -1670,7 +1683,8 @@ function initBassTimeline(t){
     const d=ensureDraft(t), x=d.segs[t.bsel||0], v=+b.dataset.n;
     if(v<0){ x.n=null; x.m=undefined; }
     else { const old=segRoots(d.segs,t.kind)[t.bsel||0]; x.n=v; x.m=(x.m!=null||old!=null)?nearOct(rootOf(v),old!=null?old:rootOf(v)):undefined; if(x.m==null) delete x.m; }
-    bassChanged(t); $('.bst',t.el).textContent=''; });
+    bassChanged(t); $('.bst',t.el).textContent='';
+    if(v>=0) auditionNote(t,segRoots(d.segs,t.kind)[t.bsel||0]); });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
   // une octave plus grave / plus aiguë pour le bloc choisi seulement (les autres blocs ne bougent pas)
   t.el.querySelectorAll('.boct').forEach(b=>b.onclick=()=>{
@@ -1680,7 +1694,7 @@ function initBassTimeline(t){
     if(m<lo||m>hi){ msg('Limite atteinte : ce bloc irait trop '+(+b.dataset.d<0?'grave':'aigu')+'.'); return; }
     d.segs.forEach((x,k)=>{ if(roots[k]!=null){ x.m=roots[k]; x.n=((roots[k]%12)+12)%12; } });
     d.segs[i].m=m; d.segs[i].n=((m%12)+12)%12;
-    bassChanged(t);
+    bassChanged(t); auditionNote(t,m);
     msg('Bloc '+(i+1)+' : '+noteName(roots[i])+' → '+noteName(m)+'. Les autres blocs ne bougent pas.');
   });
   $('.mgo',t.el).onclick=()=>melToBass(t);

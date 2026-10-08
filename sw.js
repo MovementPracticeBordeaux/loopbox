@@ -1,7 +1,7 @@
 // Service worker de LoopBox : permet l'installation et le fonctionnement hors connexion.
 // La page est cherchée d'abord sur le réseau (pour avoir la dernière version), puis dans le cache si hors ligne.
-const VER='loopbox-v45';
-const SHELL=['./','./index.html','./style.css?v=45','./app.js?v=45','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
+const VER='loopbox-v46';
+const SHELL=['./','./index.html','./style.css?v=46','./app.js?v=46','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(VER).then(c=>c.addAll(SHELL))); });
 self.addEventListener('activate',e=>{
   e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('loopbox-')&&k!==VER).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
