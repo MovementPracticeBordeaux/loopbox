@@ -1265,6 +1265,43 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const b2=P.lastBuf(), bl=b2.length/8;
     ok(near(fz(b2,4.1,4.8),65.4,3)&&near(fz(b2,6.1,6.8),61.7,3),'notes jouées Do2 puis Si1 : '+fz(b2,4.1,4.8).toFixed(1)+' / '+fz(b2,6.1,6.8).toFixed(1));
   });
+
+  await test('montage : la variation d\'une piste du milieu ne touche à aucune autre piste',async()=>{
+    const {P,tap,X,Y,L}=await montBoot();
+    P.$('#addtrk').click(); await sleep(10);
+    await P.importFile(2,mkFile(L,d=>{ for(let i=0;i<L;i++) d[i]=0.3*Math.sin(2*Math.PI*330*i/SR); })); await sleep(20);
+    const cv=P.$('#mcv'); cv.getBoundingClientRect=()=>({left:0,top:0,width:900,height:400});
+    tap(X(16),12); tap(X(14),Y(1)); P.$('#mcut').click(); tap(X(20),Y(1)); P.$('#mvar').click(); await sleep(30);
+    const names=P.$$('.trk').map(x=>x.querySelector('.tn').textContent).join(' · ');
+    ok(names==='Piste 1 · Piste 2 · Piste 2 (variation) · Piste 3','pistes : '+names);
+    ok(P.$('#mlanehint').hidden,'aucune piste ne doit perdre ses blocs : '+P.$('#mlanehint').textContent);
+    tap(X(20),Y(3)); ok(/« Piste 3 » · mesures 1 →/.test(P.$('#mclipinfo').textContent),'Piste 3 doit garder son bloc : '+P.$('#mclipinfo').textContent);
+    tap(X(20),Y(2)); ok(/« Piste 2 \(variation\) » · mesures 5 →/.test(P.$('#mclipinfo').textContent),'bloc de la variation : '+P.$('#mclipinfo').textContent);
+    P.$('#undo').click(); await sleep(30);
+    ok(P.$$('.trk').map(x=>x.querySelector('.tn').textContent).join(' · ')==='Piste 1 · Piste 2 · Piste 3','↶ doit retirer la variation (même au milieu) : '+P.$$('.trk').map(x=>x.querySelector('.tn').textContent).join(' · '));
+  });
+  await test('supprimer n\'importe quelle piste (vide ou non), et la récupérer avec ↶',async()=>{
+    const {P,tap,X,Y,L}=await montBoot();
+    P.$('#addtrk').click(); await sleep(10); P.$('#addtrk').click(); await sleep(10);
+    const names=()=>P.$$('.trk').map(x=>x.querySelector('.tn').textContent).join(' · ');
+    ok(names()==='Piste 1 · Piste 2 · Piste 3 · Piste 4','préparation : '+names());
+    const t3=P.$$('.trk')[2]; t3.querySelector('.tog').click(); t3.querySelector('.ttabs button[data-tab="trk"]').click();
+    ok(!t3.querySelector('.del').hidden,'une piste vide au milieu doit pouvoir être supprimée');
+    t3.querySelector('.del').click(); await sleep(20);
+    ok(names()==='Piste 1 · Piste 2 · Piste 4','suppression d\'une piste vide : '+names());
+    const t2=P.$$('.trk')[1]; t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="trk"]').click();
+    t2.querySelector('.del').click(); await sleep(20);
+    ok(names()==='Piste 1 · Piste 4'&&/supprimée avec son son/.test(P.$('#msg').textContent),'suppression d\'une piste avec du son : '+names()+' | '+P.$('#msg').textContent);
+    P.$('#undo').click(); await sleep(30);
+    ok(names()==='Piste 1 · Piste 2 · Piste 4','↶ : la piste revient à sa place : '+names());
+    P.starts.length=0; P.$('#mplay').click(); await sleep(20);
+    ok(P.starts.filter(x=>x.buf).length===2,'la piste récupérée rejoue avec ses blocs du montage');
+    P.$('#mplay').click();
+    P.$('#undo').click(); await sleep(30);
+    ok(names()==='Piste 1 · Piste 2 · Piste 3 · Piste 4','↶ encore : la piste vide revient : '+names());
+    P.$('#redo').click(); await sleep(30);
+    ok(names()==='Piste 1 · Piste 2 · Piste 4','↷ : '+names());
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

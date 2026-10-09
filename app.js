@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='48';
+const APPVER='49';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -938,7 +938,11 @@ function restoreState(sn){
   masterTake=sn.mt?{...sn.mt}:null; loopHist=null;
   const map=new Map(sn.tr.map(x=>[x.t,x]));
   // une copie de piste créée après cet état (dupliquer, variation) disparaît vraiment quand on l'annule
-  while(tracks.length>1){ const t=tracks[tracks.length-1]; if(map.has(t)||!t.fromDup) break; if(recObj&&recObj.i===t.id) break; disposeTrack(t); tracks.pop(); }
+  { const order=sn.tr.map(x=>x.t), extra=tracks.filter(t=>!map.has(t)&&!t.fromDup&&!t.histDel), gone=tracks.filter(t=>!map.has(t)&&(t.fromDup||t.histDel)&&!(recObj&&recObj.i===t.id));
+    gone.forEach(t=>{ stopSrc(t); setLive(t,false); if(t.el) t.el.remove(); });
+    const next=order.concat(extra);
+    if(next.length&&(next.length!==tracks.length||next.some((t,i)=>tracks[i]!==t))){ tracks.length=0; next.forEach(t=>tracks.push(t)); reindexTracks(); applyGains(); }
+  }
   updTrackBtns(); updFold();
   tracks.forEach(t=>{
     const x=map.get(t);
@@ -2207,7 +2211,7 @@ function buildTrackUI(t){
   el.querySelectorAll('.tsn').forEach(b=>b.onclick=()=>{ const q=tsGet(), db=(+b.dataset.ms/1000)/(loopSec()/beats); if(b.dataset.w==='s') setTrackSel(t,q.s+db,q.e); else setTrackSel(t,q.s,q.e+db); });
   $('.tsnap',el).onchange=e=>{ t.snap=e.target.checked; t.pc=null; t.po=null; startSrc(t); drawWave(t); scheduleSave(true); };
   el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>setSelMode(t,b.dataset.m));
-  $('.del',el).onclick=()=>removeLastTrack();
+  $('.del',el).onclick=()=>removeTrack(t);
   $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
   $('.bgo',el).onclick=()=>genBass(t);
   $('.bprev',el).onclick=()=>{ if(preview&&preview.t===t) stopPreview(); else startPreview(t); };
@@ -2403,6 +2407,7 @@ function duplicateTrack(t){
   setFx(n); syncTrackUI(n); drawWave(n); applyGains(n); startSrc(n);
   updTrackBtns(); lockUI(); updLive(); scheduleSave();
   msg('Piste dupliquée : « '+n.name+' ».');
+  return n;
 }
 // ---------- mode live ----------
 function nextBoundary(){
@@ -2746,15 +2751,15 @@ function songMakeVar(){
   const c=songSelClip(); if(!c||recObj) return;
   const t=trackByUid(c.u); if(!t) return;
   if(tracks.length>=MAXTRACKS){ msg('Nombre maximum de pistes atteint ('+MAXTRACKS+').'); return; }
-  const before=tracks.length;
-  duplicateTrack(t);
-  if(tracks.length===before) return;
-  const n=tracks[tracks.length-1];
+  const n=duplicateTrack(t);
+  if(!n) return;
   if(!song.known.includes(n.uid)) song.known.push(n.uid);
-  n.name=uniqueTrackName(t.name.replace(/ \\(variation( \\d+)?\\)$/,'')+' (variation)',n); $('.tn',n.el).textContent=n.name;
+  const base=t.name.replace(/ \(variation( \d+)?\)$/,'').replace(/ copie( \d+)?$/,'');
+  n.name=uniqueTrackName(base.slice(0,12)+' (variation)',n); $('.tn',n.el).textContent=n.name; $('.tnin',n.el).value=n.name; updLive();
   c.u=n.uid; song.clips=song.clips.filter(x=>x===c||x.u!==n.uid);
   songCache.delete(n.uid); scheduleSave(true); songRestartIfPlaying(); drawSong();
-  msg('Variation créée : « '+n.name+' » ne joue que ce bloc. Modifie ses notes, ses effets ou son son dans sa piste (en bas) : le reste du morceau garde « '+t.name+' ». ↶ pour annuler.');
+  const left=song.clips.some(x=>x.u===t.uid);
+  msg('Variation créée : « '+n.name+' » ne joue que ce bloc. Modifie ses notes, ses effets ou son son dans sa piste (sous « '+t.name+' »).'+(left?' Le reste du morceau garde « '+t.name+' ».':' Ce bloc était le seul de « '+t.name+' » : il joue maintenant la variation partout. Pour ne varier qu\'une partie, ↶ puis coupe d\'abord le bloc au curseur (✂).')+' ↶ pour annuler.');
 }
 function songBlank(){
   const p=songSnap(songPos()), L=+$('#mblankl').value;
@@ -2874,6 +2879,20 @@ function disposeTrack(t){
   [t.inp,t.eq.lo,t.eq.mid,t.eq.hi,t.gain,t.pan].forEach(n=>{ try{ if(n) n.disconnect(); }catch(e){} });
   if(t.el) t.el.remove();
 }
+// supprimer une piste (vide ou non) ; ↶ la récupère (la piste est mise de côté, pas détruite)
+function removeTrack(t){
+  if(!t||recObj) return;
+  if(tracks.length<=1){ msg('Il faut garder au moins une piste.'); return; }
+  pushHist();
+  if(preview&&preview.t===t) stopPreview(false);
+  stopSrc(t); setLive(t,false); if(t.el) t.el.remove(); t.histDel=true;
+  tracks.splice(tracks.indexOf(t),1);
+  if(masterTake&&masterTake.ref===t) masterTake=null;
+  reindexTracks(); updTrackBtns(); updFold(); applyGains(); lockUI(); updLive();
+  try{ drawSong(); }catch(e){}
+  scheduleSave();
+  msg('Piste « '+t.name+' » supprimée'+(t.buf?' avec son son':'')+'. ↶ pour la récupérer.');
+}
 function removeLastTrack(){
   const t=tracks[tracks.length-1];
   if(!t||tracks.length<=1||t.buf||(recObj&&recObj.i===t.id)) return;
@@ -2977,7 +2996,7 @@ function lockUI(){
     const showSel=!!(t.buf&&loopLen&&!(ed&&masterTake&&masterTake.i===t.id));
     $('.tsel',t.el).hidden=!showSel;
     if(showSel) drawTsel(t);
-    $('.del',t.el).hidden=!(i===tracks.length-1&&tracks.length>1&&!t.buf&&!(recObj&&recObj.i===t.id));
+    $('.del',t.el).hidden=!(tracks.length>1&&!(recObj&&recObj.i===t.id));
   });
 }
 function playFrom(p){
