@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='49';
+const APPVER='50';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1722,7 +1722,7 @@ function initBassTimeline(t){
   $('.tfb',t.el).onclick=()=>transformTrack(t,'bass');
   $('.tfm',t.el).onclick=()=>transformTrack(t,'synth');
   $('.tfvoice',t.el).onclick=()=>revertVoice(t);
-  $('.tfswap',t.el).onclick=()=>transformTrack(t,t.kind==='synth'?'bass':'synth');
+  $('.tfswap',t.el).onclick=()=>convertGen(t,t.kind==='synth'?'bass':'synth');
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
   $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
   $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } bassChanged(t); };
@@ -1787,8 +1787,30 @@ function genBass(t,noHist){
 // ---------- transformer n'importe quelle piste en basse ou en mélodie ----------
 function updVoiceUI(t){
   const r=$('.tfback',t.el); if(!r) return;
-  r.hidden=!(isGen(t)&&t.voice);
+  r.hidden=!isGen(t);
+  const v=$('.tfvoice',t.el); if(v) v.hidden=!t.voice;
   const b=$('.tfswap',t.el); if(b) b.textContent=t.kind==='synth'?'🎸 Changer en ligne de basse':'🎹 Changer en mélodie';
+}
+// basse ↔ mélodie : on garde les blocs (notes, durées, silences), le rythme et les réglages ; seule l'octave change de registre
+function convertGen(t,kind){
+  if(!isGen(t)||recObj||t.kind===kind) return;
+  stopPreview(false);
+  const d=ensureDraft(t), segs=normSegs(d.segs,nbOf(t)), rts=segRoots(segs,t.kind), ms=rts.filter(x=>x!=null).sort((a,b)=>a-b);
+  const pr=genPick(kind), med=ms.length?ms[ms.length>>1]:(kind==='synth'?60:36), shift=12*Math.round(((kind==='synth'?60:36)-med)/12);
+  const o=readBassOpts(t);
+  pushHist();
+  const nb=defaultBass(nbOf(t),kind);
+  nb.rhy=o.rhy; nb.mel=o.mel; nb.len=o.len; nb.beats=o.beats;
+  nb.segs=segs.map((x,i)=>rts[i]==null?{...x,n:null}:{...x,m:rts[i]+shift,n:mod(rts[i]+shift,12)});
+  const oldName=t.name; t.kind=kind; t.bass=nb; t.bdraft=null; t.bsel=0; t.pitch=0; t.pp=null;
+  if(/\((basse|mélodie)\)$/.test(t.name)) t.name=t.name.replace(/\((basse|mélodie)\)$/,kind==='synth'?'(mélodie)':'(basse)');
+  else if(/^(Basse|Mélodie)( \d+)?$/.test(t.name)) t.name=uniqueTrackName(kind==='synth'?'Mélodie':'Basse',t);
+  $('.tn',t.el).textContent=t.name; $('.tnin',t.el).value=t.name;
+  setKindUI(t); showBassOpts(t);
+  genBass(t,true);
+  setTab(t,'bass'); updVoiceUI(t); syncTrackUI(t); updLive(); try{ drawSong(); }catch(e){}
+  const lo=ms.length?noteName(ms[0]+shift):'', hi=ms.length?noteName(ms[ms.length-1]+shift):'';
+  msg('« '+oldName+' » est maintenant '+(kind==='synth'?'une mélodie (son simple, choisis un style dans « Style »)':'une ligne de basse')+' : mêmes notes et même rythme'+(shift?', '+(shift>0?'montées':'descendues')+' de '+Math.abs(shift/12)+' octave'+(Math.abs(shift)>12?'s':''):'')+(lo?' (de '+lo+' à '+hi+')':'')+'. ↶ pour revenir.');
 }
 function transformTrack(t,kind){
   if(!t.buf||!loopLen||recObj){ if(!loopLen) msg('Il faut d\'abord une boucle.'); return; }

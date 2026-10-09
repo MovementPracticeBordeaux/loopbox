@@ -1302,6 +1302,26 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#redo').click(); await sleep(30);
     ok(names()==='Piste 1 · Piste 2 · Piste 4','↷ : '+names());
   });
+
+  await test('une ligne de basse créée à la main se change en mélodie (et inversement) en gardant ses notes',async()=>{
+    const {P,tb}=await bassBoot();
+    const cv=tb.querySelector('.btl'); cv.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ cv.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); cv.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    tap(400,15); tb.querySelector('.bpal button[data-n="7"]').click();
+    tb.querySelector('.bgo').click(); await sleep(30);
+    ok(!tb.querySelector('.tfback').hidden&&tb.querySelector('.tfvoice').hidden&&/Changer en mélodie/.test(tb.querySelector('.tfswap').textContent),'le bouton doit être proposé sur une basse créée à la main');
+    tb.querySelector('.tfswap').click(); await sleep(40);
+    ok(/ksynth/.test(tb.className)&&tb.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tb.className+' / '+tb.querySelector('.tn').textContent);
+    ok(/^Do → Sol/.test(tb.querySelector('.btlinfo').textContent),'notes gardées : '+tb.querySelector('.btlinfo').textContent);
+    let b=P.lastBuf();
+    ok(near(fz(b,0.2,0.8),261.6,6)&&near(fz(b,4.2,4.8),196,5),'mélodie Do4 puis Sol3 : '+fz(b,0.2,0.8).toFixed(1)+' / '+fz(b,4.2,4.8).toFixed(1));
+    ok(/montées de 2 octaves/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    tb.querySelector('.tfswap').click(); await sleep(40);
+    b=P.lastBuf();
+    ok(/kbass/.test(tb.className)&&tb.querySelector('.tn').textContent==='Basse'&&near(fz(b,0.2,0.8),65.4,3),'retour en basse (Do2) : '+tb.querySelector('.tn').textContent+' / '+fz(b,0.2,0.8).toFixed(1));
+    P.$('#undo').click(); await sleep(30);
+    ok(/ksynth/.test(tb.className),'↶ doit revenir à la mélodie');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
