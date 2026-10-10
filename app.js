@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='53';
+const APPVER='54';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -529,7 +529,8 @@ async function reopenMic(){
 async function listMics(){
   const sel=$('#micsel'); if(!sel||!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices) return;
   try{
-    const devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'&&d.deviceId&&d.deviceId!=='default'&&d.deviceId!=='communications');
+    const all=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput'); rawMics=all.map(d=>(d.label||'(sans nom)')+(d.deviceId==='default'?' [par défaut]':d.deviceId==='communications'?' [appels]':d.deviceId?'':' [identifiant caché]'));
+    const devs=all.filter(d=>d.deviceId&&d.deviceId!=='default'&&d.deviceId!=='communications');
     sel.innerHTML='<option value="">Micro par défaut</option>'+devs.map((d,k)=>`<option value="${d.deviceId.replace(/"/g,'')}"></option>`).join('');
     devs.forEach((d,k)=>{ sel.options[k+1].textContent=d.label||('Micro '+(k+1)); });
     sel.value=devs.some(d=>d.deviceId===micId)?micId:'';
@@ -537,12 +538,13 @@ async function listMics(){
   }catch(e){}
 }
 // nom du micro réellement utilisé (le navigateur le donne une fois le micro autorisé)
+let rawMics=null;
 function showMicUsed(n){
   const e=$('#micused'); if(!e) return;
   let lab='';
   try{ const tr=micStream&&micStream.getAudioTracks?micStream.getAudioTracks()[0]:null; lab=tr&&tr.label?tr.label:''; }catch(x){}
   if(!micStream){ e.textContent='Touche « Chercher les micros » (ou fais une prise) pour autoriser le micro et voir la liste.'; return; }
-  e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.');
+  e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.')+(rawMics?' — Ce que le navigateur annonce ('+rawMics.length+') : '+(rawMics.join(' · ')||'rien')+'.':'');
 }
 async function scanMics(){
   if(recObj) return;
@@ -1174,7 +1176,6 @@ const HELP={
   share:"<b>Partager le mix</b> : prépare le fichier WAV et ouvre le menu de partage du téléphone (WhatsApp, mail, Drive…). Si le navigateur ne sait pas partager un fichier, il est simplement téléchargé.",
   stems:"<b>Pistes séparées</b> : exporte chaque piste dans son propre fichier WAV, tous rangés dans un .zip, pour les retravailler dans une autre appli. Chaque piste garde son volume, sa tonalité, ses effets et sa hauteur, mais pas le « Son final ». Toutes les pistes ont la même longueur et démarrent en même temps : elles se superposent parfaitement.",
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
-  kick:"<b>Renforcer les grosses caisses</b> : repère tes grosses caisses de beatbox (coups graves et soudains) et leur ajoute une attaque nette et un corps bien grave, comme une vraie grosse caisse. Ça aide quand elles sonnent « étouffées » : un micro proche capte surtout un souffle d'air très grave que les haut-parleurs de tablette ne rendent pas. Ce souffle sous 45 Hz est retiré. Caisses claires et voix ne sont pas modifiées. <b>Léger</b>, <b>Moyen</b> ou <b>Fort</b> règle la quantité ajoutée. ↶ annule.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -1364,75 +1365,6 @@ function denoiseTracks(list,level){
   lockUI(); scheduleSave();
   const avg=gain.length?Math.round(-gain.reduce((a,b)=>a+b,0)/gain.length):0;
   msg('Bruit nettoyé sur '+ok.length+' piste'+(ok.length>1?'s':'')+' (souffle réduit d\'environ '+avg+' dB dans les silences)'+(skipTxt.length?'. Laissées intactes : '+skipTxt.join(' ; '):'')+'. ↶ pour revenir.');
-}
-
-// ---------- renforcer les grosses caisses ----------
-// repère les grosses caisses : attaque soudaine dont l'énergie est surtout grave
-function findKicks(x,SR){
-  const L=x.length, hop=256, F=Math.floor(L/hop);
-  // séparation grave / aigu par filtre passe-bas simple
-  const lo=new Float32Array(L); let y=0; const a=1-Math.exp(-2*Math.PI*150/SR);
-  for(let i=0;i<L;i++){ y+=a*(x[i]-y); lo[i]=y; }
-  const el=new Float32Array(F), eh=new Float32Array(F);
-  for(let j=0;j<F;j++){ let sl=0,sh=0; for(let i=j*hop;i<(j+1)*hop;i++){ sl+=lo[i]*lo[i]; const h=x[i]-lo[i]; sh+=h*h; } el[j]=Math.sqrt(sl/hop); eh[j]=Math.sqrt(sh/hop); }
-  const le=el.map(v=>Math.log(1+2000*v)), fl=new Float32Array(F); let mx=0;
-  for(let j=0;j<F;j++){ fl[j]=Math.max(0,le[j]-Math.max(j>0?le[j-1]:0,j>1?le[j-2]:0)); if(fl[j]>mx) mx=fl[j]; } // avant le début = silence : une grosse caisse pile au début compte
-  let pkMax=0; for(let j=0;j<F;j++) if(el[j]>pkMax) pkMax=el[j];
-  const out=[]; let last=-1e9;
-  for(let j=0;j<F-12;j++){
-    if(fl[j]<0.25*mx||(j>0&&fl[j]<fl[j-1])||fl[j]<fl[j+1]||j-last<Math.round(0.14*SR/hop)) continue;
-    let sl=0,sh=0,pk=0; for(let k=j;k<j+12;k++){ sl+=el[k]*el[k]; sh+=eh[k]*eh[k]; if(el[k]>pk) pk=el[k]; }
-    if(pk<0.25*pkMax||sl<4*sh) continue;              // assez fort, et surtout grave
-    // début exact : premier échantillon fort autour de la trame
-    let st=Math.max(0,(j-2)*hop), p=0; for(let i=st;i<Math.min(L,st+6*hop);i++) p=Math.max(p,Math.abs(lo[i]));
-    for(let i=st;i<Math.min(L,st+6*hop);i++) if(Math.abs(lo[i])>0.2*p){ st=i; break; }
-    out.push({n:st,amp:p}); last=j;
-  }
-  return out;
-}
-// ajoute à chaque grosse caisse un corps net (note qui chute) et une attaque (« click »), et retire le grondement d'air très grave
-function enhanceKicks(x,amount,SR){
-  const k=findKicks(x,SR), L=x.length, y=new Float32Array(L);
-  // passe-haut 45 Hz (2 étages) : enlève le « pouf » d'air sous la grosse caisse
-  const w0=2*Math.PI*45/SR, al=Math.sin(w0)/(2*0.707), cs=Math.cos(w0), a0=1+al, b0=(1+cs)/2/a0, b1=-(1+cs)/a0, b2=b0, a1=-2*cs/a0, a2=(1-al)/a0;
-  y.set(x);
-  for(let s=0;s<2;s++){ let x1=0,x2=0,y1=0,y2=0; for(let i=0;i<L;i++){ const v=y[i], o=b0*v+b1*x1+b2*x2-a1*y1-a2*y2; x2=x1; x1=v; y2=y1; y1=o; y[i]=o; } }
-  let sd=12345;
-  k.forEach(({n,amp})=>{
-    const g=clamp(amp*1.6,0.15,0.9)*amount, len=Math.round(0.32*SR); let ph=0;
-    for(let i=0;i<len&&n+i<L;i++){
-      const t=i/SR, f=55+105*Math.exp(-t/0.035); ph+=f/SR;
-      let v=Math.sin(2*Math.PI*ph)*Math.exp(-t/0.16)*Math.min(1,t/0.001);
-      if(t<0.006){ sd=(sd*16807)%2147483647; v+=0.55*(sd/2147483647*2-1)*(1-t/0.006); }
-      y[n+i]+=g*v;
-    }
-  });
-  // trop fort : on baisse seulement la grosse caisse concernée (fondu de 5 ms), pas le reste de la piste
-  const len=Math.round(0.32*SR), rmp=Math.round(0.005*SR);
-  k.forEach(({n})=>{
-    const a=n, b=Math.min(L,n+len); let pk=0; for(let i=a;i<b;i++) pk=Math.max(pk,Math.abs(y[i]));
-    if(pk<=0.95) return; const f=0.95/pk;
-    for(let i=Math.max(0,a-rmp);i<Math.min(L,b+rmp);i++){ const w=i<a?(a-i)/rmp:i>=b?(i-b+1)/rmp:0; y[i]*=f+(1-f)*Math.min(1,w); }
-  });
-  let pk=0; for(let i=0;i<L;i++) pk=Math.max(pk,Math.abs(y[i])); if(pk>0.99){ const f=0.99/pk; for(let i=0;i<L;i++) y[i]*=f; }
-  return {y,count:k.length,kicks:k};
-}
-function kickTracks(list,amount){
-  if(recObj) return;
-  const cand=list.filter(t=>t.buf&&!isGen(t));
-  if(!cand.length){ msg('Rien à renforcer : il faut une piste enregistrée.'); return; }
-  const res=cand.map(t=>{ const d=t.buf.getChannelData(0); return {t,r:enhanceKicks(d,amount,t.buf.sampleRate)}; });
-  const ok=res.filter(o=>o.r.count>0);
-  if(!ok.length){ msg('Aucune grosse caisse repérée (il faut des coups graves et marqués).'); return; }
-  pushHist();
-  ok.forEach(({t,r})=>{
-    const keep=t.sel?{...t.sel}:null, nb=ctx.createBuffer(1,r.y.length,t.buf.sampleRate); nb.copyToChannel(r.y,0);
-    t.buf=nb; t.sel=keep; if(masterTake&&masterTake.i===t.id) masterTake=null;
-    drawWave(t); startSrc(t);
-  });
-  lockUI(); scheduleSave();
-  const n=ok.reduce((s,o)=>s+o.r.count,0);
-  msg(n+' grosse'+(n>1?'s':'')+' caisse'+(n>1?'s':'')+' renforcée'+(n>1?'s':'')+' (attaque + corps ajoutés, grondement d\'air sous 45 Hz retiré). Les autres sons ne sont pas touchés. ↶ pour revenir.');
 }
 
 // ---------- générateur de ligne de basse ----------
@@ -2282,8 +2214,6 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="fades">Fondus et sens</span></div>
       <div class="row wrap" style="margin-top:6px"><span class="lbl">Entrée</span><select class="fdi" style="width:auto" aria-label="Fondu d'entrée">${FADE_OPTS}</select><span class="lbl">Sortie</span><select class="fdo" style="width:auto" aria-label="Fondu de sortie">${FADE_OPTS}</select></div>
       <div class="row"><button class="revb">↔ Jouer à l'envers</button></div></div>
-    <div class="field reconly"><div class="row"><span class="lbl" data-help="kick">Grosses caisses étouffées</span></div>
-      <div class="row wrap" style="margin-top:6px"><select class="kkl" style="width:auto" aria-label="Force du renfort"><option value="0.6">Léger</option><option value="1" selected>Moyen</option><option value="1.5">Fort</option></select><button class="kkb">🥁 Renforcer les grosses caisses</button></div></div>
     <div class="field reconly"><div class="row"><span class="lbl" data-help="denoise">Nettoyer le bruit</span></div>
       <div class="row wrap" style="margin-top:6px"><select class="dnl" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button class="dnb">🧹 Nettoyer</button></div></div>
   </div>
@@ -2345,7 +2275,6 @@ function buildTrackUI(t){
   el.querySelectorAll('.trep button').forEach(b=>b.onclick=()=>setSelMode(t,b.dataset.m));
   $('.del',el).onclick=()=>removeTrack(t);
   $('.dnb',el).onclick=()=>denoiseTracks([t],$('.dnl',el).value);
-  $('.kkb',el).onclick=()=>kickTracks([t],+$('.kkl',el).value);
   $('.bgo',el).onclick=()=>genBass(t);
   $('.bprev',el).onclick=()=>{ if(preview&&preview.t===t) stopPreview(); else startPreview(t); };
   el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>bassChanged(t));
