@@ -302,6 +302,27 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(20);
     ok(Math.abs(rms(P.lastPlayed().getChannelData(0),gapStart,gapEnd)-rms(before,gapStart,gapEnd))<1e-4,'annulation');
   });
+  await test('renforcer les grosses caisses : pouf grave rendu audible, caisses claires intactes, ↶',async()=>{
+    const P=await boot();
+    const n=SR*4, d=new Float32Array(n); let sd=7;
+    const kicks=[0,1,2,3].map(k=>Math.round(k*SR)+3000), snares=[0,1,2,3].map(k=>Math.round((k+0.5)*SR)+3000);
+    // grosse caisse de beatbox au micro proche : souffle d'air sous 40 Hz, sans attaque
+    kicks.forEach(p=>{ for(let i=0;i<9000;i++) d[p+i]+=0.6*Math.sin(2*Math.PI*32*i/SR)*Math.exp(-i/2500)*Math.min(1,i/200); });
+    snares.forEach(p=>{ for(let i=0;i<6000;i++){ sd=(sd*16807)%2147483647; d[p+i]+=0.5*(sd/2147483647*2-1)*Math.exp(-i/1200); } });
+    await P.importFile(0,{numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>d});
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    const before=Float32Array.from(P.lastPlayed().getChannelData(0));
+    const hi=(x,a,b)=>{ let y=0,s=0; const al=1-Math.exp(-2*Math.PI*150/SR); for(let i=a;i<b;i++){ y+=al*(x[i]-y); s+=(x[i]-y)**2; } return Math.sqrt(s/(b-a)); };
+    t1.querySelector('.kkb').click(); await sleep(40);
+    const after=P.lastPlayed().getChannelData(0);
+    ok(/4 grosses caisses renforcées/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    // décalage éventuel de la lecture : on mesure via la piste elle-même
+    const off=(()=>{ let best=0,bv=-1; for(let s=-2000;s<=2000;s+=50){ let c=0; for(let i=SR*0.5+3000;i<SR*0.5+5000;i++){ const j=i+s; if(j>=0&&j<n) c+=before[i]*after[j]; } if(c>bv){bv=c;best=s;} } return best; })();
+    kicks.forEach(p=>{ const g=20*Math.log10(hi(after,p+off,p+off+4000)/hi(before,p,p+4000)); ok(g>10,'grosse caisse à '+(p/SR).toFixed(2)+' s : seulement +'+g.toFixed(1)+' dB audibles'); });
+    snares.forEach(p=>{ const g=20*Math.log10(hi(after,p+off+500,p+off+4000)/hi(before,p+500,p+4000)); ok(Math.abs(g)<1.5,'caisse claire modifiée : '+g.toFixed(1)+' dB'); });
+    P.$('#undo').click(); await sleep(20);
+    const u=P.lastPlayed().getChannelData(0); let e=u.length===before.length?0:1; for(let i=0;i<before.length;i++) e=Math.max(e,Math.abs(u[i]-before[i])); ok(e<1e-4,'annulation : écart '+e);
+  });
   await test('menus de piste en onglets : une seule partie affichée à la fois',async()=>{
     const P=await boot();
     const t1=P.$('.trk'); t1.querySelector('.tog').click(); await sleep(10);
