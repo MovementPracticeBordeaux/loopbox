@@ -20,7 +20,7 @@ function pageHtml(){
 async function boot(opt={}){
   const engine=opt.engine||'worklet';
   const idb=opt.idb||new FI.IDBFactory();
-  const P={gum:[],errs:[],buffers:[],starts:[],blobs:[],k:0,impulses:[],noise:0,amp:0.8,ctx:null,proc:null,wnode:null,idb};
+  const P={defaultMic:'Micro intégré',devs:[{kind:'audioinput',deviceId:'default',label:'Par défaut'},{kind:'audioinput',deviceId:'int1',label:'Micro intégré'},{kind:'audioinput',deviceId:'usb1',label:'Micro USB'},{kind:'audiooutput',deviceId:'o1',label:'Haut-parleur'}],gum:[],errs:[],buffers:[],starts:[],blobs:[],k:0,impulses:[],noise:0,amp:0.8,ctx:null,proc:null,wnode:null,idb};
   const mk=()=>new Proxy(function(){},{get:(t,p)=>{ if(p==='value') return t._v??0; return t[p]??(t[p]=mk()); },set:(t,p,v)=>{ t[p]=v; return true; },apply:()=>mk()});
   const dom=new JSDOM(pageHtml(),{runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
     class AC{ constructor(){ this.sampleRate=SR; this.currentTime=0; this.destination=mk(); P.ctx=this; }
@@ -39,8 +39,8 @@ async function boot(opt={}){
     if(opt.share){ w.navigator.canShare=()=>true; w.navigator.share=async d=>{ P.shared=d; }; }
     w.indexedDB=idb;
     w.navigator.mediaDevices={
-      getUserMedia:c=>{ P.gum.push(c); return Promise.resolve({getTracks:()=>[{stop(){}}]}); },
-      enumerateDevices:async()=>[{kind:'audioinput',deviceId:'default',label:'Par défaut'},{kind:'audioinput',deviceId:'int1',label:'Micro intégré'},{kind:'audioinput',deviceId:'usb1',label:'Micro USB'},{kind:'audiooutput',deviceId:'o1',label:'Haut-parleur'}]
+      getUserMedia:c=>{ P.gum.push(c); const lab=(c&&c.audio&&c.audio.deviceId)?((P.devs.find(d=>d.deviceId===c.audio.deviceId.exact)||{}).label||'?'):P.defaultMic; return Promise.resolve({getTracks:()=>[{stop(){}}],getAudioTracks:()=>[{label:lab,stop(){}}]}); },
+      enumerateDevices:async()=>P.devs.slice()
     };
     w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},fillRect(){},set fillStyle(v){}});
     w.URL.createObjectURL=b=>{ P.blobs.push(b); return 'blob:'+P.blobs.length; }; w.URL.revokeObjectURL=()=>{};

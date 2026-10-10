@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='51';
+const APPVER='52';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -524,7 +524,7 @@ async function ensureMic(){
 async function reopenMic(){
   if(recObj){ msg("Termine l'enregistrement avant de changer de micro."); return; }
   if(micStream){ try{ (micStream.getTracks?micStream.getTracks():[]).forEach(tr=>tr.stop()); }catch(e){} try{ micSrc.disconnect(); }catch(e){} micStream=null; micSrc=null; }
-  if(await ensureMic()) msg('Micro activé : '+($('#micsel').selectedOptions[0]||{}).textContent+'.');
+  if(await ensureMic()){ showMicUsed(); msg('Micro activé : '+($('#micsel').selectedOptions[0]||{}).textContent+'.'); }
 }
 async function listMics(){
   const sel=$('#micsel'); if(!sel||!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices) return;
@@ -533,7 +533,31 @@ async function listMics(){
     sel.innerHTML='<option value="">Micro par défaut</option>'+devs.map((d,k)=>`<option value="${d.deviceId.replace(/"/g,'')}"></option>`).join('');
     devs.forEach((d,k)=>{ sel.options[k+1].textContent=d.label||('Micro '+(k+1)); });
     sel.value=devs.some(d=>d.deviceId===micId)?micId:'';
+    showMicUsed(devs.length);
   }catch(e){}
+}
+// nom du micro réellement utilisé (le navigateur le donne une fois le micro autorisé)
+function showMicUsed(n){
+  const e=$('#micused'); if(!e) return;
+  let lab='';
+  try{ const tr=micStream&&micStream.getAudioTracks?micStream.getAudioTracks()[0]:null; lab=tr&&tr.label?tr.label:''; }catch(x){}
+  if(!micStream){ e.textContent='Touche « Chercher les micros » (ou fais une prise) pour autoriser le micro et voir la liste.'; return; }
+  e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.');
+}
+async function scanMics(){
+  if(recObj) return;
+  if(!(await ensureMic())) return;
+  if(!micId) await reopenMic();
+  await listMics();
+  const n=$('#micsel').options.length-1;
+  msg(n?n+' micro'+(n>1?'s':'')+' trouvé'+(n>1?'s':'')+'. Choisis le tien dans la liste « Micro ».':'Aucun autre micro proposé par le navigateur : le micro par défaut est utilisé.');
+}
+if(navigator.mediaDevices){
+  navigator.mediaDevices.ondevicechange=async()=>{
+    await listMics();
+    // un micro vient d'être branché ou débranché : si aucun micro précis n'est choisi, on repasse sur celui par défaut (souvent le micro USB)
+    if(micStream&&!micId&&!recObj){ await reopenMic(); await listMics(); msg('Micro branché ou débranché : '+($('#micused').textContent||'').replace(/^Micro utilisé : /,'micro utilisé : ')); }
+  };
 }
 // Le processeur reçoit le son du micro par blocs de 128 échantillons, chacun avec son numéro exact
 // dans la ligne de temps du moteur audio (currentFrame) : plus besoin d'estimer le temps.
@@ -1186,7 +1210,7 @@ const HELP={
   src:"<b>Type de son</b> : dis à l'appli ce que tu vas enregistrer sur cette piste. Elle adapte le <b>filtre des graves</b> (plus fort pour la voix, pour éviter les « pop » et le bruit de manipulation ; très léger pour le beatbox et les percussions, pour garder les « boum »), la <b>sensibilité</b> (plus élevée pour les sons faibles et proches de l'environnement) et, pour la <b>voix</b>, un filtre qui atténue le bruit de fond entre les phrases. Cela ne change pas le micro du téléphone lui-même : le plus important reste la distance entre ta bouche et le micro.",
   lvl:"<b>Niveau auto des prises</b> : après chaque prise, si elle est trop faible, l'appli la remonte automatiquement à un bon volume. Pratique si tu t'éloignes du micro ou si tu fais des sons doux. Désactive-le si tu préfères régler le volume toi-même.",
   setup:"<b>Je joue avec</b> : choisis ce que tu utilises pour écouter et enregistrer. L'appli garde une latence pour chaque configuration et passe de l'une à l'autre quand tu changes. <b>Sans casque</b> : calibration automatique. <b>Casque filaire</b> et <b>Casque Bluetooth</b> : calibration en tapant (le Bluetooth ajoute souvent 150 à 300 ms). <b>Micro externe</b> : choisis-le dans la liste « Micro » et calibre-le.",
-  micsel:"<b>Micro</b> : le micro utilisé pour enregistrer. « Par défaut » = celui choisi par la tablette. Avec un micro externe branché, choisis-le ici. Avec un casque Bluetooth, garde de préférence le micro de la tablette : utiliser le micro du casque fait souvent passer Android en « mode appel », avec un son de bien moins bonne qualité.",
+  micsel:"<b>Micro</b> : le micro utilisé pour enregistrer. Si ton micro n'apparaît pas, touche « 🔄 Chercher les micros » (après l'avoir branché). La ligne « Micro utilisé » indique celui que l'appli entend vraiment. « Par défaut » = celui choisi par la tablette. Avec un micro externe branché, choisis-le ici. Avec un casque Bluetooth, garde de préférence le micro de la tablette : utiliser le micro du casque fait souvent passer Android en « mode appel », avec un son de bien moins bonne qualité.",
   caltap:"<b>Calibrer en tapant</b> : à faire <b>avec le casque sur les oreilles</b>. Tu entends 12 clics : les 4 premiers servent de décompte, puis tape sur la table (ou fais « pa » au micro) pile sur chacun des 8 suivants. L'appli mesure le retard total, casque compris, et le range dans la configuration choisie.",
   cal:"<b>Calibrer</b> : le téléphone joue des clics et mesure le retard avec son propre micro. Il faut être <b>sans casque</b>, volume moyen, dans un endroit calme. À refaire si tu changes de casque ou d'appareil."
 };
@@ -3120,6 +3144,7 @@ function selectSetup(id){
   msg('Configuration « '+SETUPS[id]+' » : latence '+Math.round(comp*1000)+' ms'+(lats[id]==null?' (estimation, pense à calibrer).':'.'));
 }
 $('#setupseg').onclick=e=>{ const b=e.target.closest('button'); if(b) selectSetup(b.dataset.s); };
+$('#micscan').onclick=scanMics;
 $('#micsel').onchange=e=>{ micId=e.target.value; scheduleSave(true); reopenMic(); };
 $('#comp').oninput=e=>{ comp=(+e.target.value)/1000; lats[setup]=comp; $('#compv').textContent=e.target.value+'ms'; showSetupUI(); scheduleSave(true); };
 let clearTimer=null;

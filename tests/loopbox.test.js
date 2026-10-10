@@ -1335,6 +1335,21 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P=await boot(); P.amp=1.7; await recordBase(P); await sleep(800);
     ok(/micro lui-même sature/.test(P.$('#msg').textContent)&&/side-address/.test(P.$('#msg').textContent),'saturation du micro signalée : '+P.$('#msg').textContent);
   });
+
+  await test('micros : liste disponible avant la 1re prise, mise à jour quand on branche un micro, nom du micro utilisé affiché',async()=>{
+    const P=await boot();
+    ok(P.$('#micsel').options.length===1,'avant autorisation : seulement « par défaut »');
+    P.$('#micscan').click(); await sleep(80);
+    ok([...P.$('#micsel').options].map(o=>o.textContent).join('|')==='Micro par défaut|Micro intégré|Micro USB','liste : '+[...P.$('#micsel').options].map(o=>o.textContent).join('|'));
+    ok(/Micro utilisé : Micro intégré/.test(P.$('#micused').textContent),'micro utilisé : '+P.$('#micused').textContent);
+    // on branche l'ATR2500x : la tablette en fait le micro par défaut
+    P.devs.push({kind:'audioinput',deviceId:'atr',label:'ATR2500x-USB Microphone'}); P.defaultMic='ATR2500x-USB Microphone';
+    const n0=P.gum.length; await P.w.navigator.mediaDevices.ondevicechange(); await sleep(60);
+    ok([...P.$('#micsel').options].some(o=>o.textContent==='ATR2500x-USB Microphone'),'le micro branché doit apparaître');
+    ok(P.gum.length>n0&&/Micro utilisé : ATR2500x-USB Microphone/.test(P.$('#micused').textContent),'le micro par défaut doit être repris : '+P.$('#micused').textContent);
+    P.$('#micsel').value='int1'; P.$('#micsel').dispatchEvent(new P.w.Event('change')); await sleep(80);
+    ok(/Micro utilisé : Micro intégré/.test(P.$('#micused').textContent),'choix manuel : '+P.$('#micused').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
