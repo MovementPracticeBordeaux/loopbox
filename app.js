@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='50';
+const APPVER='51';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1072,10 +1072,24 @@ function drawEditor(){
 })();
 function finishRec(s,e){
   const r=recObj; if(!r) return;
+  setTimeout(()=>{ if(window.__lvlMsg){ msg(window.__lvlMsg+(($('#msg').textContent&&!/Prise trop forte|micro lui-même/.test($('#msg').textContent))?' — '+$('#msg').textContent:'')); window.__lvlMsg=''; } },700);
   pushHist();
   const blocks=cap.blocks;
   cap=null; recObj=null;
   const raw=gather(blocks,s,e);
+  // prise trop forte : on la baisse d'un bloc (rien n'est rasé) et on règle le gain des prochaines prises
+  let pk=0; for(let i=0;i<raw.length;i++){ const v=raw[i]<0?-raw[i]:raw[i]; if(v>pk) pk=v; }
+  const g=ingain*(curProf?curProf.mul:1); let adc=0;
+  if(g>0){ const lim=0.985*g; for(let i=0;i<raw.length;i++) if((raw[i]<0?-raw[i]:raw[i])>=lim) adc++; }
+  let levelMsg='';
+  if(pk>0.98){
+    const f=0.9/pk; for(let i=0;i<raw.length;i++) raw[i]*=f;
+    if(normOn){ const old=ingain; ingain=clamp(Math.round(ingain*0.7/pk*10)/10,0.1,6); if(ingain<old){ $('#ingain').value=ingain; $('#ingv').textContent=ingain.toFixed(1)+'×'; if(inGainNode) inGainNode.gain.value=ingain*(curProf?curProf.mul:1); scheduleSave(true);
+      levelMsg='Prise trop forte pour le réglage du micro : elle a été baissée sans rien couper, et le gain micro passe de '+old.toFixed(1).replace('.',',')+'× à '+ingain.toFixed(1).replace('.',',')+'× pour les prochaines prises.'; } }
+  }
+  window.__lvlMsg='';
+  if(adc>=8) levelMsg=(levelMsg?levelMsg+' ':'')+'⚠ Le micro lui-même sature sur les sons les plus forts : recule-toi de 10 à 15 cm, et place ta bouche face au côté du micro (micro « side-address » : on lui parle par la face avec le logo), un peu de biais pour éviter le souffle direct.';
+  window.__lvlMsg=levelMsg;
   for(let i=0;i<raw.length;i++) raw[i]=clamp(raw[i],-1,1);
   autoLevel(raw);
   const t=tracks[r.i];
@@ -1167,7 +1181,7 @@ const HELP={
   min:"<b>Niveau micro</b> : ce que capte ton micro. Quand tu joues, la barre doit bouger bien franchement sans devenir rouge. Trop faible : augmente le gain micro dans « Réglages ». Rouge : baisse-le.",
   fin:"<b>Son final</b> (on parle aussi de finalisation ou de mastering). Il polit l'ensemble : il équilibre les graves et les aigus, resserre l'écart entre les sons faibles et forts (compression) et empêche les pics de saturer (limiteur). Résultat : un mix plus homogène et plus fort. <b>Doux</b> = discret. <b>Fort</b> = plus puissant et plus « compressé ». S'applique aussi à l'export.",
   exp:"<b>Exporter</b> : crée un fichier son (WAV, qualité CD) de ton mix, avec tous tes réglages et effets. Choisis avant combien de fois la boucle est répétée dans le fichier.",
-  ingain:"<b>Gain micro</b> : amplifie le micro avant l'enregistrement. Si ton « Niveau micro » reste très faible, augmente. S'il devient rouge, baisse.",
+  ingain:"<b>Gain micro</b> (avec un micro USB à condensateur, souvent 0,5× ou moins suffit ; l'appli le baisse toute seule si une prise est trop forte) : amplifie le micro avant l'enregistrement. Si ton « Niveau micro » reste très faible, augmente. S'il devient rouge, baisse.",
   comp:"<b>Latence</b> : le petit retard entre le moment où tu joues et celui où ton téléphone l'enregistre. Si tes sons arrivent trop tard dans la boucle, augmente cette valeur. Le bouton « Calibrer » la règle tout seul.",
   src:"<b>Type de son</b> : dis à l'appli ce que tu vas enregistrer sur cette piste. Elle adapte le <b>filtre des graves</b> (plus fort pour la voix, pour éviter les « pop » et le bruit de manipulation ; très léger pour le beatbox et les percussions, pour garder les « boum »), la <b>sensibilité</b> (plus élevée pour les sons faibles et proches de l'environnement) et, pour la <b>voix</b>, un filtre qui atténue le bruit de fond entre les phrases. Cela ne change pas le micro du téléphone lui-même : le plus important reste la distance entre ta bouche et le micro.",
   lvl:"<b>Niveau auto des prises</b> : après chaque prise, si elle est trop faible, l'appli la remonte automatiquement à un bon volume. Pratique si tu t'éloignes du micro ou si tu fais des sons doux. Désactive-le si tu préfères régler le volume toi-même.",

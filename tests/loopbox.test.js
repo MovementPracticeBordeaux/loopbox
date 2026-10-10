@@ -1322,6 +1322,19 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(30);
     ok(/ksynth/.test(tb.className),'↶ doit revenir à la mélodie');
   });
+
+  await test('micro sensible : une prise trop forte n\'est plus rasée, le gain s\'adapte, la saturation du micro est signalée',async()=>{
+    const peak=b=>{ const x=b.getChannelData(0); let m=0; for(const v of x) m=Math.max(m,Math.abs(v)); return m; };
+    let P=await boot(); await recordBase(P); await sleep(800);
+    ok(!/trop forte|sature/.test(P.$('#msg').textContent)&&P.$('#ingain').value==='2','prise normale : rien ne change ('+P.$('#msg').textContent+')');
+    P=await boot(); P.amp=1.2; const r=await recordBase(P); await sleep(800);
+    ok(peak(r.buf)<=0.92&&peak(r.buf)>0.85,'prise trop forte baissée sans être rasée : crête '+peak(r.buf).toFixed(2));
+    ok(P.hits(r.buf).length===16,'tous les coups doivent rester : '+P.hits(r.buf).length);
+    ok(/Prise trop forte/.test(P.$('#msg').textContent)&&+P.$('#ingain').value<2,'gain adapté et message : '+P.$('#ingain').value+' | '+P.$('#msg').textContent);
+    ok(!/micro lui-même sature/.test(P.$('#msg').textContent),'pas de saturation du micro à ce niveau');
+    P=await boot(); P.amp=1.7; await recordBase(P); await sleep(800);
+    ok(/micro lui-même sature/.test(P.$('#msg').textContent)&&/side-address/.test(P.$('#msg').textContent),'saturation du micro signalée : '+P.$('#msg').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
