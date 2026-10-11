@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=58">
+<link rel="stylesheet" href="style.css?v=59">
 </head>
 <body>
 <header>
@@ -98,9 +98,10 @@
   <div class="row wrap"><button id="mplay" class="primary">▶ Lire le morceau</button><button id="mstop" aria-label="Arrêter et revenir au début">■ Début</button><span id="mcurv" class="lbl"></span></div>
   <canvas id="mcv" style="width:100%;display:block;margin-top:10px;border-radius:12px;background:rgba(255,255,255,.04);touch-action:none"></canvas>
   <p id="mlanehint" class="hint" hidden style="color:#FFB020"></p>
-  <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="msnap" checked style="width:22px;height:22px"> caler sur les mesures</label></div>
+  <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgrid">Aimant <select id="mgrid" style="width:auto" aria-label="Aimant pour placer les blocs"><option value="M">mesure</option><option value="1" selected>temps</option><option value="0.5">½ temps</option><option value="0.25">¼ temps</option><option value="0">libre</option></select></label></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mclip">Bloc choisi</span><span id="mclipinfo" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgroup"><input type="checkbox" id="mmulti" style="width:22px;height:22px"> choisir plusieurs blocs</label><button id="mgrp">⛓ Grouper</button><button id="mungrp">Dissocier</button></div>
+    <div class="row wrap"><span class="lbl w2">Déplacer</span><button class="mnudge" data-d="-M">◀◀ 1 mesure</button><button class="mnudge" data-d="-g">◀ <span class="mstep">1 temps</span></button><button class="mnudge" data-d="g"><span class="mstep">1 temps</span> ▶</button><button class="mnudge" data-d="M">1 mesure ▶▶</button></div>
     <div class="row wrap"><button id="mcut">✂ Couper au curseur</button><select id="mdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="4">4 fois</option><option value="8">8 fois</option></select><button id="mdup">⧉ Dupliquer</button><button id="mdel">🗑 Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div>
     <div class="row wrap"><span class="lbl w2" data-help="mtrans">Entrée</span><select id="mtin" style="width:auto" aria-label="Transition d'entrée"><option value="none">aucune transition</option><option value="fade">fondu (le son monte)</option><option value="filter">filtre qui s'ouvre</option><option value="hp">montée par les aigus</option></select><select id="mtinl" style="width:auto" aria-label="Durée de l'entrée"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
     <div class="row wrap"><span class="lbl w2">Sortie</span><select id="mtout" style="width:auto" aria-label="Transition de sortie"><option value="none">aucune transition</option><option value="fade">fondu (le son descend)</option><option value="filter">filtre qui se ferme</option><option value="tape">ralenti (tape stop)</option><option value="echo">écho qui s'éteint</option><option value="stutter">hachage (stutter)</option></select><select id="mtoutl" style="width:auto" aria-label="Durée de la sortie"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
@@ -175,6 +176,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=58"></script>
+<script src="app.js?v=59"></script>
 </body>
 </html>

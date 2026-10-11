@@ -1497,6 +1497,28 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     Q.$('#cloudlogout').click(); await sleep(10);
     ok(!Q.$('#cloudout').hidden,'déconnexion');
   });
+  await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
+    const {P,tap,drag,X,Y}=await montBoot();
+    const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };
+    tap(X(14),Y(1)); await sleep(5);
+    ok(/début : mesure 1, temps 1$/.test(info()),'position affichée : '+info());
+    setG('0.25'); drag(X(14),Y(1),X(14)+1.3*22); await sleep(5);
+    ok(/début : mesure 1, temps 2,25$/.test(info()),'aimant ¼ de temps : '+info());
+    setG('0'); drag(X(16),Y(1),X(16)+0.4*22); await sleep(5);
+    const m=/temps ([\d,]+)$/.exec(info()), v=m?+m[1].replace(',','.'):0;
+    ok(Math.abs(v-2.65)<0.05,'libre : posé là où le doigt s\'arrête ('+info()+')');
+    setG('1'); P.$$('.mnudge')[2].click(); await sleep(5);
+    ok(/temps 3,65$/.test(info())&&P.$$('.mstep')[0].textContent==='1 temps','+1 temps : '+info());
+    P.$$('.mnudge')[3].click(); await sleep(5);
+    ok(/début : mesure 2, temps 3,65$/.test(info()),'+1 mesure : '+info());
+    setG('0.25'); P.$$('.mnudge')[1].click(); P.$$('.mnudge')[1].click(); await sleep(5);
+    ok(/temps 3,15$/.test(info())&&P.$$('.mstep')[0].textContent==='¼ temps','−2 × ¼ temps : '+info());
+    P.$('#undo').click(); await sleep(10); tap(X(4+2.4),Y(1)); await sleep(5);
+    ok(/temps 3,4$/.test(info()),'↶ annule un pas : '+info());
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20); P.$('#mplay').click();
+    const w=P.starts.filter(x=>x.buf).map(x=>x.when).sort((a,b)=>a-b), bd=60/95.9;
+    ok(w.length===2&&Math.abs((w[1]-w[0])/bd-6.4)<0.02,'le bloc de la piste 2 part 6,4 temps après le début : '+(w.length===2?((w[1]-w[0])/bd).toFixed(3):w.length));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

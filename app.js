@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='58';
+const APPVER='59';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1203,6 +1203,7 @@ const HELP={
   msec:"<b>Partie du morceau</b> : place le curseur (touche la règle) puis « Début = curseur », avance le curseur puis « Fin = curseur ». La partie est surlignée en orange. <b>Dupliquer cette partie</b> la recopie juste après, <b>sur toutes les pistes à la fois</b> (piste principale, basse, mélodie…), et décale la suite du morceau. <b>Supprimer cette partie</b> l'enlève partout et rapproche la suite. Pratique pour construire couplet, refrain, couplet… puis faire varier une des copies.",
   mvar:"<b>Créer une variation de ce bloc</b> : le bloc choisi joue désormais une copie de sa piste (par exemple « Basse (variation) »), ajoutée à la liste des pistes. Modifie cette copie (autres notes, autre style, autres effets…) : seul ce bloc change, le reste du morceau garde la piste d'origine. Pour qu'un autre bloc joue aussi la variation, fais-le glisser sur sa ligne.",
   mont:"<b>Montage du morceau</b> : compose un morceau du début à la fin, comme sur un logiciel de montage vidéo. Chaque piste a sa ligne ; chaque bloc joue la boucle de la piste (elle se répète tant que le bloc dure). <b>Touche la règle</b> (numéros de mesures) pour placer le curseur. <b>Touche une ligne vide</b> pour ajouter un bloc d'un tour de boucle. <b>Fais glisser un bloc</b> pour le déplacer, <b>son bord droit ou gauche</b> pour l'allonger ou le raccourcir. Avec un bloc choisi : couper au curseur, dupliquer, supprimer, ou changer son ton (variation : refrain un ton plus haut…). Glisse sur une zone vide pour faire défiler. La ligne rouge marque la fin du morceau. ▶ en bas joue le morceau quand le montage est ouvert.",
+  mgrid:"<b>Aimant</b> : quand tu fais glisser un bloc (ou son bord), il s'accroche à la grille choisie : la <b>mesure</b>, le <b>temps</b>, le <b>½</b> ou le <b>¼ de temps</b>. <b>Libre</b> le laisse exactement où tu lâches ton doigt. Pour un placement précis, choisis le bloc puis utilise les boutons <b>Déplacer</b> : ◀ ▶ avancent ou reculent d'un pas de l'aimant (1/16 de temps en mode libre), ◀◀ ▶▶ d'une mesure. Le début exact du bloc (mesure et temps) est affiché au-dessus.",
   mgroup:"<b>Plusieurs blocs</b> : coche <b>choisir plusieurs blocs</b>, puis touche chaque bloc voulu, sur une ou plusieurs lignes (ils s'entourent d'orange ; retouche pour en retirer un). <b>⛓ Grouper</b> les attache : toucher l'un d'eux choisit tout le groupe, et les faire glisser les déplace ensemble (un trait blanc marque les blocs groupés). <b>Dissocier</b> les détache. <b>⧉ Dupliquer</b> recopie tout le motif juste après lui, 1 à 8 fois : sur ces lignes, ce qui s'y trouvait est remplacé, les autres lignes ne bougent pas. <b>🗑</b> supprime tous les blocs choisis.",
   mclip:"<b>Bloc choisi</b> : « Couper au curseur » coupe le bloc à l'endroit du curseur orange (touche la règle pour le placer). « Dupliquer » recopie le bloc (ou le groupe) juste après, le nombre de fois choisi. « ♭ / ♯ » change le ton de ce bloc seulement, pour créer des variations (la basse ou la mélodie sont recalculées note à note).",
   mend:"<b>Fin du morceau</b> : la ligne rouge. Tout ce qui est après n'est ni joué ni exporté. « Fin = dernier bloc » la place à la fin du dernier bloc.",
@@ -2626,7 +2627,7 @@ $('#lq').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; liveQ=b
 // ======================= 🎬 MONTAGE DU MORCEAU =======================
 // Le morceau est une ligne de temps (en temps) avec, pour chaque piste, des blocs qui jouent la boucle de la piste :
 // déplacer, couper, allonger / raccourcir (la boucle se répète), dupliquer, supprimer, changer le ton d'un bloc.
-let song={end:0,clips:[],fx:[],known:[],cur:0,sel:-1,ms:[],multi:false,zoom:22,view:0,snap:true,rs:null,re:null};
+let song={end:0,clips:[],fx:[],known:[],cur:0,sel:-1,ms:[],multi:false,zoom:22,view:0,grid:1,rs:null,re:null};
 let songPlay=null;
 const songCache=new Map();
 const SG_RH=28, SG_LH=56;
@@ -2643,7 +2644,17 @@ function songPrepare(){
   songTracks().forEach(t=>{ if(!song.known.includes(t.uid)){ song.known.push(t.uid); song.clips.push({u:t.uid,s:0,len:song.end,off:0,tp:0}); } });
   song.clips=song.clips.filter(c=>trackByUid(c.u));
 }
-function songSnap(b){ return song.snap?Math.round(b/meter)*meter:Math.round(b); }
+// aimant du montage : mesure, temps, ½, ¼ de temps, ou libre (au 1/48 de temps près)
+function songGrid(){ return song.grid==='M'?meter:(+song.grid||0); }
+function songSnap(b){ const g=songGrid(); return g>0?Math.round(b/g)*g:Math.round(b*48)/48; }
+function songStep(){ const g=songGrid(); return g>0?g:1/16; }
+const fmtBeats=x=>{ if(Math.abs(x-meter)<1e-9) return '1 mesure'; const r={1:'1 temps',0.5:'½ temps',0.25:'¼ temps',0.0625:'1/16 de temps'}[x]; return r||String(Math.round(x*100)/100).replace('.',',')+' temps'; };
+function songNudge(k){
+  const set=songSelSet(); if(!set.length){ msg('Touche d\'abord un bloc.'); return; }
+  const dd=(k[0]==='-'?-1:1)*(k.slice(-1)==='M'?meter:songStep()), mn=Math.min(...set.map(c=>c.s));
+  if(mn+dd<-1e-9){ msg('Le bloc est déjà au début du morceau.'); return; }
+  songAct(()=>{ set.forEach(c=>{ c.s=Math.max(0,Math.round((c.s+dd)*4800)/4800); }); const e=Math.max(...set.map(c=>c.s+c.len)); if(e>song.end) song.end=Math.ceil(e/meter)*meter; });
+}
 function fmtSongTime(b){ const sec=b*beatDur(), m=Math.floor(sec/60); return m+':'+String(Math.floor(sec-m*60)).padStart(2,'0'); }
 // son d'un bloc : la boucle de la piste, éventuellement transposée (basse / mélodie : recalculées note à note ; autres : décalage de hauteur)
 function clipBuf(t,tp){
@@ -2814,7 +2825,8 @@ function updSongUI(){
   $('#mendv').textContent=song.end?'mesure '+Math.round(song.end/meter)+' ('+fmtSongTime(song.end)+')':'';
   const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
   { const ss=songSelSet(); const gb=$('#mgrp'); if(gb) gb.disabled=ss.length<2; const ub=$('#mungrp'); if(ub) ub.disabled=!ss.some(x=>x.g); const mm=$('#mmulti'); if(mm) mm.checked=!!song.multi; const dn=$('#mdup'); if(dn) dn.textContent=ss.length>1?'⧉ Dupliquer les '+ss.length+' blocs':'⧉ Dupliquer'; }
-  $('#mclipinfo').textContent=songSelSet().length>1?(songSelSet().length+' blocs choisis'+(songSelSet().every(x=>x.g&&x.g===songSelSet()[0].g)?' (groupe)':'')):c&&t?('« '+t.name+' » · mesures '+fb(c.s)+' → '+fb(c.s+c.len)+(c.tp?' · ton '+(c.tp>0?'+':'')+c.tp:'')):'Touche un bloc pour le choisir.';
+  $('#mclipinfo').textContent=songSelSet().length>1?(songSelSet().length+' blocs choisis'+(songSelSet().every(x=>x.g&&x.g===songSelSet()[0].g)?' (groupe)':'')):c&&t?('« '+t.name+' » · mesures '+fb(c.s)+' → '+fb(c.s+c.len)+(c.tp?' · ton '+(c.tp>0?'+':'')+c.tp:'')+' · début : mesure '+(Math.floor(c.s/meter+1e-9)+1)+', temps '+String(Math.round((c.s-Math.floor(c.s/meter+1e-9)*meter+1)*100)/100).replace('.',',')):'Touche un bloc pour le choisir.';
+  document.querySelectorAll('.mstep').forEach(e=>e.textContent=fmtBeats(songStep())); document.querySelectorAll('.mnudge').forEach(b=>b.disabled=!songSelSet().length);
   ['#mcut','#mdup','#mdel','#mtpm','#mtpp'].forEach(id=>{ const b=$(id); if(b) b.disabled=!c; });
   const p=songPos(); if($('#mcut')) $('#mcut').disabled=!(c&&p>c.s+1e-6&&p<c.s+c.len-1e-6);
   $('#mplay').textContent=songPlay?'❚❚ Pause':'▶ Lire le morceau';
@@ -2857,7 +2869,7 @@ function updSongUI(){
     if(drag.k==='pan'||drag.k==='empty'){ song.view=Math.max(0,drag.v0-(p.x-drag.x0)/song.zoom); drawSong(); return; }
     const c=song.clips[drag.i]; if(!c) return;
     if(!drag.hist){ pushHist(); drag.hist=true; }
-    const mn=song.snap?meter:1, d=b-drag.b0;
+    const mn=Math.max(0.25,songGrid()), d=b-drag.b0;
     if(drag.k==='move'){ if(song.multi){ drag.moved=false; return; } if(drag.grp&&drag.grp.length>1){ const mn0=Math.min(...drag.grp.map(o=>o.s0)), dd=Math.max(-mn0,songSnap(drag.s0+d)-drag.s0); drag.grp.forEach(o=>{ o.c.s=o.s0+dd; }); } else c.s=Math.max(0,songSnap(drag.s0+d)); }
     else if(drag.k==='right') c.len=Math.max(mn,songSnap(drag.s0+drag.len0+d)-c.s);
     else { const ns=clamp(songSnap(drag.s0+d),0,drag.s0+drag.len0-mn), dd=ns-drag.s0; c.s=ns; c.len=drag.len0-dd; c.off=mod(drag.off0+dd,beats); }
@@ -3013,7 +3025,8 @@ $('#mplay').onclick=()=>{ if(songPlay) songStop(); else songStart(song.cur); };
 $('#mstop').onclick=()=>{ songStop(true); song.cur=0; drawSong(); };
 $('#mzoomin').onclick=()=>{ song.zoom=Math.min(120,song.zoom*1.5); drawSong(); };
 $('#mzoomout').onclick=()=>{ song.zoom=Math.max(3,song.zoom/1.5); drawSong(); };
-$('#msnap').onchange=e=>{ song.snap=e.target.checked; };
+$('#mgrid').onchange=e=>{ song.grid=e.target.value==='M'?'M':+e.target.value; updSongUI(); };
+document.querySelectorAll('.mnudge').forEach(b=>b.onclick=()=>songNudge(b.dataset.d));
 $('#mcut').onclick=()=>{ const c=songSelClip(), p=Math.round(songPos()); if(!c||!(p>c.s&&p<c.s+c.len)){ msg('Place le curseur (touche la règle) à l\'intérieur du bloc choisi.'); return; } songAct(()=>{ const n={...c,s:p,len:c.s+c.len-p,off:mod(c.off+(p-c.s),beats),ti:'none',til:0}; c.len=p-c.s; c.to='none'; c.tol=0; song.clips.push(n); song.sel=song.clips.length-1; msg('Bloc coupé à la mesure '+String(Math.round(p/meter*100)/100+1).replace('.',',')+'.'); }); };
 $('#mdup').onclick=()=>songDupSel($('#mdupn')?$('#mdupn').value:1);
 $('#mgrp').onclick=()=>songGroup(true);
