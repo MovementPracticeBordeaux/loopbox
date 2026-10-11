@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='56';
+const APPVER='57';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1191,6 +1191,7 @@ const HELP={
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
   bgroup:"<b>Motif</b> : coche <b>choisir plusieurs blocs</b>, touche le premier puis le dernier bloc d'un motif : tous les blocs entre les deux sont choisis (tant que la case est cochée, la palette de notes change tous ces blocs d'un coup ; sinon, seulement le bloc touché). <b>⛓ Grouper</b> les attache : ensuite, toucher l'un d'eux choisit tout le groupe (une ligne blanche les relie). <b>Dissocier</b> les détache. <b>⧉ Dupliquer à la suite</b> recopie le motif juste après lui, 1, 2, 3 fois ou jusqu'à la fin de la boucle, en remplaçant les blocs qui s'y trouvaient. ↶ annule.",
   tsdup:"<b>Copier la partie à la suite</b> : la partie choisie (entre les deux traits orange) est recopiée juste après elle, 1, 2, 3 fois ou jusqu'à la fin de la boucle. Le son qui se trouvait à ces endroits est remplacé, et la partie gardée s'agrandit pour inclure les copies. Pratique pour répéter un motif réussi. ↶ annule.",
+  cloud:"<b>En ligne</b> : tes projets sont gardés dans ton espace privé (personne d'autre ne peut les voir), pour les retrouver sur la tablette, le téléphone ou un ordinateur. Connecte-toi avec le même e-mail et mot de passe sur chaque appareil. <b>Mettre ce projet en ligne</b> l'envoie ; avec <b>envoi automatique</b>, chaque modification est envoyée 20 secondes après ton dernier changement. Sur l'autre appareil : menu projet → En ligne → <b>Ouvrir</b>. Si tu modifies le même projet sur deux appareils, c'est le dernier envoi qui compte. Taille maximale : 50 Mo par projet (environ 4 minutes de son en tout). Il faut internet pour envoyer et ouvrir ; sans internet, l'appli marche comme avant.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -3491,7 +3492,7 @@ const newId=()=>'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6
 function safeName(n){ return (String(n||'loopbox').replace(/[\\/:*?"<>|]+/g,'').trim()||'loopbox').slice(0,40); }
 function uniqueName(base){ const names=new Set(projIndex.list.map(p=>p.name)); if(!names.has(base)) return base; let k=2; while(names.has(base+' '+k)) k++; return base+' '+k; }
 function setSaveState(st){ const e=$('#savestate'); if(!e) return; e.textContent=st==='ok'?'✓':st==='err'?'⚠':'…'; e.title=st==='ok'?'Enregistré':st==='err'?'Non enregistré':'Enregistrement…'; e.setAttribute('aria-label',e.title); }
-function scheduleSave(settingsOnly){ if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
+function scheduleSave(settingsOnly){ cloudDirty=true; if(!settingsOnly) audioDirty=true; clearTimeout(saveT); setSaveState('…'); saveT=setTimeout(saveProj,settingsOnly?300:700); }
 function mainData(){
   return {v:2,song:songSnapData(),name:projName,go:gridOff,liveQ,scenes:scenes.map(sc=>sc?sc.map(x=>({i:tracks.indexOf(x.t),m:x.mute})).filter(x=>x.i>=0):null),meter,bpm,loopLen,beats,baseLen,baseBeats,rep,snap,mixMode,mvol,fin,
     tracks:tracks.map(t=>({sr:t.buf?t.buf.sampleRate:0,vol:t.vol,pan:t.panv,mute:t.mute,solo:t.solo,fxs:t.fxs.map(f=>({t:f.type,a:f.amt})),st:t.srcType,pt:t.pitch,eq:t.eqv,sel:t.sel?[t.sel.s,t.sel.e]:null,u:t.uid,smd:t.selMode,of:t.off||0,an:!!t.anc,sn:t.snap!==false,spd:t.speed||1,vo:t.voice?{sr:t.voice.buf.sampleRate,sel:t.voice.sel?[t.voice.sel.s,t.voice.sel.e]:null,smd:t.voice.selMode,of:t.voice.off,spd:t.voice.speed,pt:t.voice.pitch,fxs:t.voice.fxs.map(f=>({t:f.type,a:f.amt})),nm:t.voice.name}:null,nm:t.name,co:t.color,fi:t.fadeIn,fo:t.fadeOut,k:t.kind,bs:t.bass}))};
@@ -3511,7 +3512,7 @@ async function saveProj(){
     const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn,eng:devEng,mv:metroVol,ms:metroSub,setup,lats,latAt,micId}]];
     if(audio) pairs.push(['p:'+projId+':audio',audio]);
     await idbPut(db,pairs);
-    setSaveState('ok'); updProjList();
+    setSaveState('ok'); updProjList(); cloudAfterSave();
     if(!window.__persistAsked){ window.__persistAsked=true; try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){} }
   }catch(e){ if(withAudio) audioDirty=true; setSaveState('err'); }
 }
@@ -3644,8 +3645,11 @@ async function deleteProject(id){
 // ----- fichier .loopbox : en-tête « LBX1 », longueur JSON, JSON, puis le son de chaque piste en 16 bits
 function encodeProject(){
   const lens=[], parts=[];
-  tracks.forEach(t=>{ if(t.buf){ const d=t.buf.getChannelData(0), q=new Int16Array(d.length); for(let i=0;i<d.length;i++) q[i]=Math.round(clamp(d[i],-1,1)*32767); parts.push(q); lens.push(d.length); } else lens.push(0); });
-  const json=new TextEncoder().encode(JSON.stringify({format:1,app:'LoopBox',name:projName,main:mainData(),lens}));
+  const q16=d=>{ const q=new Int16Array(d.length); for(let i=0;i<d.length;i++) q[i]=Math.round(clamp(d[i],-1,1)*32767); return q; };
+  tracks.forEach(t=>{ if(t.buf){ const d=t.buf.getChannelData(0); parts.push(q16(d)); lens.push(d.length); } else lens.push(0); });
+  // voix d'origine des pistes transformées en basse / mélodie (pour « revenir à la voix » sur un autre appareil)
+  const xl=[]; tracks.forEach((t,i)=>{ if(t.voice&&t.voice.buf){ const b=t.voice.buf.getChannelData(0); parts.push(q16(b)); xl.push([100+i,b.length]); if(t.voice.play&&t.voice.play.length){ parts.push(q16(t.voice.play)); xl.push([200+i,t.voice.play.length]); } } });
+  const json=new TextEncoder().encode(JSON.stringify({format:1,app:'LoopBox',name:projName,main:mainData(),lens,xl}));
   const head=new Uint8Array(8); head.set([76,66,88,49]); new DataView(head.buffer).setUint32(4,json.length,true);
   return new Blob([head,json,...parts],{type:'application/octet-stream'});
 }
@@ -3654,20 +3658,142 @@ function downloadBlob(blob,name){
   a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
+function decodeLbx(ab){
+  const u=new Uint8Array(ab);
+  if(u.length<8||u[0]!==76||u[1]!==66||u[2]!==88||u[3]!==49) throw new Error('format');
+  const jl=new DataView(ab).getUint32(4,true);
+  const meta=JSON.parse(new TextDecoder().decode(u.subarray(8,8+jl)));
+  let off=8+jl;
+  const rd=n=>{ const q=new Int16Array(ab.slice(off,off+n*2)); off+=n*2; const f=new Float32Array(n); for(let i=0;i<n;i++) f[i]=q[i]/32767; return f; };
+  const audio=(meta.lens||[]).map(n=>n?rd(n):null);
+  (meta.xl||[]).forEach(([k,n])=>{ audio[k]=rd(n); });
+  return {meta,audio};
+}
 async function importProjectFile(file){
   try{
-    const ab=await readFile(file), u=new Uint8Array(ab);
-    if(u.length<8||u[0]!==76||u[1]!==66||u[2]!==88||u[3]!==49) throw new Error('format');
-    const jl=new DataView(ab).getUint32(4,true);
-    const meta=JSON.parse(new TextDecoder().decode(u.subarray(8,8+jl)));
-    let off=8+jl;
-    const audio=(meta.lens||[]).map(n=>{ if(!n) return null; const q=new Int16Array(ab.slice(off,off+n*2)); off+=n*2; const f=new Float32Array(n); for(let i=0;i<n;i++) f[i]=q[i]/32767; return f; });
+    const ab=await readFile(file), {meta,audio}=decodeLbx(ab);
     await saveProj();
     resetProject();
     projId=newId(); projName=uniqueName(meta.name||'Projet importé');
     const d=meta.main||{}; d.v=2; applyProject(d,audio);
     audioDirty=true; await saveProj(); updProjUI(); msg('Projet ouvert depuis le fichier : « '+projName+' ».');
   }catch(e){ msg("Ce fichier n'est pas un projet LoopBox valide."); }
+}
+// ----- projets en ligne (Supabase : un dossier privé par compte) -----
+const CLOUD={url:'https://zwltvhjitrvlrhbivdfm.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3bHR2aGppdHJ2bHJoYml2ZGZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczMTMxMjcsImV4cCI6MjEwMjg4OTEyN30.hTD6h2r9dKdKaJ15vcFU6eN8WScA1rr_nT2dNByT6co',bucket:'loopbox',max:50*1024*1024};
+const lsGet=k=>{ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } };
+const lsSet=(k,v)=>{ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+let cloudDirty=false, cloud=lsGet('lbx-cloud'), cloudAuto=lsGet('lbx-cloud-auto')!==false, cloudUp=lsGet('lbx-cloud-up')||{}, cloudList=null, cloudBusy=false, cloudAutoT=null;
+function cloudErr(j,r){ const m=(j&&(j.error_description||j.msg||j.message||j.error))||('erreur '+(r&&r.status)); if(/invalid login|invalid_grant|invalid credentials/i.test(m)) return 'e-mail ou mot de passe incorrect'; if(/not confirmed/i.test(m)) return 'compte pas encore confirmé : ouvre le lien reçu par e-mail'; if(/already registered|already exists/i.test(m)) return 'ce compte existe déjà : connecte-toi'; if(/password/i.test(m)&&/6|short|weak/i.test(m)) return 'mot de passe trop court (6 caractères minimum)'; if(/exceeded|too large|payload/i.test(m)) return 'projet trop gros pour l\'envoi (50 Mo maximum)'; return m; }
+async function cfetch(path,opt,auth){
+  const h=Object.assign({apikey:CLOUD.key},(opt&&opt.headers)||{});
+  h.Authorization='Bearer '+(auth===false?CLOUD.key:await cloudToken());
+  let r; try{ r=await fetch(CLOUD.url+path,Object.assign({cache:'no-store'},opt,{headers:h})); }catch(e){ throw new Error('pas de connexion internet'); }
+  if(!r.ok){ let j=null; try{ j=await r.json(); }catch(e){} const er=new Error(cloudErr(j,r)); er.status=r.status; er.body=j; throw er; }
+  return r;
+}
+function cloudSetSession(j){ cloud={at:j.access_token,rt:j.refresh_token,exp:Math.floor(Date.now()/1000)+(+j.expires_in||3600),uid:j.user&&j.user.id,email:j.user&&j.user.email}; lsSet('lbx-cloud',cloud); }
+async function cloudToken(){
+  if(!cloud) throw new Error('non connecté');
+  if(cloud.exp-60>Date.now()/1000) return cloud.at;
+  try{ const r=await cfetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:cloud.rt})},false); cloudSetSession(await r.json()); return cloud.at; }
+  catch(e){ if(e.status){ cloud=null; lsSet('lbx-cloud',null); updCloudUI(); throw new Error('session expirée : reconnecte-toi'); } throw e; }
+}
+async function cloudLogin(email,pw,create){
+  if(!email||!pw){ msg('Indique ton e-mail et ton mot de passe.'); return; }
+  setCloudSt('…');
+  try{
+    if(create){
+      const r=await cfetch('/auth/v1/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw})},false), j=await r.json();
+      if(!j.access_token){ setCloudSt(''); msg('Compte créé : ouvre le lien de confirmation reçu par e-mail (regarde aussi les indésirables), puis reviens ici et touche « Se connecter ».'); return; }
+      cloudSetSession(j);
+    } else {
+      const r=await cfetch('/auth/v1/token?grant_type=password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw})},false);
+      cloudSetSession(await r.json());
+    }
+    $('#cloudpw').value=''; msg('Connecté : tes projets en ligne sont listés dans le menu.'); updCloudUI(); await cloudRefresh();
+  }catch(e){ setCloudSt('⚠'); msg('Connexion impossible : '+e.message+'.'); }
+}
+function cloudLogout(){ cloud=null; cloudList=null; lsSet('lbx-cloud',null); updCloudUI(); msg('Déconnecté. Tes projets restent en ligne et sur cet appareil.'); }
+const cPath=id=>cloud.uid+'/'+id+'.loopbox', cIdx=()=>cloud.uid+'/index.json';
+async function cloudGetIndex(){ try{ const r=await cfetch('/storage/v1/object/authenticated/'+CLOUD.bucket+'/'+cIdx(),{method:'GET'}); return await r.json(); }catch(e){ const b=e.body||{}; if(e.status===404||String(b.statusCode)==='404'||b.error==='not_found'||/not found/i.test(b.message||'')) return {}; throw e; } }
+async function cloudPutIndex(ix){ await cfetch('/storage/v1/object/'+CLOUD.bucket+'/'+cIdx(),{method:'POST',headers:{'Content-Type':'application/json','x-upsert':'true','cache-control':'no-cache'},body:JSON.stringify(ix)}); }
+async function cloudRefresh(){
+  if(!cloud) return;
+  try{ cloudList=await cloudGetIndex(); setCloudSt('✓'); }catch(e){ setCloudSt('⚠'); msg('Liste en ligne indisponible : '+e.message+'.'); }
+  updCloudUI();
+}
+async function cloudUpload(silent){
+  if(!cloud||cloudBusy) return false;
+  if(!tracks.some(t=>t.buf)){ if(!silent) msg('Rien à envoyer : le projet est vide.'); return false; }
+  cloudBusy=true; setCloudSt('⬆…'); clearTimeout(cloudAutoT); cloudAutoT=null; let failed=false;
+  try{
+    cloudDirty=false; await saveProj();
+    const blob=encodeProject(), id=projId, sm=summary();
+    if(blob.size>CLOUD.max){ throw new Error('projet trop gros pour l\'envoi ('+Math.round(blob.size/1048576)+' Mo, 50 Mo maximum) : supprime des pistes inutiles ou raccourcis-les'); }
+    await cfetch('/storage/v1/object/'+CLOUD.bucket+'/'+cPath(id),{method:'POST',headers:{'Content-Type':'application/octet-stream','x-upsert':'true','cache-control':'no-cache'},body:blob});
+    const ix=await cloudGetIndex(); ix[id]={name:sm.name,updated:sm.updated,beats:sm.beats,bpm:sm.bpm,ntr:sm.ntr,size:blob.size}; await cloudPutIndex(ix);
+    cloudList=ix; cloudUp[id]=sm.updated; lsSet('lbx-cloud-up',cloudUp);
+    setCloudSt('✓ '+fmtDate(Date.now()).split(' ').pop());
+    if(!silent) msg('« '+sm.name+' » est en ligne ('+(blob.size/1048576).toFixed(1).replace('.',',')+' Mo) : ouvre-le depuis n\'importe quel appareil, menu projet → En ligne.');
+    return true;
+  }catch(e){ failed=true; cloudDirty=true; setCloudSt('⚠ non envoyé'); if(!silent) msg('Envoi en ligne impossible : '+e.message+'. Le projet reste enregistré sur cet appareil.'); return false; }
+  finally{ cloudBusy=false; updCloudUI(); if(!failed&&cloudDirty&&cloudAuto&&cloud) cloudAfterSave(); }
+}
+async function cloudOpen(id){
+  if(!cloud) return;
+  setCloudSt('⬇…'); msg('Téléchargement du projet…');
+  try{
+    const r=await cfetch('/storage/v1/object/authenticated/'+CLOUD.bucket+'/'+cPath(id),{method:'GET'}), ab=await r.arrayBuffer(), {meta,audio}=decodeLbx(ab);
+    await saveProj();
+    resetProject();
+    projId=id; projName=(cloudList&&cloudList[id]&&cloudList[id].name)||meta.name||'Projet';
+    const d=meta.main||{}; d.v=2; applyProject(d,audio);
+    audioDirty=true; cloudDirty=false; await saveProj(); clearTimeout(cloudAutoT); cloudAutoT=null; cloudDirty=false;
+    cloudUp[id]=(projIndex.list.find(p=>p.id===id)||{}).updated||Date.now(); lsSet('lbx-cloud-up',cloudUp);
+    setCloudSt('✓'); updProjUI(); msg('Projet « '+projName+' » ouvert depuis ton espace en ligne.');
+  }catch(e){ setCloudSt('⚠'); msg('Ouverture impossible : '+(e.message==='format'?'fichier abîmé':e.message)+'.'); }
+}
+async function cloudDelete(id){
+  if(!cloud) return;
+  try{
+    await cfetch('/storage/v1/object/'+CLOUD.bucket,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixes:[cPath(id)]})});
+    const ix=await cloudGetIndex(); delete ix[id]; await cloudPutIndex(ix); cloudList=ix; delete cloudUp[id]; lsSet('lbx-cloud-up',cloudUp);
+    msg('Projet retiré de ton espace en ligne (il reste sur cet appareil s\'il y était).');
+  }catch(e){ msg('Suppression en ligne impossible : '+e.message+'.'); }
+  updCloudUI();
+}
+// après chaque enregistrement : envoi automatique (regroupé, 20 s après le dernier changement)
+function cloudAfterSave(){
+  if(!cloud||!cloudAuto||!projId) return;
+  if(!cloudDirty) return;
+  if(!tracks.some(t=>t.buf)) return;
+  clearTimeout(cloudAutoT); setCloudSt('⏳'); cloudAutoT=setTimeout(()=>{ cloudAutoT=null; cloudUpload(true); },window.__cloudDelay!=null?window.__cloudDelay:20000);
+}
+function setCloudSt(s){ const e=$('#cloudst'); if(e) e.textContent=s; }
+function updCloudUI(){
+  const out=$('#cloudout'), inn=$('#cloudin'); if(!out||!inn) return;
+  out.hidden=!!cloud; inn.hidden=!cloud;
+  if(!cloud) return;
+  $('#cloudwho').textContent='Connecté : '+(cloud.email||'');
+  $('#cloudauto').checked=cloudAuto;
+  const box=$('#cloudlist'); box.innerHTML='';
+  if(!cloudList){ box.textContent='…'; return; }
+  const ids=Object.keys(cloudList).sort((a,b)=>(cloudList[b].updated||0)-(cloudList[a].updated||0));
+  if(!ids.length){ const p=document.createElement('p'); p.className='hint'; p.textContent='Aucun projet en ligne pour l\'instant : ouvre un projet et touche « Mettre ce projet en ligne ».'; box.appendChild(p); return; }
+  ids.forEach(id=>{
+    const p=cloudList[id], loc=projIndex.list.find(x=>x.id===id), row=document.createElement('div'); row.className='prow';
+    const info=(p.beats?(p.beats+' temps · '+String(p.bpm).replace('.',',')+' BPM · '+p.ntr+' piste'+(p.ntr>1?'s':'')):'vide')+' · '+fmtDate(p.updated)+(p.size?' · '+(p.size/1048576).toFixed(1).replace('.',',')+' Mo':'');
+    const newer=loc&&loc.updated>(p.updated||0)+2000&&!(cloudUp[id]>=loc.updated);
+    row.innerHTML='<div class="pn"><b></b><small></small></div>';
+    $('b',row).textContent='☁ '+p.name; $('small',row).textContent=info+(id===projId?' · ouvert ici':'')+(newer?' · version plus récente sur cet appareil':'');
+    const o=document.createElement('button'); o.textContent=id===projId?'Recharger':'Ouvrir';
+    o.onclick=()=>{ if((newer||id===projId)&&o.dataset.arm!=='1'){ o.dataset.arm='1'; o.textContent='Remplacer ici ?'; setTimeout(()=>{ o.dataset.arm='0'; o.textContent=id===projId?'Recharger':'Ouvrir'; },3500); return; } setProjMenu(false); cloudOpen(id); };
+    row.appendChild(o);
+    const del=document.createElement('button'); del.textContent='🗑'; del.setAttribute('aria-label','Retirer '+p.name+' de l\'espace en ligne');
+    del.onclick=()=>{ if(del.dataset.arm!=='1'){ del.dataset.arm='1'; del.textContent='Confirmer ?'; setTimeout(()=>{ del.dataset.arm='0'; del.textContent='🗑'; },3000); return; } cloudDelete(id); };
+    row.appendChild(del); box.appendChild(row);
+  });
 }
 // ----- menu projet
 function fmtDate(ts){ try{ return new Date(ts).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
@@ -3692,6 +3818,7 @@ function updProjUI(){
   $('#projname').textContent=projName;
   if(document.activeElement!==$('#projinp')) $('#projinp').value=projName;
   updProjList();
+  updCloudUI();
 }
 let diagSpeed='non lancé';
 async function diagText(){
@@ -3774,6 +3901,12 @@ $('#projcopy').onclick=()=>{ const n=$('#projinp').value.trim(); saveCopy(n&&n!=
 $('#projnew').onclick=()=>{ setProjMenu(false); newProject(); };
 $('#projexp').onclick=()=>{ if(!tracks.some(t=>t.buf)){ msg('Rien à sauvegarder : le projet est vide.'); return; } downloadBlob(encodeProject(),safeName(projName)+'.loopbox'); msg('Fichier « '+safeName(projName)+'.loopbox » créé dans tes téléchargements.'); };
 $('#projimp').onclick=()=>$('#projfile').click();
+$('#cloudlogin').onclick=()=>cloudLogin($('#cloudmail').value.trim(),$('#cloudpw').value,false);
+$('#cloudsignup').onclick=()=>cloudLogin($('#cloudmail').value.trim(),$('#cloudpw').value,true);
+$('#cloudlogout').onclick=cloudLogout;
+$('#cloudupb').onclick=()=>cloudUpload(false);
+$('#cloudauto').onchange=e=>{ cloudAuto=e.target.checked; lsSet('lbx-cloud-auto',cloudAuto); if(cloudAuto) cloudAfterSave(); else { clearTimeout(cloudAutoT); setCloudSt(''); } };
+updCloudUI(); if(cloud) cloudRefresh();
 $('#projfile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importProjectFile(f); };
 
 // ---------- boucle d'affichage ----------

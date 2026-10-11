@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=56">
+<link rel="stylesheet" href="style.css?v=57">
 </head>
 <body>
 <header>
@@ -30,6 +30,12 @@
       <div class="row" style="margin-top:6px"><input id="projinp" type="text" maxlength="40" style="flex:1" aria-label="Nom du projet"><button id="projren">Renommer</button></div></div>
     <div class="row wrap"><button id="projsave" class="primary">💾 Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl">Mes projets</span></div><div id="projlist"></div></div>
+    <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="cloud">☁ En ligne (tous tes appareils)</span><span id="cloudst" class="lbl" style="margin-left:auto"></span></div>
+      <div id="cloudout"><div class="row wrap" style="margin-top:6px"><input id="cloudmail" type="email" autocomplete="username" placeholder="ton e-mail" style="flex:1;min-width:180px" aria-label="E-mail"><input id="cloudpw" type="password" autocomplete="current-password" placeholder="mot de passe" style="flex:1;min-width:140px" aria-label="Mot de passe"></div>
+        <div class="row wrap"><button id="cloudlogin" class="primary">Se connecter</button><button id="cloudsignup">Créer un compte</button></div></div>
+      <div id="cloudin" hidden><div class="row wrap" style="margin-top:6px"><span id="cloudwho" class="lbl"></span><button id="cloudlogout" style="margin-left:auto">Se déconnecter</button></div>
+        <div class="row wrap"><button id="cloudupb" class="primary">☁ Mettre ce projet en ligne</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cloudauto" checked style="width:22px;height:22px"> envoi automatique</label></div>
+        <div id="cloudlist"></div></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="install">Installer l'appli</span></div>
       <div class="row wrap" style="margin-top:6px"><button id="installbtn" class="primary" hidden>📲 Installer LoopBox</button><span id="installhint" class="hint" style="margin:0"></span></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="projfile">Fichier (sauvegarde de sécurité)</span></div>
@@ -168,6 +174,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=56"></script>
+<script src="app.js?v=57"></script>
 </body>
 </html>

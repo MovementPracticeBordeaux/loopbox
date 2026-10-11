@@ -88,7 +88,7 @@ details>summary{cursor:pointer;font-weight:600;font-size:19px;list-style-positio
 .hbtn{width:44px;min-height:44px;padding:0;flex:none;font-size:20px;}
 #projmenu{max-height:70vh;overflow:auto;}
 #savestate{font-size:15px;}
-input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:44px;min-width:0;}
+input[type=text],input[type=email],input[type=password]{font:inherit;color:var(--ink);background:var(--surf2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;min-height:44px;min-width:0;}
 .prow{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid var(--line);}
 .prow .pn{flex:1;min-width:0;}
 .prow .pn b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

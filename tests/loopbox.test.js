@@ -1,5 +1,5 @@
 // Tests automatiques de LoopBox. Lancer : npm install puis npm test
-const {boot,recordBase,tone,freqOf,sleep,SR,FI}=require('./harness');
+const {boot,recordBase,tone,freqOf,sleep,SR,FI,fakeCloud}=require('./harness');
 const results=[];
 const near=(a,b,tol)=>Math.abs(a-b)<=tol;
 async function test(name,fn){
@@ -1443,6 +1443,56 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#mungrp').click(); tap(X(18),Y(1)); await sleep(5);
     ok(/« Piste 2 » · mesures 5 → 6/.test(info()),'dissocié : '+info());
     P.$('#undo').click(); P.$('#undo').click(); await sleep(10);
+  });
+  await test('projets en ligne : compte, envoi, envoi automatique, ouverture sur un 2e appareil, session renouvelée, hors connexion, retrait',async()=>{
+    const S=fakeCloud();
+    const P=await boot({cloud:S}); await recordBase(P); await sleep(50);
+    ok(!P.$('#cloudout').hidden&&P.$('#cloudin').hidden,'déconnecté au départ');
+    P.$('#cloudmail').value='sylvain@test.fr'; P.$('#cloudpw').value='abc'; P.$('#cloudsignup').click(); await sleep(30);
+    ok(/trop court/.test(P.$('#msg').textContent),'mot de passe trop court : '+P.$('#msg').textContent);
+    P.$('#cloudpw').value='secret123'; P.$('#cloudsignup').click(); await sleep(50);
+    ok(P.$('#cloudout').hidden&&!P.$('#cloudin').hidden&&/sylvain@test\.fr/.test(P.$('#cloudwho').textContent),'connecté : '+P.$('#cloudwho').textContent);
+    const files=()=>Object.keys(S.files).filter(k=>/\.loopbox$/.test(k)), until=async(f,ms)=>{ for(let k=0;k<(ms||6000)/50&&!f();k++) await sleep(50); };
+    P.$('#cloudupb').click(); await until(()=>files().length&&/est en ligne/.test(P.$('#msg').textContent)); await sleep(50);
+    ok(files().length===1&&Object.keys(S.files).some(k=>/index\.json$/.test(k)),'projet + index envoyés : '+Object.keys(S.files).join(', ')+' | '+S.log.join(' ; ')+' | '+P.$('#msg').textContent);
+    ok(/est en ligne/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    ok(/☁ Mon projet/.test(P.$('#cloudlist').textContent),'listé en ligne : '+P.$('#cloudlist').textContent);
+    const posts=()=>S.log.filter(l=>/^POST \/storage.*\.loopbox/.test(l)).length, n0=posts();
+    await sleep(500);
+    ok(posts()===n0,'pas d\'envoi en boucle sans changement ('+(posts()-n0)+')');
+    // envoi automatique après une modification
+    P.$('#projinp').value='Beat du dimanche'; P.$('#projren').click(); for(let k=0;k<40&&posts()===n0;k++) await sleep(100); await sleep(200);
+    ok(posts()===n0+1,'envoi automatique après un changement : '+(posts()-n0)+' | '+S.log.join(' ; ')+' | '+P.$('#cloudst').textContent+' | '+P.$('#msg').textContent);
+    const ix=JSON.parse(new TextDecoder().decode(S.files[Object.keys(S.files).find(k=>/index\.json$/.test(k))]));
+    ok(Object.values(ix).some(x=>x.name==='Beat du dimanche'),'nom à jour en ligne : '+JSON.stringify(ix));
+    const ref=Float32Array.from(P.lastPlayed().getChannelData(0));
+    // 2e appareil
+    S.ttl=30;
+    const Q=await boot({cloud:S}); await sleep(50);
+    Q.$('#cloudmail').value='sylvain@test.fr'; Q.$('#cloudpw').value='mauvais'; Q.$('#cloudlogin').click(); await sleep(40);
+    ok(/incorrect/.test(Q.$('#msg').textContent),'mauvais mot de passe : '+Q.$('#msg').textContent);
+    Q.$('#cloudpw').value='secret123'; Q.$('#cloudlogin').click(); await until(()=>/☁/.test(Q.$('#cloudlist').textContent));
+    ok(/☁ Beat du dimanche/.test(Q.$('#cloudlist').textContent),'le projet apparaît sur le 2e appareil : '+Q.$('#cloudlist').textContent);
+    ok((S.refreshed||0)>0,'session expirée renouvelée sans redemander le mot de passe');
+    const ob=[...Q.$('#cloudlist').querySelectorAll('button')].find(b=>b.textContent==='Ouvrir'); ob.click(); for(let k=0;k<50&&Q.$('#projname').textContent!=='Beat du dimanche';k++) await sleep(100); await sleep(100);
+    ok(Q.$('#projname').textContent==='Beat du dimanche','projet ouvert : '+Q.$('#projname').textContent+' | '+Q.$('#msg').textContent);
+    Q.starts.length=0; Q.$('#dplay').click(); await sleep(80);
+    const got=Q.lastPlayed()&&Q.lastPlayed().getChannelData(0); let e=got&&got.length===ref.length?0:1; if(got) for(let i=0;i<ref.length;i+=7) e=Math.max(e,Math.abs(got[i]-ref[i]));
+    ok(e<2e-4,'même son sur les deux appareils (écart '+e+')');
+    ok(/ouvert ici/.test(Q.$('#cloudlist').textContent),'marqué ouvert ici');
+    // sans internet
+    S.down=true; Q.$('#cloudupb').click(); await until(()=>/⚠/.test(Q.$('#cloudst').textContent));
+    ok(/pas de connexion internet/.test(Q.$('#msg').textContent)&&/⚠/.test(Q.$('#cloudst').textContent),'hors connexion : '+Q.$('#msg').textContent);
+    S.down=false;
+    // envoi automatique coupé
+    Q.$('#cloudauto').checked=false; Q.$('#cloudauto').dispatchEvent(new Q.w.Event('change'));
+    const n1=posts(); Q.$('#projinp').value='Autre nom'; Q.$('#projren').click(); await sleep(700);
+    ok(posts()===n1,'pas d\'envoi quand l\'envoi automatique est coupé');
+    // retrait
+    const del=[...Q.$('#cloudlist').querySelectorAll('button')].find(b=>b.textContent==='🗑'); del.click(); del.click(); await until(()=>files().length===0); await sleep(50);
+    ok(files().length===0&&!/Beat du dimanche/.test(Q.$('#cloudlist').textContent),'retiré en ligne : '+files().join(','));
+    Q.$('#cloudlogout').click(); await sleep(10);
+    ok(!Q.$('#cloudout').hidden,'déconnexion');
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));

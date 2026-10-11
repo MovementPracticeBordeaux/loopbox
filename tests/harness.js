@@ -17,12 +17,40 @@ function pageHtml(){
   return html;
 }
 
+// faux serveur Supabase (auth par mot de passe + stockage privé par compte), pour tester les projets en ligne
+function fakeCloud(){
+  const S={users:{},files:{},tokens:{},n:0,log:[],down:false,ttl:3600};
+  const res=(status,body,raw)=>({ok:status<300,status,json:async()=>body,arrayBuffer:async()=>raw});
+  S.fetch=async(url,opt={})=>{
+    if(S.down) throw new TypeError('Failed to fetch');
+    const u=new URL(url), m=(opt.method||'GET').toUpperCase(), H=opt.headers||{}; S.log.push(m+' '+u.pathname+u.search);
+    if(!H.apikey) return res(401,{message:'No API key found in request'});
+    const body=opt.body==null?null:typeof opt.body==='string'?opt.body:new Uint8Array(await opt.body.arrayBuffer()).buffer;
+    const auth=(H.Authorization||'').replace('Bearer ',''), who=S.tokens[auth];
+    const sess=uid=>{ const at='at'+(++S.n), rt='rt'+S.n; S.tokens[at]={uid,exp:Date.now()+S.ttl*1000}; S.tokens[rt]={uid,refresh:true}; return {access_token:at,refresh_token:rt,expires_in:S.ttl,user:{id:uid,email:S.users[uid].email}}; };
+    if(u.pathname==='/auth/v1/signup'){ const j=JSON.parse(body); if(Object.values(S.users).some(x=>x.email===j.email)) return res(422,{msg:'User already registered'}); if((j.password||'').length<6) return res(422,{msg:'Password should be at least 6 characters'}); const id='u'+(++S.n); S.users[id]={email:j.email,pw:j.password,ok:!S.confirm}; return res(200,S.confirm?{id,email:j.email}:sess(id)); }
+    if(u.pathname==='/auth/v1/token'){ const j=JSON.parse(body);
+      if(u.searchParams.get('grant_type')==='password'){ const id=Object.keys(S.users).find(k=>S.users[k].email===j.email&&S.users[k].pw===j.password); if(!id) return res(400,{error:'invalid_grant',error_description:'Invalid login credentials'}); if(!S.users[id].ok) return res(400,{error_description:'Email not confirmed'}); return res(200,sess(id)); }
+      const t=S.tokens[j.refresh_token]; if(!t||!t.refresh) return res(400,{error:'invalid_grant',error_description:'Invalid Refresh Token'}); delete S.tokens[j.refresh_token]; S.refreshed=(S.refreshed||0)+1; return res(200,sess(t.uid)); }
+    const sm=u.pathname.match(/^\/storage\/v1\/object\/(authenticated\/)?([^/]+)\/?(.*)$/);
+    if(sm){ if(!who||who.refresh||who.exp<Date.now()) return res(400,{statusCode:'403',error:'Unauthorized',message:'invalid JWT'});
+      const path=decodeURIComponent(sm[3]), mine=p=>p.split('/')[0]===who.uid;
+      if(m==='DELETE'){ JSON.parse(body).prefixes.forEach(p=>{ if(mine(p)) delete S.files[sm[2]+'/'+p]; }); return res(200,[]); }
+      if(!mine(path)) return res(400,{statusCode:'403',error:'Unauthorized',message:'new row violates row-level security policy'});
+      const key=sm[2]+'/'+path;
+      if(m==='POST'){ if(body.byteLength>50*1024*1024) return res(413,{message:'The object exceeded the maximum allowed size'}); if(S.files[key]&&H['x-upsert']!=='true') return res(400,{message:'The resource already exists'}); S.files[key]=typeof body==='string'?new TextEncoder().encode(body).buffer:body; return res(200,{Key:key}); }
+      if(m==='GET'){ const f=S.files[key]; if(!f) return res(400,{statusCode:'404',error:'not_found',message:'Object not found'}); return {ok:true,status:200,json:async()=>JSON.parse(new TextDecoder().decode(f)),arrayBuffer:async()=>f.slice(0)}; } }
+    return res(404,{message:'unknown route'});
+  };
+  return S;
+}
+
 async function boot(opt={}){
   const engine=opt.engine||'worklet';
   const idb=opt.idb||new FI.IDBFactory();
   const P={defaultMic:'Micro intégré',devs:[{kind:'audioinput',deviceId:'default',label:'Par défaut'},{kind:'audioinput',deviceId:'int1',label:'Micro intégré'},{kind:'audioinput',deviceId:'usb1',label:'Micro USB'},{kind:'audiooutput',deviceId:'o1',label:'Haut-parleur'}],gum:[],errs:[],buffers:[],starts:[],blobs:[],k:0,impulses:[],noise:0,amp:0.8,ctx:null,proc:null,wnode:null,idb};
   const mk=()=>new Proxy(function(){},{get:(t,p)=>{ if(p==='value') return t._v??0; return t[p]??(t[p]=mk()); },set:(t,p,v)=>{ t[p]=v; return true; },apply:()=>mk()});
-  const dom=new JSDOM(pageHtml(),{runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
+  const dom=new JSDOM(pageHtml(),{...(opt.cloud?{url:'https://loopbox.test/'}:{}),runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
     class AC{ constructor(){ this.sampleRate=SR; this.currentTime=0; this.destination=mk(); P.ctx=this; }
       resume(){ return Promise.resolve(); }
       createBuffer(c,l,sr){ const d=new Float32Array(l); const b={length:l,duration:l/sr,sampleRate:sr,numberOfChannels:1,getChannelData:()=>d,copyToChannel:a=>d.set(a)}; P.buffers.push(b); return b; } }
@@ -38,6 +66,7 @@ async function boot(opt={}){
     for(const m of ['createGain','createBiquadFilter','createDynamicsCompressor','createBufferSource','createStereoPanner','createDelay','createConvolver','createWaveShaper','createOscillator']) w.OfflineAudioContext.prototype[m]=function(){ return mk(); };
     if(opt.share){ w.navigator.canShare=()=>true; w.navigator.share=async d=>{ P.shared=d; }; }
     w.indexedDB=idb;
+    if(opt.cloud){ w.fetch=opt.cloud.fetch; w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }
     w.navigator.mediaDevices={
       getUserMedia:c=>{ P.gum.push(c); const lab=(c&&c.audio&&c.audio.deviceId)?((P.devs.find(d=>d.deviceId===c.audio.deviceId.exact)||{}).label||'?'):P.defaultMic; return Promise.resolve({getTracks:()=>[{stop(){}}],getAudioTracks:()=>[{label:lab,stop(){}}]}); },
       enumerateDevices:async()=>P.devs.slice()
@@ -81,4 +110,4 @@ async function recordBase(P){
 }
 const tone=(f,sec,amp=0.5)=>{ const n=Math.round(SR*sec), d=new Float32Array(n); for(let i=0;i<n;i++) d[i]=amp*Math.sin(2*Math.PI*f*i/SR); return {numberOfChannels:1,length:n,sampleRate:SR,duration:n/SR,getChannelData:()=>d}; };
 const freqOf=b=>{ const x=b.getChannelData(0); let zc=0; const a=Math.floor(x.length*0.2), z=Math.floor(x.length*0.8); for(let i=a+1;i<z;i++) if(x[i-1]<=0&&x[i]>0) zc++; return zc/((z-a)/SR); };
-module.exports={boot,recordBase,tone,freqOf,sleep,SR,FI};
+module.exports={boot,recordBase,tone,freqOf,sleep,SR,FI,fakeCloud};
