@@ -155,3 +155,6 @@ input[type=text]{font:inherit;color:var(--ink);background:var(--surf2);border:1p
 
 /* piste qu'on n'entend pas : la raison s'affiche sur sa forme d'onde */
 .trk.silent .tag{opacity:1;color:#FFB020;background:rgba(0,0,0,.55);font-weight:600;}
+
+/* outil de coupe de la prise de base, rangé dans l'onglet Découpe */
+.edslot>#editor{margin:12px 0 0;padding:0;border:0;background:none;box-shadow:none;}

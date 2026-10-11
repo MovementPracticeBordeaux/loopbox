@@ -302,6 +302,21 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#undo').click(); await sleep(20);
     ok(Math.abs(rms(P.lastPlayed().getChannelData(0),gapStart,gapEnd)-rms(before,gapStart,gapEnd))<1e-4,'annulation');
   });
+  await test('prise de base : l\'outil de coupe est dans l\'onglet Découpe de la piste, et survit à l\'effacement de la piste',async()=>{
+    const P=await boot(); await recordBase(P); await sleep(100);
+    const t1=P.$('.trk'), ed=P.$('#editor');
+    ok(ed.style.display==='block','outil de coupe affiché');
+    ok(t1.querySelector('.edslot').contains(ed),'l\'outil doit être dans l\'onglet Découpe de la piste 1');
+    ok(!t1.querySelector('.tbody').hidden&&!t1.querySelector('[data-pane="cut"]').hidden,'la piste 1 doit s\'ouvrir sur Découpe');
+    t1.querySelector('.ttabs button[data-tab="son"]').click(); await sleep(10);
+    ok(t1.querySelector('[data-pane="cut"]').hidden,'autre onglet : Découpe caché');
+    t1.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    ok(!t1.querySelector('[data-pane="cut"]').hidden&&t1.querySelector('.edslot').contains(ed),'retour sur Découpe');
+    P.$('#addtrk')&&P.$('#addtrk').click(); await sleep(20);
+    t1.querySelector('.del').click(); await sleep(50);
+    const yes=[...P.$$('button')].find(b=>/^(Oui|Effacer|Supprimer)/.test(b.textContent)&&b.offsetParent!==undefined); if(yes) { yes.click(); await sleep(50); }
+    ok(!!P.$('#editor'),'l\'outil de coupe ne doit pas disparaître de la page');
+  });
   await test('menus de piste en onglets : une seule partie affichée à la fois',async()=>{
     const P=await boot();
     const t1=P.$('.trk'); t1.querySelector('.tog').click(); await sleep(10);

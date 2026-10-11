@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='54';
+const APPVER='55';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -965,7 +965,7 @@ function restoreState(sn){
   const map=new Map(sn.tr.map(x=>[x.t,x]));
   // une copie de piste créée après cet état (dupliquer, variation) disparaît vraiment quand on l'annule
   { const order=sn.tr.map(x=>x.t), extra=tracks.filter(t=>!map.has(t)&&!t.fromDup&&!t.histDel), gone=tracks.filter(t=>!map.has(t)&&(t.fromDup||t.histDel)&&!(recObj&&recObj.i===t.id));
-    gone.forEach(t=>{ stopSrc(t); setLive(t,false); if(t.el) t.el.remove(); });
+    gone.forEach(t=>{ stopSrc(t); setLive(t,false); if(t.el){ edOut(t); t.el.remove(); } });
     const next=order.concat(extra);
     if(next.length&&(next.length!==tracks.length||next.some((t,i)=>tracks[i]!==t))){ tracks.length=0; next.forEach(t=>tracks.push(t)); reindexTracks(); applyGains(); }
   }
@@ -1059,6 +1059,19 @@ function peaksOf(raw,w){
   const p=new Float32Array(w), step=raw.length/w;
   for(let i=0;i<w;i++){ let m=0; const a=Math.floor(i*step), z=Math.min(raw.length,Math.floor((i+1)*step)); for(let j=a;j<z;j+=8){ const v=Math.abs(raw[j]); if(v>m) m=v; } p[i]=m; }
   return p;
+}
+// l'outil de coupe de la prise de base vit dans l'onglet ✂ Découpe de sa piste (avant : un cadre à part, loin sur téléphone)
+let edHome=null, edWas=false;
+function edOut(t){ const e=document.getElementById('editor'); if(e&&edHome&&t.el&&t.el.contains(e)){ edHome.parentNode.insertBefore(e,edHome.nextSibling); edWas=false; } }
+function placeEditor(ed){
+  const e=$('#editor'); if(!e) return;
+  if(!edHome){ edHome=document.createComment('editor'); e.parentNode.insertBefore(edHome,e); }
+  const t=ed&&masterTake?tracks[masterTake.i]:null, slot=t&&t.el?$('.edslot',t.el):null;
+  if(slot){ if(e.parentNode!==slot) slot.appendChild(e); }
+  else if(e.parentNode!==edHome.parentNode||e.previousSibling!==edHome) edHome.parentNode.insertBefore(e,edHome.nextSibling);
+  // juste après la prise de base : on ouvre directement l'onglet Découpe de la piste
+  if(slot&&!edWas){ const b=$('.tbody',t.el); if(b.hidden){ b.hidden=false; $('.tog',t.el).setAttribute('aria-expanded','true'); try{ updFold(); }catch(x){} } setTab(t,'cut'); }
+  edWas=!!slot;
 }
 function drawEditor(){
   const m=masterTake; if(!m) return;
@@ -1907,7 +1920,7 @@ function setTab(t,tab){
   t.tab=tab;
   t.el.querySelectorAll('.ttabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   t.el.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==tab);
-  if(tab==='cut') drawTsel(t);
+  if(tab==='cut'){ drawTsel(t); if(masterTake&&tracks[masterTake.i]===t&&$('#editor').style.display!=='none') drawEditor(); }
   if(tab==='bass'){ fillMelSrc(t); drawBassTimeline(t); drawBassViz(t); }
 }
 function setKindUI(t){
@@ -2196,6 +2209,7 @@ function buildTrackUI(t){
       <div class="row"><span class="lbl w2">Aigus</span><input type="range" class="eq" data-b="2" min="-12" max="12" step="1" value="0" aria-label="Aigus piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div></div>
   </div>
   <div class="pane" data-pane="cut" hidden>
+  <div class="edslot"></div>
   <div class="field tsel" hidden><div class="row"><span class="lbl" data-help="tsel">Garder la partie propre</span><span class="tsl lbl" style="margin-left:auto"></span></div>
     <canvas class="tsc" style="width:100%;height:76px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="tsnap" checked style="width:22px;height:22px"> aimanter aux temps</label></div>
@@ -2939,7 +2953,7 @@ function disposeTrack(t){
   if(t.pjob){ t.pjob.cancel=true; t.pjob=null; }
   (t.fxn||[]).forEach(f=>f.dispose());
   [t.inp,t.eq.lo,t.eq.mid,t.eq.hi,t.gain,t.pan].forEach(n=>{ try{ if(n) n.disconnect(); }catch(e){} });
-  if(t.el) t.el.remove();
+  if(t.el){ edOut(t); t.el.remove(); }
 }
 // supprimer une piste (vide ou non) ; ↶ la récupère (la piste est mise de côté, pas détruite)
 function removeTrack(t){
@@ -2947,7 +2961,7 @@ function removeTrack(t){
   if(tracks.length<=1){ msg('Il faut garder au moins une piste.'); return; }
   pushHist();
   if(preview&&preview.t===t) stopPreview(false);
-  stopSrc(t); setLive(t,false); if(t.el) t.el.remove(); t.histDel=true;
+  stopSrc(t); setLive(t,false); if(t.el){ edOut(t); t.el.remove(); } t.histDel=true;
   tracks.splice(tracks.indexOf(t),1);
   if(masterTake&&masterTake.ref===t) masterTake=null;
   reindexTracks(); updTrackBtns(); updFold(); applyGains(); lockUI(); updLive();
@@ -3040,6 +3054,7 @@ function lockUI(){
   else h.style.display='none';
   const ed=!!(masterTake&&masterTake.T&&loopLen&&!recObj&&tracks.filter(t=>t.buf).length===1&&tracks[masterTake.i].buf);
   $('#editor').style.display=ed?'block':'none';
+  placeEditor(ed);
   if(ed) drawEditor();
   const gr=!!(loopLen&&!recObj);
   $('#grow').style.display=gr?'block':'none';
