@@ -1366,6 +1366,84 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#micsel').value='int1'; P.$('#micsel').dispatchEvent(new P.w.Event('change')); await sleep(80);
     ok(/Micro utilisé : Micro intégré/.test(P.$('#micused').textContent),'choix manuel : '+P.$('#micused').textContent);
   });
+  await test('basse : choisir plusieurs blocs, les grouper, dupliquer le motif jusqu\'à la fin, dissocier',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    const at=b=>b/8*800, info=()=>tb.querySelector('.btlinfo').textContent, sel=()=>tb.querySelector('.bselinfo').textContent;
+    tap(at(1),15); tap(at(2),15); await sleep(5);
+    tap(at(1.5),60); tb.querySelector('.bpal button[data-n="4"]').click();
+    ok(info().startsWith('Do → Mi → Do · 3 blocs'),'motif de départ : '+info());
+    const m=tb.querySelector('.bmulti'); m.checked=true; m.dispatchEvent(new P.w.Event('change'));
+    tap(at(0.5),60); tap(at(1.5),60); await sleep(5);
+    ok(/^Blocs 1 → 2 : temps 1 → 2/.test(sel()),'deux blocs choisis : '+sel());
+    tb.querySelector('.bgrp').click();
+    m.checked=false; m.dispatchEvent(new P.w.Event('change'));
+    tap(at(6),60); tap(at(1.5),60); await sleep(5);
+    ok(/^Blocs 1 → 2 .*groupe/.test(sel()),'toucher un bloc du groupe choisit tout le groupe : '+sel());
+    tb.querySelector('.bdupn').value='fill'; tb.querySelector('.bdup').click(); await sleep(5);
+    ok(info().startsWith('Do → Mi → Do → Mi → Do → Mi → Do → Mi · 8 blocs'),'motif répété jusqu\'à la fin : '+info());
+    ok(/^Blocs 3 → 8/.test(sel()),'les copies sont choisies : '+sel());
+    tap(at(4.5),60); await sleep(5);
+    ok(/^Blocs 5 → 6 .*groupe/.test(sel()),'chaque copie est son propre groupe : '+sel());
+    tb.querySelector('.bungrp').click(); tap(at(4.5),60); await sleep(5);
+    ok(/^Bloc 5 :/.test(sel()),'dissocié : '+sel());
+    tb.querySelector('.bgo').click(); await sleep(30);
+    const b=P.lastBuf();
+    ok(near(fz(b,3.1,3.8),82.4,3)&&near(fz(b,6.1,6.8),65.4,3)&&near(fz(b,7.1,7.8),82.4,3),'notes jouées : '+[3,6,7].map(k=>fz(b,k+0.1,k+0.8).toFixed(1)).join(' / '));
+    // une fois la basse créée, la duplication s'applique tout de suite et ↶ l'annule
+    tap(at(0.5),60); tb.querySelector('.bpal button[data-n="7"]').click(); tb.querySelector('.bgo').click(); await sleep(20);
+    tap(at(0.5),60); tb.querySelector('.bdupn').value='1'; tb.querySelector('.bdup').click(); await sleep(20);
+    ok(info().startsWith('Sol → Mi → Sol → Mi → Do'),'dupliqué et appliqué : '+info()+' | '+P.$('#msg').textContent);
+    ok(near(fz(P.lastBuf(),2.1,2.8),98,4)&&near(fz(P.lastBuf(),3.1,3.8),82.4,3),'entendu tout de suite : '+fz(P.lastBuf(),2.1,2.8).toFixed(1)+' / '+fz(P.lastBuf(),3.1,3.8).toFixed(1));
+    P.$('#undo').click(); await sleep(20);
+    ok(info().startsWith('Sol → Mi → Do → Mi → Do'),'↶ : '+info());
+  });
+
+  await test('piste enregistrée : copier la partie choisie à la suite (motif répété), ↶',async()=>{
+    const P=await boot(); const r=await recordBase(P); const L=r.buf.length;
+    P.$('#addtrk').click(); await sleep(10);
+    const t2=P.$$('.trk')[1];
+    await P.importFile(1,mkFile(L,d=>{ for(let i=0;i<Math.round(L/8);i++) d[i]=0.4*Math.sin(2*Math.PI*220*i/SR); }));
+    t2.querySelector('.tog').click(); t2.querySelector('.ttabs button[data-tab="cut"]').click(); await sleep(10);
+    const nb=+/sur (\d+)/.exec(t2.querySelector('.tsl').textContent+' sur 8')[1];
+    for(let k=0;k<nb-1;k++) t2.querySelector('.ts3').click();
+    await sleep(10);
+    ok(/Temps 1 → 1 sur/.test(t2.querySelector('.tsl').textContent),'partie = 1er temps : '+t2.querySelector('.tsl').textContent);
+    const rms=(b,a,z)=>{ const d=b.getChannelData(0), bl=d.length/nb; let s=0; for(let i=Math.round(a*bl);i<Math.round(z*bl);i++) s+=d[i]*d[i]; return Math.sqrt(s/((z-a)*bl)); };
+    t2.querySelector('.tsdupn').value='2'; t2.querySelector('.tsdup').click(); await sleep(20);
+    const b=P.lastPlayed();
+    ok(rms(b,1.1,1.9)>0.2&&rms(b,2.1,2.9)>0.2&&rms(b,3.2,3.9)<0.01,'2 copies aux temps 2 et 3, rien au temps 4 : '+[1,2,3].map(k=>rms(b,k+0.1,k+0.9).toFixed(3)).join(' / '));
+    ok(/Temps 1 → 3 sur/.test(t2.querySelector('.tsl').textContent),'la partie gardée inclut les copies : '+t2.querySelector('.tsl').textContent);
+    ok(/copiée 2 fois/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    P.$('#undo').click(); await sleep(20);
+    ok(rms(P.lastPlayed(),1.1,1.9)<0.01&&/Temps 1 → 1 sur/.test(t2.querySelector('.tsl').textContent),'↶ : '+rms(P.lastPlayed(),1.1,1.9).toFixed(3)+' '+t2.querySelector('.tsl').textContent);
+  });
+
+  await test('montage : choisir plusieurs blocs sur plusieurs lignes, grouper, dupliquer le groupe 3 fois, déplacer ensemble, dissocier',async()=>{
+    const {P,tap,drag,X,Y}=await montBoot();
+    const info=()=>P.$('#mclipinfo').textContent;
+    tap(X(4),12); tap(X(14),Y(0)); P.$('#mcut').click(); P.$('#mdel').click();
+    tap(X(14),Y(1)); P.$('#mcut').click(); P.$('#mdel').click(); await sleep(5);
+    const mm=P.$('#mmulti'); mm.checked=true; mm.dispatchEvent(new P.w.Event('change'));
+    tap(X(2),Y(0)); tap(X(2),Y(1)); await sleep(5);
+    ok(/^2 blocs choisis$/.test(info()),'deux blocs choisis : '+info());
+    P.$('#mgrp').click(); mm.checked=false; mm.dispatchEvent(new P.w.Event('change'));
+    tap(X(20),12); tap(X(2),Y(1)); await sleep(5);
+    ok(/^2 blocs choisis \(groupe\)$/.test(info()),'toucher un bloc du groupe : '+info());
+    P.$('#mdupn').value='3'; P.$('#mdup').click(); await sleep(5);
+    ok(/dupliqués 3 fois/.test(P.$('#msg').textContent)&&/^2 blocs choisis \(groupe\)$/.test(info()),'duplication : '+P.$('#msg').textContent);
+    P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20);
+    ok(P.starts.filter(x=>x.buf).length===8,'8 blocs joués (2 + 3×2) : '+P.starts.filter(x=>x.buf).length);
+    P.$('#mplay').click();
+    // le dernier groupe (temps 12 à 16) glisse d'une mesure : les deux blocs bougent
+    drag(X(14),Y(0),X(18)); await sleep(5);
+    tap(X(15),12); tap(X(18),Y(1)); await sleep(5);
+    ok(/^2 blocs choisis \(groupe\)$/.test(info()),'le bloc de la piste 2 a suivi : '+info());
+    P.$('#mungrp').click(); tap(X(18),Y(1)); await sleep(5);
+    ok(/« Piste 2 » · mesures 5 → 6/.test(info()),'dissocié : '+info());
+    P.$('#undo').click(); P.$('#undo').click(); await sleep(10);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

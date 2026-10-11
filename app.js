@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='55';
+const APPVER='56';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1189,6 +1189,8 @@ const HELP={
   share:"<b>Partager le mix</b> : prépare le fichier WAV et ouvre le menu de partage du téléphone (WhatsApp, mail, Drive…). Si le navigateur ne sait pas partager un fichier, il est simplement téléchargé.",
   stems:"<b>Pistes séparées</b> : exporte chaque piste dans son propre fichier WAV, tous rangés dans un .zip, pour les retravailler dans une autre appli. Chaque piste garde son volume, sa tonalité, ses effets et sa hauteur, mais pas le « Son final ». Toutes les pistes ont la même longueur et démarrent en même temps : elles se superposent parfaitement.",
   install:"<b>Installer l'appli</b> : ajoute LoopBox à ton écran d'accueil comme une vraie appli, en plein écran, et elle <b>fonctionne même sans connexion</b> une fois installée. Selon le navigateur, le bouton apparaît ici, ou il faut passer par le menu du navigateur (⋮) → « Ajouter à l'écran d'accueil » / « Installer l'appli ». Quand une nouvelle version sort, un message « Mettre à jour » s'affiche.",
+  bgroup:"<b>Motif</b> : coche <b>choisir plusieurs blocs</b>, touche le premier puis le dernier bloc d'un motif : tous les blocs entre les deux sont choisis (tant que la case est cochée, la palette de notes change tous ces blocs d'un coup ; sinon, seulement le bloc touché). <b>⛓ Grouper</b> les attache : ensuite, toucher l'un d'eux choisit tout le groupe (une ligne blanche les relie). <b>Dissocier</b> les détache. <b>⧉ Dupliquer à la suite</b> recopie le motif juste après lui, 1, 2, 3 fois ou jusqu'à la fin de la boucle, en remplaçant les blocs qui s'y trouvaient. ↶ annule.",
+  tsdup:"<b>Copier la partie à la suite</b> : la partie choisie (entre les deux traits orange) est recopiée juste après elle, 1, 2, 3 fois ou jusqu'à la fin de la boucle. Le son qui se trouvait à ces endroits est remplacé, et la partie gardée s'agrandit pour inclure les copies. Pratique pour répéter un motif réussi. ↶ annule.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -1200,7 +1202,8 @@ const HELP={
   msec:"<b>Partie du morceau</b> : place le curseur (touche la règle) puis « Début = curseur », avance le curseur puis « Fin = curseur ». La partie est surlignée en orange. <b>Dupliquer cette partie</b> la recopie juste après, <b>sur toutes les pistes à la fois</b> (piste principale, basse, mélodie…), et décale la suite du morceau. <b>Supprimer cette partie</b> l'enlève partout et rapproche la suite. Pratique pour construire couplet, refrain, couplet… puis faire varier une des copies.",
   mvar:"<b>Créer une variation de ce bloc</b> : le bloc choisi joue désormais une copie de sa piste (par exemple « Basse (variation) »), ajoutée à la liste des pistes. Modifie cette copie (autres notes, autre style, autres effets…) : seul ce bloc change, le reste du morceau garde la piste d'origine. Pour qu'un autre bloc joue aussi la variation, fais-le glisser sur sa ligne.",
   mont:"<b>Montage du morceau</b> : compose un morceau du début à la fin, comme sur un logiciel de montage vidéo. Chaque piste a sa ligne ; chaque bloc joue la boucle de la piste (elle se répète tant que le bloc dure). <b>Touche la règle</b> (numéros de mesures) pour placer le curseur. <b>Touche une ligne vide</b> pour ajouter un bloc d'un tour de boucle. <b>Fais glisser un bloc</b> pour le déplacer, <b>son bord droit ou gauche</b> pour l'allonger ou le raccourcir. Avec un bloc choisi : couper au curseur, dupliquer, supprimer, ou changer son ton (variation : refrain un ton plus haut…). Glisse sur une zone vide pour faire défiler. La ligne rouge marque la fin du morceau. ▶ en bas joue le morceau quand le montage est ouvert.",
-  mclip:"<b>Bloc choisi</b> : « Couper au curseur » coupe le bloc à l'endroit du curseur orange (touche la règle pour le placer). « Dupliquer » recopie le bloc juste après. « ♭ / ♯ » change le ton de ce bloc seulement, pour créer des variations (la basse ou la mélodie sont recalculées note à note).",
+  mgroup:"<b>Plusieurs blocs</b> : coche <b>choisir plusieurs blocs</b>, puis touche chaque bloc voulu, sur une ou plusieurs lignes (ils s'entourent d'orange ; retouche pour en retirer un). <b>⛓ Grouper</b> les attache : toucher l'un d'eux choisit tout le groupe, et les faire glisser les déplace ensemble (un trait blanc marque les blocs groupés). <b>Dissocier</b> les détache. <b>⧉ Dupliquer</b> recopie tout le motif juste après lui, 1 à 8 fois : sur ces lignes, ce qui s'y trouvait est remplacé, les autres lignes ne bougent pas. <b>🗑</b> supprime tous les blocs choisis.",
+  mclip:"<b>Bloc choisi</b> : « Couper au curseur » coupe le bloc à l'endroit du curseur orange (touche la règle pour le placer). « Dupliquer » recopie le bloc (ou le groupe) juste après, le nombre de fois choisi. « ♭ / ♯ » change le ton de ce bloc seulement, pour créer des variations (la basse ou la mélodie sont recalculées note à note).",
   mend:"<b>Fin du morceau</b> : la ligne rouge. Tout ce qui est après n'est ni joué ni exporté. « Fin = dernier bloc » la place à la fin du dernier bloc.",
   tf:"<b>Transformer la piste</b> : l'appli repère les notes que tu as chantées, fredonnées ou sifflées sur cette piste, les cale sur la boucle (double-croche, croche ou temps) et les fait jouer par un instrument. <b>En ligne de basse</b> : descendue dans les graves. <b>En mélodie</b> : gardée à ta hauteur, avec un style (lo-fi, hip-hop, trap…). Le son d'origine est conservé avec le projet : « 🎙 Revenir au son enregistré » le récupère, et tu peux passer de basse à mélodie et inversement. ↶ annule.",
   synth:"<b>Piste mélodie</b> : comme la piste de basse, mais pour jouer une mélodie avec un instrument. Chante ou fredonne ta ligne sur une piste normale, puis « Repérer les notes » : l'appli la transforme en notes (à la même hauteur que ta voix) et la joue d'abord avec un <b>son simple, sans effet</b>, à la hauteur exacte de ta voix. Tu peux ensuite changer le ton (« Transposer », ▼ ▲ octave par bloc) ou choisir un <b>style</b> avec ses effets : lo-fi (piano électrique), hip-hop (pluck), rap / trap (cloche ou lead), nappe, flûte, 8-bit ou orgue. Chaque style pose ses effets sur la piste (lo-fi, écho, réverbération…), modifiables ensuite dans ✨ Effets.",
@@ -1473,7 +1476,7 @@ function nbOf(t){ return loopLen?beats:(+$('.bbeats',t.el).value||8); }
 // les blocs couvrent toujours toute la boucle, sans trou ni chevauchement
 function normSegs(segs,nb){
   const q=v=>Math.round((+v||0)*64)/64;
-  let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
+  let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide,g:x.g?String(x.g):undefined}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
   if(!sg.length) return [{s:0,e:nb,n:0,glide:false}];
   const tot=sg[sg.length-1].e, ratio=nb/tot;
   if(tot<nb&&tot>0&&Math.abs(ratio-Math.round(ratio))<1e-9&&sg[0].s===0){ const base=sg.slice(); for(let k=1;k<Math.round(ratio);k++) base.forEach(x=>sg.push({...x,s:x.s+k*tot,e:x.e+k*tot})); }
@@ -1515,7 +1518,43 @@ function normBass(o,nb,kind){
   r.segs=normSegs(o&&o.segs?o.segs:(o&&o.note!=null?legacySegs(o,nb):d.segs),nb);
   return r;
 }
-function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft) t.bdraft=normBass(t.bass,nb,t.kind); t.bdraft.segs=normSegs(t.bdraft.segs,nb); if((t.bsel||0)>=t.bdraft.segs.length) t.bsel=t.bdraft.segs.length-1; return t.bdraft; }
+function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft) t.bdraft=normBass(t.bass,nb,t.kind); t.bdraft.segs=normSegs(t.bdraft.segs,nb); if((t.bsel||0)>=t.bdraft.segs.length) t.bsel=t.bdraft.segs.length-1; if(t.brange&&t.brange[1]>=t.bdraft.segs.length) t.brange=null; return t.bdraft; }
+// ----- blocs choisis ensemble, groupes, duplication d'un motif -----
+let gidN=0; const newGid=()=>'g'+Date.now().toString(36)+(++gidN);
+function bRange(t){ const n=ensureDraft(t).segs.length, f=Math.min(n-1,t.bsel||0); if(!t.brange) return [f,f]; const a=Math.min(n-1,t.brange[0]), b=Math.min(n-1,t.brange[1]); return [Math.min(a,b,f),Math.max(a,b,f)]; }
+function groupSpan(segs,i){ const g=segs[i]&&segs[i].g; if(!g) return [i,i]; let a=i,b=i; segs.forEach((x,k)=>{ if(x.g===g){ a=Math.min(a,k); b=Math.max(b,k); } }); return [a,b]; }
+// les notes réelles sont figées avant de déplacer des blocs, pour que rien d'autre ne change d'octave
+function freezeRoots(t){ const d=ensureDraft(t), r=segRoots(d.segs,t.kind); d.segs.forEach((x,i)=>{ if(r[i]!=null){ x.m=r[i]; x.n=((r[i]%12)+12)%12; } }); }
+// remplace ce qu'il y a entre A et B par les blocs donnés
+function overwriteSegs(segs,A,B,blocks){
+  const out=[]; segs.forEach(x=>{ if(x.e<=A||x.s>=B){ out.push(x); return; } if(x.s<A) out.push({...x,e:A,glide:false}); if(x.e>B) out.push({...x,s:B}); });
+  blocks.forEach(x=>{ const s=Math.max(A,x.s), e=Math.min(B,x.e); if(e>s) out.push({...x,s,e}); });
+  return out.sort((p,q)=>p.s-q.s);
+}
+function bassGroup(t,on){
+  const d=ensureDraft(t), [a,b]=bRange(t);
+  if(on){ if(a===b){ msg('Choisis d\'abord plusieurs blocs : coche « choisir plusieurs blocs », puis touche le dernier bloc du motif.'); return; }
+    const g=newGid(); for(let i=a;i<=b;i++) d.segs[i].g=g; }
+  else { let k=0; for(let i=a;i<=b;i++) if(d.segs[i].g){ delete d.segs[i].g; k++; } if(!k){ msg('Ces blocs ne sont pas groupés.'); return; } }
+  if(t.buf) genBass(t); else bassChanged(t);
+  msg(on?'Blocs '+(a+1)+' à '+(b+1)+' groupés : toucher l\'un d\'eux choisit tout le groupe.':'Blocs dissociés.');
+}
+function bassDup(t,cnt){
+  const nb=nbOf(t); freezeRoots(t);
+  const d=ensureDraft(t), [a,b]=bRange(t), S=d.segs[a].s, E=d.segs[b].e, L=E-S;
+  const n=cnt==='fill'?Math.ceil((nb-E)/L-1e-9):(+cnt||1);
+  if(n<1||E>=nb){ msg('Pas de place après ce motif : il va déjà jusqu\'à la fin de la boucle ('+nb+' temps). Allonge la boucle ou choisis un motif plus tôt.'); return; }
+  const src=d.segs.slice(a,b+1), grouped=src.some(x=>x.g); let segs=d.segs, last=E, k=0;
+  for(k=1;k<=n;k++){ const A=S+k*L; if(A>=nb) break; const g=grouped?newGid():undefined;
+    segs=overwriteSegs(segs,A,Math.min(nb,A+L),src.map(x=>{ const y={...x,s:x.s+k*L,e:x.e+k*L}; if(grouped) y.g=g; else delete y.g; return y; })); last=Math.min(nb,A+L); }
+  k--;
+  d.segs=normSegs(segs,nb);
+  const i0=d.segs.findIndex(x=>x.s>=E-1e-9), i1=d.segs.findIndex(x=>x.e>=last-1e-9);
+  t.bsel=i0<0?0:i0; t.brange=i1<0?null:[t.bsel,i1];
+  if(t.buf) genBass(t); else bassChanged(t);
+  const fb=x=>String(Math.round(x*100)/100).replace('.',','), cutEnd=last>=nb&&S+(k+1)*L>nb+1e-9;
+  msg('Motif (temps '+fb(S+1)+' → '+fb(E)+') copié '+k+' fois à la suite'+(cutEnd?' (la dernière copie est coupée à la fin de la boucle)':'')+'.'+(t.buf?' ↶ pour revenir.':' Touche « ✓ Créer » pour l\'entendre.'));
+}
 const rootOf=n=>n<=4?36+n:24+n;
 const nearOct=(m,ref)=>{ while(m-ref>6) m-=12; while(ref-m>6) m+=12; return m; };
 function bassEvents(o,nb){
@@ -1659,14 +1698,14 @@ function readBassOpts(t){
   return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
 }
 function showBassOpts(t){
-  const el=t.el; t.bdraft=null; t.bsel=0;
+  const el=t.el; t.bdraft=null; t.bsel=0; t.brange=null;
   const o=normBass(t.bass,nbOf(t),t.kind); t.bdraft=o;
   $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'clean'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
   drawBassTimeline(t);
 }
 function drawBassTimeline(t){
   const c=$('.btl',t.el); if(!c) return;
-  const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), sel=t.bsel||0, cur=segs[sel];
+  const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), sel=t.bsel||0, cur=segs[sel], [ra,rb]=bRange(t), inR=i=>i>=ra&&i<=rb;
   const lab=x=>x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''), rests=segs.filter(x=>x.n==null).length;
   $('.btlinfo',t.el).textContent=(segs.length<=10?segs.map(lab).join(' → ')+' · ':'')+segs.length+' bloc'+(segs.length>1?'s':'')+(rests?' (dont '+rests+' silence'+(rests>1?'s':'')+')':'');
   if(cur.n!=null) $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
@@ -1674,7 +1713,8 @@ function drawBassTimeline(t){
   $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
   t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',b.dataset.n==='-1'?cur.n==null:+b.dataset.n===cur.n));
   const fb=x=>String(Math.round(x*100)/100).replace('.',','), rts=segRoots(segs,t.kind);
-  $('.bselinfo',t.el).textContent='Bloc '+(sel+1)+' : temps '+fb(cur.s+1)+' → '+fb(cur.e)+(cur.n!=null?' · '+noteName(rts[sel]):' · silence');
+  $('.bselinfo',t.el).textContent=ra!==rb?('Blocs '+(ra+1)+' → '+(rb+1)+' : temps '+fb(segs[ra].s+1)+' → '+fb(segs[rb].e)+(segs.slice(ra,rb+1).every(x=>x.g&&x.g===segs[ra].g)?' · groupe':'')+' · touché : bloc '+(sel+1)+(cur.n!=null?' ('+noteName(rts[sel])+')':'')):('Bloc '+(sel+1)+' : temps '+fb(cur.s+1)+' → '+fb(cur.e)+(cur.n!=null?' · '+noteName(rts[sel]):' · silence')+(cur.g?' · groupé':''));
+  { const m=$('.bmulti',t.el); if(m) m.checked=!!t.bmulti; const u=$('.bungrp',t.el); if(u) u.disabled=!segs.slice(ra,rb+1).some(x=>x.g); const gb=$('.bgrp',t.el); if(gb) gb.disabled=ra===rb; const db=$('.bdup',t.el); if(db) db.disabled=segs[rb].e>=nb; }
   t.el.querySelectorAll('.boct').forEach(b=>b.disabled=cur.n==null);
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':(t.kind==='synth'?'✓ Créer la mélodie':'✓ Créer la basse');
   const dpr=window.devicePixelRatio||1, w=Math.floor(c.clientWidth*dpr), hh=Math.floor(c.clientHeight*dpr); if(!w||!hh) return;
@@ -1693,10 +1733,11 @@ function drawBassTimeline(t){
   g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif";
   segs.forEach((x,i)=>{
     const x0=X(x.s)+2*dpr, x1=X(x.e)-2*dpr;
-    g.fillStyle=x.n==null?(i===sel?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)'):'hsl('+NOTE_HUE[x.n]+',70%,'+(i===sel?'52%':'38%')+')';
+    g.fillStyle=x.n==null?(inR(i)?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)'):'hsl('+NOTE_HUE[x.n]+',70%,'+(inR(i)?'52%':'38%')+')';
     if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.fill(); } else g.fillRect(x0,by0,Math.max(2,x1-x0),by1-by0);
-    if(i===sel){ g.strokeStyle='#fff'; g.lineWidth=2.5*dpr; if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.stroke(); } else g.strokeRect(x0,by0,x1-x0,by1-by0); }
+    if(inR(i)){ g.strokeStyle='#fff'; g.lineWidth=(i===sel?2.5:1.5)*dpr; if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.stroke(); } else g.strokeRect(x0,by0,x1-x0,by1-by0); }
     g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
+    if(x.g&&(i===0||segs[i-1].g!==x.g)){ let j=i; while(j+1<segs.length&&segs[j+1].g===x.g) j++; g.fillStyle='#fff'; g.fillRect(X(x.s)+4*dpr,hh-3.5*dpr,X(segs[j].e)-X(x.s)-8*dpr,3*dpr); }
     if(i<segs.length-1){ g.fillStyle='#FF8A00'; g.fillRect(X(x.e)-2*dpr,0,4*dpr,hh); g.font=Math.round(RH*0.5)+'px sans-serif'; g.fillText('✂',X(x.e),RH*0.42); g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; }
   });
 }
@@ -1717,14 +1758,19 @@ function auditionNote(t,m){
 function initBassTimeline(t){
   const c=$('.btl',t.el); let drag=null;
   const posAt=ev=>{ const r=c.getBoundingClientRect(); return clamp((ev.clientX-r.left)/(r.width||1),0,1)*nbOf(t); };
-  const pick=p=>{ const segs=ensureDraft(t).segs, k=segs.findIndex(x=>p>=x.s&&p<x.e); t.bsel=k<0?segs.length-1:k; drawBassTimeline(t); };
+  const pick=p=>{ const segs=ensureDraft(t).segs; let k=segs.findIndex(x=>p>=x.s&&p<x.e); if(k<0) k=segs.length-1;
+    const [ga,gb]=groupSpan(segs,k);
+    if(t.bmulti){ const [a,b]=bRange(t); t.brange=[Math.min(a,ga),Math.max(b,gb)]; t.bsel=k; }
+    else if(ga!==gb){ t.brange=[ga,gb]; t.bsel=k; }
+    else { t.bsel=k; t.brange=null; }
+    drawBassTimeline(t); };
   // un toucher sélectionne le bloc ; la limite orange ne bouge que si le doigt glisse vraiment
   const toggleCut=k=>{
     const d=ensureDraft(t), segs=d.segs, nb=nbOf(t);
     if(k<=0||k>=nb) return;
     const bi=segs.findIndex(x=>x.e===k);
-    if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; $('.bst',t.el).textContent='Coupe enlevée au temps '+(k+1)+'.'; }
-    else { const i=segs.findIndex(x=>k>x.s&&k<x.e); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=k; x.glide=false; t.bsel=i+1; $('.bst',t.el).textContent='Coupé au temps '+(k+1)+' : touche une note pour ce nouveau bloc.'; }
+    if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; t.brange=null; $('.bst',t.el).textContent='Coupe enlevée au temps '+(k+1)+'.'; }
+    else { const i=segs.findIndex(x=>k>x.s&&k<x.e); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au temps '+(k+1)+' : touche une note pour ce nouveau bloc.'; }
     bassChanged(t);
   };
   c.addEventListener('pointerdown',ev=>{
@@ -1746,17 +1792,23 @@ function initBassTimeline(t){
   });
   const end=ev=>{ if(!drag) return; const d=drag; drag=null; if(d.moved) bassChanged(t); else pick(d.p0); };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',()=>{ drag=null; });
-  $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); drawBassTimeline(t); };
-  $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); drawBassTimeline(t); };
+  $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); t.brange=null; drawBassTimeline(t); };
+  $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); t.brange=null; drawBassTimeline(t); };
+  $('.bmulti',t.el).onchange=e=>{ t.bmulti=e.target.checked; if(!t.bmulti){ t.brange=null; } $('.bst',t.el).textContent=t.bmulti?'Touche le premier puis le dernier bloc du motif : tout ce qui est entre les deux est choisi.':''; drawBassTimeline(t); };
+  $('.bgrp',t.el).onclick=()=>bassGroup(t,true);
+  $('.bungrp',t.el).onclick=()=>bassGroup(t,false);
+  $('.bdup',t.el).onclick=()=>bassDup(t,$('.bdupn',t.el).value);
   $('.bsn',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].n=+e.target.value; bassChanged(t); };
   t.el.querySelectorAll('.bpal button').forEach(b=>b.onclick=()=>{
-    const d=ensureDraft(t), x=d.segs[t.bsel||0], v=+b.dataset.n;
-    if(v<0){ x.n=null; x.m=undefined; }
+    const d=ensureDraft(t), x=d.segs[t.bsel||0], v=+b.dataset.n, [ra,rb]=t.bmulti?bRange(t):[t.bsel||0,t.bsel||0];
+    if(ra!==rb){ if(v>=0) freezeRoots(t); }
+    if(v<0){ for(let i=ra;i<=rb;i++){ d.segs[i].n=null; d.segs[i].m=undefined; } }
     else { const i=t.bsel||0, rts=segRoots(d.segs,t.kind); let ref=null;
       for(let k=i-1;k>=0&&ref==null;k--) ref=rts[k];
       for(let k=i+1;k<rts.length&&ref==null;k++) ref=rts[k];
       const base=t.kind==='synth'?60+v:rootOf(v), pr=genPick(t.kind);
-      x.n=v; x.m=foldInto(ref!=null?nearOct(base,ref):base,pr[0],pr[1]); }
+      x.n=v; x.m=foldInto(ref!=null?nearOct(base,ref):base,pr[0],pr[1]);
+      for(let i=ra;i<=rb;i++){ d.segs[i].n=v; d.segs[i].m=x.m; } }
     bassChanged(t); $('.bst',t.el).textContent='';
     if(v>=0) auditionNote(t,segRoots(d.segs,t.kind)[t.bsel||0]); });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
@@ -1777,8 +1829,8 @@ function initBassTimeline(t){
   $('.tfvoice',t.el).onclick=()=>revertVoice(t);
   $('.tfswap',t.el).onclick=()=>convertGen(t,t.kind==='synth'?'bass':'synth');
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
-  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide}); x.e=mid; x.glide=false; t.bsel=i+1; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
-  $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } bassChanged(t); };
+  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=mid; x.glide=false; t.bsel=i+1; t.brange=null; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
+  $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } t.brange=null; bassChanged(t); };
 }
 function drawBassViz(t){
   const c=$('.bviz',t.el); if(!c) return;
@@ -2185,6 +2237,9 @@ function buildTrackUI(t){
     <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
     <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label><button class="bsplit">✂ Couper le bloc choisi en deux</button><button class="bdel">🗑 Retirer le bloc</button></div>
+    <div class="row" style="margin-top:12px"><span class="lbl" data-help="bgroup">Motif : grouper et dupliquer</span></div>
+    <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bmulti" style="width:22px;height:22px"> choisir plusieurs blocs</label><button class="bgrp">⛓ Grouper</button><button class="bungrp">Dissocier</button></div>
+    <div class="row wrap"><select class="bdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="fill">jusqu'à la fin</option></select><button class="bdup primary">⧉ Dupliquer à la suite</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl">Notes jouées</span></div>
     <canvas class="bviz" style="width:100%;height:84px;display:block;margin-top:6px;border-radius:10px;background:rgba(255,255,255,.05)"></canvas>
     <div class="row wrap"><span class="lbl w2" data-help="bass">Rythme</span><select class="brhy bopt" style="width:auto">${Object.keys(RHYTHMS).map(k=>`<option value="${k}">${RHYTHMS[k][0]}</option>`).join('')}</select></div>
@@ -2215,6 +2270,7 @@ function buildTrackUI(t){
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="tsnap" checked style="width:22px;height:22px"> aimanter aux temps</label></div>
     <div class="row wrap"><span class="lbl w2">Début</span><button class="ts1">◀ 1 temps</button><button class="tsn" data-w="s" data-ms="-10">−10 ms</button><button class="tsn" data-w="s" data-ms="-1">−1 ms</button><button class="tsn" data-w="s" data-ms="1">+1 ms</button><button class="tsn" data-w="s" data-ms="10">+10 ms</button><button class="ts2">1 temps ▶</button></div>
     <div class="row wrap"><span class="lbl w2">Fin</span><button class="ts3">◀ 1 temps</button><button class="tsn" data-w="e" data-ms="-10">−10 ms</button><button class="tsn" data-w="e" data-ms="-1">−1 ms</button><button class="tsn" data-w="e" data-ms="1">+1 ms</button><button class="tsn" data-w="e" data-ms="10">+10 ms</button><button class="ts4">1 temps ▶</button></div>
+    <div class="row wrap reconly"><select class="tsdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="fill">jusqu'à la fin</option></select><button class="tsdup" data-help="tsdup">⧉ Copier la partie à la suite</button></div>
     <div class="row wrap"><button class="tsall">Tout garder</button><button class="tsloop primary">✂ Faire de cette partie la boucle</button><button class="tsalign">⇤ Placer la partie au début de la boucle</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl" data-help="trep">Le reste de la piste</span><span class="trl lbl" style="margin-left:auto"></span></div>
     <div class="seg trep" style="margin-top:8px"><button data-m="mute">Silence</button><button data-m="loop">Répéter en boucle</button><button data-m="2">×2</button><button data-m="3">×3</button><button data-m="4">×4</button></div></div>
@@ -2282,6 +2338,7 @@ function buildTrackUI(t){
   $('.ts3',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e-1); };
   $('.ts4',el).onclick=()=>{ const q=tsGet(); setTrackSel(t,q.s,q.e+1); };
   $('.tsall',el).onclick=()=>setTrackSel(t,0,beats);
+  $('.tsdup',el).onclick=()=>recDup(t,$('.tsdupn',el).value);
   $('.tsloop',el).onclick=()=>{ if(tracks.some(x=>x!==t&&x.buf)) loopPart(t); else selToLoop(t); };
   $('.tsalign',el).onclick=()=>alignSelStart(t);
   el.querySelectorAll('.tsn').forEach(b=>b.onclick=()=>{ const q=tsGet(), db=(+b.dataset.ms/1000)/(loopSec()/beats); if(b.dataset.w==='s') setTrackSel(t,q.s+db,q.e); else setTrackSel(t,q.s,q.e+db); });
@@ -2407,6 +2464,27 @@ function alignSelStart(t){
   const v=-(t.sel.s*loopSec()/beats);
   setOffset(t,v); t.anc=true;
   msg('La partie de « '+t.name+' » démarre maintenant au début de la boucle (décalage '+fmtMs(t.off)+', rien n\'est coupé). « 0 » dans « Décaler la piste » revient en arrière.');
+}
+// recopie la partie choisie juste après elle dans la piste (le son qui s'y trouvait est remplacé)
+function recDup(t,cnt){
+  if(recObj||!t.buf||!loopLen) return;
+  if(!t.sel||(t.sel.s<=0&&t.sel.e>=beats)){ msg('Choisis d\'abord la partie à copier : règle début et fin dans le cadre ci-dessus.'); return; }
+  const s=t.sel.s, e=t.sel.e, P=e-s;
+  if(e>=beats-1e-6){ msg('Pas de place après cette partie : elle va jusqu\'à la fin de la boucle.'); return; }
+  const n=cnt==='fill'?Math.ceil((beats-e)/P-1e-9):(+cnt||1);
+  const src=t.buf.getChannelData(0), L=src.length, bl=L/beats, a0=Math.round(s*bl), z0=Math.round(e*bl), len=z0-a0, y=Float32Array.from(src), f=Math.min(Math.round(0.004*SR),len>>2);
+  let k=0, endB=e;
+  for(k=1;k<=n;k++){ const st=Math.round((s+k*P)*bl); if(st>=L-1) break; const m=Math.min(len,L-st);
+    for(let i=0;i<m;i++){ const w=i<f?i/f:(m-i<=f&&m===len?(m-i)/f:1); y[st+i]=src[a0+i]*w+y[st+i]*(1-w); }
+    endB=Math.min(beats,e+k*P); }
+  k--; if(k<1) return;
+  pushHist();
+  const mode=t.selMode, nb=ctx.createBuffer(1,L,t.buf.sampleRate); nb.copyToChannel(y,0);
+  t.buf=nb; t.sel={s,e:Math.round(endB*1e6)/1e6}; t.selMode=mode; if(masterTake&&masterTake.i===t.id) masterTake=null;
+  if(t.sel.s<=0&&t.sel.e>=beats){ t.sel=null; t.selMode='mute'; }
+  drawWave(t); startSrc(t); drawTsel(t); lockUI(); scheduleSave();
+  const fb=x=>String(Math.round(x*100)/100).replace('.',',');
+  msg('Partie (temps '+fb(s+1)+' → '+fb(e)+') copiée '+k+' fois juste après'+(s+(k+1)*P>beats+1e-6?' (la dernière copie est coupée à la fin de la boucle)':'')+'. La partie gardée va maintenant jusqu\'au temps '+fb(endB)+'. ↶ pour revenir.');
 }
 function setTrackSel(t,s,e){
   if(!t.buf||!loopLen) return;
@@ -2547,16 +2625,16 @@ $('#lq').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; liveQ=b
 // ======================= 🎬 MONTAGE DU MORCEAU =======================
 // Le morceau est une ligne de temps (en temps) avec, pour chaque piste, des blocs qui jouent la boucle de la piste :
 // déplacer, couper, allonger / raccourcir (la boucle se répète), dupliquer, supprimer, changer le ton d'un bloc.
-let song={end:0,clips:[],fx:[],known:[],cur:0,sel:-1,zoom:22,view:0,snap:true,rs:null,re:null};
+let song={end:0,clips:[],fx:[],known:[],cur:0,sel:-1,ms:[],multi:false,zoom:22,view:0,snap:true,rs:null,re:null};
 let songPlay=null;
 const songCache=new Map();
 const SG_RH=28, SG_LH=56;
 function songTracks(){ return tracks.filter(t=>t.buf); }
 function songLanes(){ return tracks.slice(); }
 function trackByUid(u){ return tracks.find(t=>t.uid===u); }
-function songResetData(){ song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; song.fx=[]; songCache.clear(); }
+function songResetData(){ song.ms=[]; song.end=0; song.clips=[]; song.known=[]; song.cur=0; song.sel=-1; song.view=0; song.rs=null; song.re=null; song.fx=[]; songCache.clear(); }
 function songSnapData(){ return {end:song.end,clips:song.clips.map(c=>({...c})),fx:song.fx.map(f=>({...f})),known:song.known.slice()}; }
-function songApplyData(d){ song.end=d&&d.end>0?d.end:0; song.clips=d&&Array.isArray(d.clips)?d.clips.filter(c=>c&&c.u&&c.len>0).map(c=>({u:c.u,s:Math.max(0,+c.s||0),len:+c.len,off:+c.off||0,tp:clamp(Math.round(+c.tp||0),-12,12),ti:TIN[c.ti]?c.ti:'none',til:+c.til||0,to:TOUT[c.to]?c.to:'none',tol:+c.tol||0})):[]; song.fx=d&&Array.isArray(d.fx)?d.fx.filter(f=>f&&FXS[f.k]&&f.len>0).map(f=>({k:f.k,s:Math.max(0,+f.s||0),len:+f.len})):[]; song.known=d&&Array.isArray(d.known)?d.known.slice():song.clips.map(c=>c.u); if(song.sel>=song.clips.length) song.sel=-1; }
+function songApplyData(d){ song.end=d&&d.end>0?d.end:0; song.clips=d&&Array.isArray(d.clips)?d.clips.filter(c=>c&&c.u&&c.len>0).map(c=>({u:c.u,s:Math.max(0,+c.s||0),len:+c.len,off:+c.off||0,tp:clamp(Math.round(+c.tp||0),-12,12),ti:TIN[c.ti]?c.ti:'none',til:+c.til||0,to:TOUT[c.to]?c.to:'none',tol:+c.tol||0,...(c.g?{g:String(c.g)}:{})})):[]; song.ms=[]; song.fx=d&&Array.isArray(d.fx)?d.fx.filter(f=>f&&FXS[f.k]&&f.len>0).map(f=>({k:f.k,s:Math.max(0,+f.s||0),len:+f.len})):[]; song.known=d&&Array.isArray(d.known)?d.known.slice():song.clips.map(c=>c.u); if(song.sel>=song.clips.length) song.sel=-1; }
 // première ouverture : chaque piste avec du son joue sur 4 tours de boucle ; les nouvelles pistes sont ajoutées sur toute la durée
 function songPrepare(){
   if(!loopLen) return;
@@ -2710,12 +2788,14 @@ function drawSong(){
       if(c.u!==t.uid) return;
       const x0=X(c.s), x1=X(c.s+c.len); if(x1<0||x0>w) return;
       g.save(); g.beginPath(); g.rect(x0+1,y0+3*dpr,Math.max(1,x1-x0-2),LH-6*dpr); g.clip();
-      g.fillStyle=t.color; g.globalAlpha=k===song.sel?0.55:0.32; g.fillRect(x0,y0,x1-x0,LH); g.globalAlpha=1;
+      const inS=k===song.sel||(song.ms||[]).includes(c);
+      g.fillStyle=t.color; g.globalAlpha=inS?0.55:0.32; g.fillRect(x0,y0,x1-x0,LH); g.globalAlpha=1;
       g.fillStyle='rgba(255,255,255,.75)'; const mid=y0+LH/2, amp=(LH-14*dpr)/2;
       for(let x=Math.max(0,Math.floor(x0));x<Math.min(w,x1);x+=2){ const bb=c.off+(song.view+x/ppb-c.s), lp=mod(bb,beats)/beats, v=pk[Math.min(pk.length-1,Math.floor(lp*pk.length))]*amp; g.fillRect(x,mid-v,1.5,Math.max(1,2*v)); }
       g.fillStyle='rgba(0,0,0,.45)'; for(let r=1;;r++){ const bb=c.s+(r*beats-mod(c.off,beats)); if(bb>=c.s+c.len) break; g.fillRect(X(bb),y0,1.5*dpr,LH); }
       g.restore();
-      g.strokeStyle=k===song.sel?'#fff':t.color; g.lineWidth=(k===song.sel?2.5:1.5)*dpr; g.strokeRect(x0+1,y0+3*dpr,Math.max(1,x1-x0-2),LH-6*dpr);
+      g.strokeStyle=(song.ms||[]).includes(c)&&song.ms.length>1?'#FF8A00':k===song.sel?'#fff':t.color; g.lineWidth=(inS?2.5:1.5)*dpr;
+      if(c.g){ g.fillStyle='#fff'; g.fillRect(x0+4*dpr,y0+LH-7*dpr,Math.max(2,x1-x0-8*dpr),2.5*dpr); } g.strokeRect(x0+1,y0+3*dpr,Math.max(1,x1-x0-2),LH-6*dpr);
       g.fillStyle='#fff'; g.font=Math.round(13*dpr)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; g.textBaseline='top';
       if(x1-x0>40*dpr) g.fillText(t.name+(c.tp?' ('+(c.tp>0?'+':'')+c.tp+')':''),Math.max(x0,0)+5*dpr,y0+5*dpr);
       if(k===song.sel){ g.fillStyle='#fff'; g.fillRect(x1-6*dpr,y0+LH*0.3,3*dpr,LH*0.4); g.fillRect(x0+3*dpr,y0+LH*0.3,3*dpr,LH*0.4); }
@@ -2732,7 +2812,8 @@ function updSongUI(){
   $('#montinfo').textContent=song.end?(Math.round(song.end/meter)+' mesures · '+fmtSongTime(song.end)):'';
   $('#mendv').textContent=song.end?'mesure '+Math.round(song.end/meter)+' ('+fmtSongTime(song.end)+')':'';
   const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
-  $('#mclipinfo').textContent=c&&t?('« '+t.name+' » · mesures '+fb(c.s)+' → '+fb(c.s+c.len)+(c.tp?' · ton '+(c.tp>0?'+':'')+c.tp:'')):'Touche un bloc pour le choisir.';
+  { const ss=songSelSet(); const gb=$('#mgrp'); if(gb) gb.disabled=ss.length<2; const ub=$('#mungrp'); if(ub) ub.disabled=!ss.some(x=>x.g); const mm=$('#mmulti'); if(mm) mm.checked=!!song.multi; const dn=$('#mdup'); if(dn) dn.textContent=ss.length>1?'⧉ Dupliquer les '+ss.length+' blocs':'⧉ Dupliquer'; }
+  $('#mclipinfo').textContent=songSelSet().length>1?(songSelSet().length+' blocs choisis'+(songSelSet().every(x=>x.g&&x.g===songSelSet()[0].g)?' (groupe)':'')):c&&t?('« '+t.name+' » · mesures '+fb(c.s)+' → '+fb(c.s+c.len)+(c.tp?' · ton '+(c.tp>0?'+':'')+c.tp:'')):'Touche un bloc pour le choisir.';
   ['#mcut','#mdup','#mdel','#mtpm','#mtpp'].forEach(id=>{ const b=$(id); if(b) b.disabled=!c; });
   const p=songPos(); if($('#mcut')) $('#mcut').disabled=!(c&&p>c.s+1e-6&&p<c.s+c.len-1e-6);
   $('#mplay').textContent=songPlay?'❚❚ Pause':'▶ Lire le morceau';
@@ -2761,7 +2842,8 @@ function updSongUI(){
       const c=song.clips[idx], ex=Math.abs(p.x-(c.s+c.len-song.view)*song.zoom), sx=Math.abs(p.x-(c.s-song.view)*song.zoom), wpx=c.len*song.zoom;
       const edge=Math.min(16,wpx/3);
       drag={k:ex<=edge?'right':sx<=edge?'left':'move',i:idx,b0:b,s0:c.s,len0:c.len,off0:c.off,x0:p.x,moved:false,hist:false};
-      song.sel=idx;
+      if(drag.k!=='move'||!(c.g&&songSelSet().includes(c))||song.multi) songPickClip(idx); else song.sel=idx;
+      drag.grp=drag.k==='move'?songSelSet().map(x=>({c:x,s0:x.s})):null;
     } else { drag={k:'empty',x0:p.x,b0:b,v0:song.view,t,moved:false}; }
     drawSong();
   });
@@ -2775,20 +2857,54 @@ function updSongUI(){
     const c=song.clips[drag.i]; if(!c) return;
     if(!drag.hist){ pushHist(); drag.hist=true; }
     const mn=song.snap?meter:1, d=b-drag.b0;
-    if(drag.k==='move') c.s=Math.max(0,songSnap(drag.s0+d));
+    if(drag.k==='move'){ if(song.multi){ drag.moved=false; return; } if(drag.grp&&drag.grp.length>1){ const mn0=Math.min(...drag.grp.map(o=>o.s0)), dd=Math.max(-mn0,songSnap(drag.s0+d)-drag.s0); drag.grp.forEach(o=>{ o.c.s=o.s0+dd; }); } else c.s=Math.max(0,songSnap(drag.s0+d)); }
     else if(drag.k==='right') c.len=Math.max(mn,songSnap(drag.s0+drag.len0+d)-c.s);
     else { const ns=clamp(songSnap(drag.s0+d),0,drag.s0+drag.len0-mn), dd=ns-drag.s0; c.s=ns; c.len=drag.len0-dd; c.off=mod(drag.off0+dd,beats); }
     drawSong();
   });
   const end=()=>{
     if(!drag) return; const d=drag; drag=null;
-    if(d.k==='empty'&&!d.moved){ pushHist(); const s=Math.max(0,Math.floor(d.b0/meter)*meter); song.clips.push({u:d.t.uid,s,len:beats,off:0,tp:0}); song.sel=song.clips.length-1; if(s+beats>song.end) song.end=s+beats; msg('Bloc ajouté sur « '+d.t.name+' » (un tour de boucle). Fais glisser son bord pour l\'allonger.'); }
+    if(d.k==='empty'&&!d.moved){ pushHist(); song.ms=[]; const s=Math.max(0,Math.floor(d.b0/meter)*meter); song.clips.push({u:d.t.uid,s,len:beats,off:0,tp:0}); song.sel=song.clips.length-1; if(s+beats>song.end) song.end=s+beats; msg('Bloc ajouté sur « '+d.t.name+' » (un tour de boucle). Fais glisser son bord pour l\'allonger.'); }
     if(d.k==='pan'||(d.k==='empty'&&d.moved)) return;
     scheduleSave(true); songRestartIfPlaying(); drawSong();
   };
   cv.addEventListener('pointerup',end); cv.addEventListener('pointercancel',end);
 })();
 function songSelClip(){ return song.clips[song.sel]; }
+// blocs choisis ensemble (sélection multiple ou groupe) ; sinon le bloc choisi seul
+function songSelSet(){ const ms=(song.ms||[]).filter(c=>song.clips.includes(c)); if(ms.length) return ms; const c=songSelClip(); return c?[c]:[]; }
+function songGroupOf(c){ return c&&c.g?song.clips.filter(x=>x.g===c.g):[c]; }
+function songPickClip(idx){
+  const c=song.clips[idx], grp=songGroupOf(c);
+  if(song.multi){
+    let ms=(song.ms||[]).filter(x=>song.clips.includes(x));
+    if(!ms.length){ const p=songSelClip(); if(p) ms=songGroupOf(p).slice(); }
+    if(ms.includes(c)) ms=ms.filter(x=>!grp.includes(x)); else grp.forEach(x=>{ if(!ms.includes(x)) ms.push(x); });
+    song.ms=ms; song.sel=ms.includes(c)?idx:(ms.length?song.clips.indexOf(ms[0]):-1);
+  } else { song.sel=idx; song.ms=c&&c.g?grp:[]; }
+}
+function songGroup(on){
+  const set=songSelSet();
+  if(on){ if(set.length<2){ msg('Choisis d\'abord plusieurs blocs : coche « choisir plusieurs blocs », puis touche chaque bloc du motif.'); return; }
+    songAct(()=>{ const g=newGid(); set.forEach(c=>c.g=g); song.ms=set.slice(); msg(set.length+' blocs groupés : toucher l\'un d\'eux choisit tout le groupe, et ils se déplacent ensemble.'); }); }
+  else { if(!set.some(c=>c.g)){ msg('Ces blocs ne sont pas groupés.'); return; } songAct(()=>{ set.forEach(c=>{ delete c.g; }); song.ms=[]; msg('Blocs dissociés : chacun se choisit et se déplace seul.'); }); }
+}
+// duplique les blocs choisis juste après eux (n fois) ; sur leurs lignes, ce qui s'y trouvait est remplacé
+function songDupSel(n){
+  const set=songSelSet(); if(!set.length) return;
+  const S=Math.min(...set.map(c=>c.s)), E=Math.max(...set.map(c=>c.s+c.len)), L=E-S, lanes=[...new Set(set.map(c=>c.u))];
+  n=Math.max(1,+n||1);
+  songAct(()=>{
+    const A=E, B=E+n*L, out=[];
+    song.clips.forEach(c=>{ if(set.includes(c)||!lanes.includes(c.u)){ out.push(c); return; } const p1=clipPart(c,-1e9,A), p2=clipPart(c,B,1e9); if(p1) out.push(p1); if(p2) out.push(p2); });
+    let lastSet=[];
+    for(let k=1;k<=n;k++){ const map={}; lastSet=set.map(c=>{ const x={...c,s:c.s+k*L}; if(c.g) x.g=map[c.g]||(map[c.g]=newGid()); out.push(x); return x; }); }
+    song.clips=out; if(B>song.end) song.end=B;
+    song.ms=set.length>1?lastSet:[]; song.sel=song.clips.indexOf(lastSet[0]);
+    const fb=x=>String(Math.round(x/meter*100)/100+1).replace('.',',');
+    msg((set.length>1?set.length+' blocs dupliqués':'Bloc dupliqué')+' '+n+' fois juste après (mesures '+fb(A)+' → '+fb(B)+'). Ce qui se trouvait là sur '+(lanes.length>1?'ces lignes':'cette ligne')+' a été remplacé.');
+  });
+}
 // morceaux de blocs : la partie d'un bloc comprise entre a et b (le son continue au bon endroit de la boucle)
 function clipPart(c,a,b){ const s0=Math.max(c.s,a), e0=Math.min(c.s+c.len,b); if(e0-s0<1e-6) return null; const p={...c,s:s0,len:e0-s0,off:mod(c.off+(s0-c.s),beats)}; if(s0>c.s+1e-6){ p.ti='none'; p.til=0; } if(e0<c.s+c.len-1e-6){ p.to='none'; p.tol=0; } return p; }
 function songSecOk(){ return song.rs!=null&&song.re!=null&&song.re-song.rs>1e-6; }
@@ -2807,7 +2923,8 @@ function songSecDup(){
   songAct(()=>{
     const out=[];
     song.clips.forEach(c=>{ const p1=clipPart(c,-1e9,b), p2=clipPart(c,b,1e9), mid=clipPart(c,a,b);
-      if(p1) out.push(p1); if(p2) out.push({...p2,s:p2.s+L}); if(mid) out.push({...mid,s:mid.s+L}); });
+      if(p1) out.push(p1); if(p2) out.push({...p2,s:p2.s+L}); if(mid) out.push({...mid,s:mid.s+L,_cp:1}); });
+    { const map={}; out.forEach(c=>{ if(c._cp){ delete c._cp; if(c.g) c.g=map[c.g]||(map[c.g]=newGid()); } }); }
     song.clips=out; song.end+=L; song.sel=-1; song.rs=b; song.re=b+L;
     msg('Partie dupliquée sur toutes les pistes : la copie (mesures '+String(Math.round(b/meter*100)/100+1).replace('.',',')+' → '+String(Math.round((b+L)/meter*100)/100+1).replace('.',',')+') est sélectionnée, la suite du morceau a été décalée. Crée une variation d\'un de ses blocs pour la faire évoluer.');
   });
@@ -2897,8 +3014,11 @@ $('#mzoomin').onclick=()=>{ song.zoom=Math.min(120,song.zoom*1.5); drawSong(); }
 $('#mzoomout').onclick=()=>{ song.zoom=Math.max(3,song.zoom/1.5); drawSong(); };
 $('#msnap').onchange=e=>{ song.snap=e.target.checked; };
 $('#mcut').onclick=()=>{ const c=songSelClip(), p=Math.round(songPos()); if(!c||!(p>c.s&&p<c.s+c.len)){ msg('Place le curseur (touche la règle) à l\'intérieur du bloc choisi.'); return; } songAct(()=>{ const n={...c,s:p,len:c.s+c.len-p,off:mod(c.off+(p-c.s),beats),ti:'none',til:0}; c.len=p-c.s; c.to='none'; c.tol=0; song.clips.push(n); song.sel=song.clips.length-1; msg('Bloc coupé à la mesure '+String(Math.round(p/meter*100)/100+1).replace('.',',')+'.'); }); };
-$('#mdup').onclick=()=>{ const c=songSelClip(); if(!c) return; songAct(()=>{ const n={...c,s:c.s+c.len}; song.clips.push(n); song.sel=song.clips.length-1; if(n.s+n.len>song.end) song.end=n.s+n.len; msg('Bloc dupliqué juste après.'); }); };
-$('#mdel').onclick=()=>{ const c=songSelClip(); if(!c) return; songAct(()=>{ song.clips.splice(song.sel,1); song.sel=-1; msg('Bloc supprimé.'); }); };
+$('#mdup').onclick=()=>songDupSel($('#mdupn')?$('#mdupn').value:1);
+$('#mgrp').onclick=()=>songGroup(true);
+$('#mungrp').onclick=()=>songGroup(false);
+$('#mmulti').onchange=e=>{ song.multi=e.target.checked; if(song.multi){ const c=songSelClip(); if(c&&!(song.ms||[]).length) song.ms=songGroupOf(c); msg('Touche chaque bloc à ajouter (ou à retirer) : ils deviennent orange. Puis ⛓ Grouper ou ⧉ Dupliquer.'); } drawSong(); };
+$('#mdel').onclick=()=>{ const set=songSelSet(); if(!set.length) return; songAct(()=>{ song.clips=song.clips.filter(x=>!set.includes(x)); song.sel=-1; song.ms=[]; msg(set.length>1?set.length+' blocs supprimés.':'Bloc supprimé.'); }); };
 $('#mtpm').onclick=()=>{ const c=songSelClip(); if(!c) return; if(c.tp<=-12) return; msg('Calcul…'); setTimeout(()=>songAct(()=>{ c.tp--; msg('Ton du bloc : '+(c.tp>0?'+':'')+c.tp+' demi-ton'+(Math.abs(c.tp)>1?'s':'')+'.'); }),20); };
 $('#mtpp').onclick=()=>{ const c=songSelClip(); if(!c) return; if(c.tp>=12) return; msg('Calcul…'); setTimeout(()=>songAct(()=>{ c.tp++; msg('Ton du bloc : '+(c.tp>0?'+':'')+c.tp+' demi-ton'+(Math.abs(c.tp)>1?'s':'')+'.'); }),20); };
 $('#mendm').onclick=()=>songAct(()=>{ song.end=Math.max(meter,song.end-meter); if(song.cur>song.end) song.cur=song.end; });
