@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='57';
+const APPVER='58';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -3770,10 +3770,15 @@ function cloudAfterSave(){
   if(!tracks.some(t=>t.buf)) return;
   clearTimeout(cloudAutoT); setCloudSt('⏳'); cloudAutoT=setTimeout(()=>{ cloudAutoT=null; cloudUpload(true); },window.__cloudDelay!=null?window.__cloudDelay:20000);
 }
-function setCloudSt(s){ const e=$('#cloudst'); if(e) e.textContent=s; }
+function setCloudSt(s){ const e=$('#cloudst'); if(e) e.textContent=s; updCloudBtn(s); }
+function updCloudBtn(s){ const b=$('#cloudbtn'); if(!b) return; const st=s!=null?s:($('#cloudst')?$('#cloudst').textContent:'');
+  b.classList.toggle('on',!!cloud&&!/⚠/.test(st)); b.classList.toggle('warn',/⚠/.test(st));
+  b.textContent=!cloud?'☁':/⚠/.test(st)?'☁⚠':/…|⏳/.test(st)?'☁…':'☁✓';
+  b.setAttribute('aria-label',!cloud?'Projets en ligne : se connecter':'Projets en ligne'+(/⚠/.test(st)?' : envoi raté':'')); }
 function updCloudUI(){
   const out=$('#cloudout'), inn=$('#cloudin'); if(!out||!inn) return;
   out.hidden=!!cloud; inn.hidden=!cloud;
+  updCloudBtn();
   if(!cloud) return;
   $('#cloudwho').textContent='Connecté : '+(cloud.email||'');
   $('#cloudauto').checked=cloudAuto;
@@ -3893,6 +3898,7 @@ function setProjMenu(open){
   if(open) updProjUI();
 }
 $('#projbtn').onclick=()=>setProjMenu($('#projmenu').hidden);
+$('#cloudbtn').onclick=()=>{ setProjMenu(true); const s=$('#cloudsec'); if(s&&s.scrollIntoView) s.scrollIntoView({behavior:'smooth',block:'center'}); if(!cloud){ const m=$('#cloudmail'); if(m) setTimeout(()=>{ try{ m.focus({preventScroll:true}); }catch(e){} },300); } };
 // le menu se referme dès qu'on touche ailleurs : il ne recouvre plus les pistes
 document.addEventListener('pointerdown',e=>{ if(!$('#projmenu').hidden&&!e.target.closest('.projbar')) setProjMenu(false); },true);
 $('#projren').onclick=()=>{ const n=$('#projinp').value.trim(); if(!n) return; projName=n.slice(0,40); updProjUI(); scheduleSave(true); msg('Projet renommé : « '+projName+' ».'); };

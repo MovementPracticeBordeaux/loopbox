@@ -1448,10 +1448,13 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const S=fakeCloud();
     const P=await boot({cloud:S}); await recordBase(P); await sleep(50);
     ok(!P.$('#cloudout').hidden&&P.$('#cloudin').hidden,'déconnecté au départ');
+    P.$('#cloudbtn').click(); await sleep(20);
+    ok(!P.$('#projmenu').hidden&&P.$('#cloudbtn').textContent==='☁','le bouton ☁ du haut ouvre la connexion');
     P.$('#cloudmail').value='sylvain@test.fr'; P.$('#cloudpw').value='abc'; P.$('#cloudsignup').click(); await sleep(30);
     ok(/trop court/.test(P.$('#msg').textContent),'mot de passe trop court : '+P.$('#msg').textContent);
     P.$('#cloudpw').value='secret123'; P.$('#cloudsignup').click(); await sleep(50);
     ok(P.$('#cloudout').hidden&&!P.$('#cloudin').hidden&&/sylvain@test\.fr/.test(P.$('#cloudwho').textContent),'connecté : '+P.$('#cloudwho').textContent);
+    ok(/^☁/.test(P.$('#cloudbtn').textContent)&&P.$('#cloudbtn').textContent!=='☁','bouton du haut après connexion : '+P.$('#cloudbtn').textContent);
     const files=()=>Object.keys(S.files).filter(k=>/\.loopbox$/.test(k)), until=async(f,ms)=>{ for(let k=0;k<(ms||6000)/50&&!f();k++) await sleep(50); };
     P.$('#cloudupb').click(); await until(()=>files().length&&/est en ligne/.test(P.$('#msg').textContent)); await sleep(50);
     ok(files().length===1&&Object.keys(S.files).some(k=>/index\.json$/.test(k)),'projet + index envoyés : '+Object.keys(S.files).join(', ')+' | '+S.log.join(' ; ')+' | '+P.$('#msg').textContent);
