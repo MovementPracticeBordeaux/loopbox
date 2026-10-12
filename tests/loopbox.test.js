@@ -1580,6 +1580,23 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const fq=(a,z)=>{ const x=d.subarray(Math.round(a*bl),Math.round(z*bl)); let best=0,bf=0; for(let f=60;f<=125;f+=0.5){ let re=0,im=0; const w=2*Math.PI*f/SR; for(let i=0;i<x.length;i++){ re+=x[i]*Math.cos(w*i); im+=x[i]*Math.sin(w*i); } const p=re*re+im*im; if(p>best){best=p;bf=f;} } return bf; };
     ok(near(fq(0.26,0.49),82.4,5)&&near(fq(0.51,0.74),98,5),'Mi puis Sol en doubles croches : '+fq(0.27,0.47).toFixed(1)+' / '+fq(0.52,0.72).toFixed(1));
   });
+  await test('basse : zoom sur la ligne de temps, barre pour se déplacer, coupes au bon endroit une fois zoomé',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    const sel=()=>tb.querySelector('.bselinfo').textContent, sc=tb.querySelector('.bscroll'), zp=tb.querySelectorAll('.bzm')[1];
+    ok(sc.hidden&&tb.querySelector('.bzlbl').textContent==='×1','pas de barre sans zoom');
+    zp.click(); zp.click(); await sleep(5);
+    ok(!sc.hidden&&tb.querySelector('.bzlbl').textContent==='×4'&&+sc.max===6,'zoom ×4 : on voit 2 temps sur 8 (barre jusqu\'à '+sc.max+')');
+    const gs=tb.querySelector('.bgrid'); gs.value='0.25'; gs.dispatchEvent(new P.w.Event('change'));
+    tap(400*0.25/1,15); await sleep(5);   // 1/8 de la largeur = ¼ de temps quand on voit 2 temps
+    ok(/temps 1 \+ ¼/.test(sel()),'coupe au ¼ de temps, visée facilement une fois zoomé : '+sel());
+    sc.value='6'; sc.dispatchEvent(new P.w.Event('input')); await sleep(5);
+    tap(400*1.5,15); await sleep(5);       // 3/4 de la largeur = temps 7,5
+    ok(/temps 8 et demi/.test(sel()),'après déplacement, la coupe tombe au milieu du 8e temps : '+sel());
+    tb.querySelectorAll('.bzm')[0].click(); tb.querySelectorAll('.bzm')[0].click(); await sleep(5);
+    ok(sc.hidden&&tb.querySelector('.bzlbl').textContent==='×1','retour à la vue entière');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');
