@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='60';
+const APPVER='61';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1193,6 +1193,7 @@ const HELP={
   tsdup:"<b>Copier la partie à la suite</b> : la partie choisie (entre les deux traits orange) est recopiée juste après elle, 1, 2, 3 fois ou jusqu'à la fin de la boucle. Le son qui se trouvait à ces endroits est remplacé, et la partie gardée s'agrandit pour inclure les copies. Pratique pour répéter un motif réussi. ↶ annule.",
   cloud:"<b>En ligne</b> : tes projets sont gardés dans ton espace privé (personne d'autre ne peut les voir), pour les retrouver sur la tablette, le téléphone ou un ordinateur. Connecte-toi avec le même e-mail et mot de passe sur chaque appareil. <b>Mettre ce projet en ligne</b> l'envoie ; avec <b>envoi automatique</b>, chaque modification est envoyée 20 secondes après ton dernier changement. Sur l'autre appareil : menu projet → En ligne → <b>Ouvrir</b>. Si tu modifies le même projet sur deux appareils, c'est le dernier envoi qui compte. Taille maximale : 50 Mo par projet (environ 4 minutes de son en tout). Il faut internet pour envoyer et ouvrir ; sans internet, l'appli marche comme avant.",
   sonlib:"<b>Son</b> : en haut, les <b>styles prêts</b> (un son + ses effets). En dessous, la <b>bibliothèque</b> rangée par familles : clochettes (xylophone, marimba, kalimba, boîte à musique, clochette façon triangle…), cordes pincées (harpe, pizzicato, guitares, koto…), claviers (Rhodes, piano FM des ballades R&B, clavinet…), vents (flûtes, sax, ocarina…), voix et chœurs, orchestre, synthés 80-90 (stab d'orchestre new jack swing, cuivres synthé, lead G-funk…), nappes, sons de jeux vidéo 8-bit, bruitages et ASMR (pluie, vagues, souffle, goutte d'eau, cloche 808…). Choisir un son le fait entendre tout de suite sur la note du bloc choisi. Les sons de la bibliothèque gardent les effets de la piste (ajoute du lo-fi ou de la réverb dans ✨ Effets). La première fois, chaque instrument se télécharge (environ 0,5 Mo, il faut internet), puis il reste disponible hors connexion. Les instruments réels viennent de la banque FluidR3_GM de Frank Wen (licence Creative Commons BY 3.0) ; les sons de jeux vidéo et d'ASMR sont fabriqués par l'appli.",
+  bgrid:"<b>Grille</b> : règle la finesse de la ligne de temps. En <b>noire</b>, on coupe sur les temps ; en <b>croche</b> sur chaque demi-temps ; en <b>double croche</b> sur chaque quart de temps ; en <b>triolet</b> sur chaque tiers. Des petites graduations apparaissent sur la règle : touche-les pour couper, et les limites orange s'accrochent à la grille quand tu les fais glisser. <b>✂ Découper en notes de la grille</b> coupe le bloc choisi (ou tous les blocs choisis) en notes de la taille de la grille : pratique pour écrire une basse en croches ou en doubles croches, puis donner une note à chaque bloc. Quand des blocs font moins d'un temps, le rythme passe sur « Suivre les notes » pour que chacun soit joué.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -1579,7 +1580,7 @@ function defaultBass(nb,kind){ return kind==='synth'?{kind:'synth',rhy:'melodie'
 function nbOf(t){ return loopLen?beats:(+$('.bbeats',t.el).value||8); }
 // les blocs couvrent toujours toute la boucle, sans trou ni chevauchement
 function normSegs(segs,nb){
-  const q=v=>Math.round((+v||0)*64)/64;
+  const q=v=>Math.round((+v||0)*192)/192;
   let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide,g:x.g?String(x.g):undefined}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
   if(!sg.length) return [{s:0,e:nb,n:0,glide:false}];
   const tot=sg[sg.length-1].e, ratio=nb/tot;
@@ -1625,6 +1626,17 @@ function normBass(o,nb,kind){
 function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft) t.bdraft=normBass(t.bass,nb,t.kind); t.bdraft.segs=normSegs(t.bdraft.segs,nb); if((t.bsel||0)>=t.bdraft.segs.length) t.bsel=t.bdraft.segs.length-1; if(t.brange&&t.brange[1]>=t.bdraft.segs.length) t.brange=null; return t.bdraft; }
 // ----- blocs choisis ensemble, groupes, duplication d'un motif -----
 let gidN=0; const newGid=()=>'g'+Date.now().toString(36)+(++gidN);
+// grille de la ligne de temps : 1 = noire (temps), 0.5 = croche, 0.25 = double croche, 1/3 = triolet
+const gridOf=t=>+(t.bgrid||1);
+const snapG=(t,p)=>{ const g=gridOf(t); return Math.round(Math.round(p/g)*g*192)/192; };
+const FR_FRAC={'0.5':' et demi','0.25':' + ¼','0.75':' + ¾','0.333':' + ⅓','0.667':' + ⅔','0.125':' + ⅛','0.375':' + ⅜','0.625':' + ⅝','0.875':' + ⅞'};
+function beatLbl(k){ const w=Math.floor(k+1e-9), f=k-w; if(f<1e-6) return 'temps '+(w+1); return 'temps '+(w+1)+(FR_FRAC[f.toFixed(3).replace(/0+$/,'').replace(/\.$/,'')]||FR_FRAC[String(Math.round(f*1000)/1000)]||(' + '+String(Math.round(f*100)/100).replace('.',','))); }
+// des blocs plus courts qu'un temps ne sont joués que si le rythme suit les blocs
+function ensureFollow(t){
+  const d=ensureDraft(t), r=$('.brhy',t.el); if(!r||r.value==='melodie') return '';
+  if(d.segs.some(x=>x.e-x.s<1-1e-6||Math.abs(x.s-Math.round(x.s))>1e-6)){ r.value='melodie'; return ' Rythme réglé sur « Suivre les notes » pour que chaque petit bloc soit joué.'; }
+  return '';
+}
 function bRange(t){ const n=ensureDraft(t).segs.length, f=Math.min(n-1,t.bsel||0); if(!t.brange) return [f,f]; const a=Math.min(n-1,t.brange[0]), b=Math.min(n-1,t.brange[1]); return [Math.min(a,b,f),Math.max(a,b,f)]; }
 function groupSpan(segs,i){ const g=segs[i]&&segs[i].g; if(!g) return [i,i]; let a=i,b=i; segs.forEach((x,k)=>{ if(x.g===g){ a=Math.min(a,k); b=Math.max(b,k); } }); return [a,b]; }
 // les notes réelles sont figées avant de déplacer des blocs, pour que rien d'autre ne change d'octave
@@ -1799,11 +1811,12 @@ function makeBass(o){ return renderBass(o,loopLen,beats); }
 function readBassOpts(t){
   const el=t.el, d=ensureDraft(t);
   const tv=$('.btype',el).value, syn=t.kind==='synth', st=syn?(STYLES[tv]?tv:'clean'):undefined;
-  return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
+  return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,grid:gridOf(t),len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
 }
 function showBassOpts(t){
   const el=t.el; t.bdraft=null; t.bsel=0; t.brange=null;
   const o=normBass(t.bass,nbOf(t),t.kind); t.bdraft=o;
+  t.bgrid=[1,0.5,0.25,1/3].find(v=>Math.abs(v-(+o.grid||1))<1e-6)||1; { const gs=$('.bgrid',el); if(gs) gs.value=String(t.bgrid); }
   $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'clean'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
   drawBassTimeline(t);
   { const ty=t.kind==='synth'?(STYLES[o.style||'clean']||STYLES.clean)[1]:o.type; if(!libReady(ty)) loadLib(ty).catch(()=>{}); }
@@ -1814,11 +1827,11 @@ function drawBassTimeline(t){
   const lab=x=>x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''), rests=segs.filter(x=>x.n==null).length;
   $('.btlinfo',t.el).textContent=(segs.length<=10?segs.map(lab).join(' → ')+' · ':'')+segs.length+' bloc'+(segs.length>1?'s':'')+(rests?' (dont '+rests+' silence'+(rests>1?'s':'')+')':'');
   if(cur.n!=null) $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
-  $('.bsplit',t.el).disabled=cur.e-cur.s<2; $('.bdel',t.el).disabled=segs.length<2;
+  $('.bsplit',t.el).disabled=cur.e-cur.s<2*gridOf(t)-1e-6; $('.bdel',t.el).disabled=segs.length<2;
   $('.bprevb',t.el).disabled=sel<=0; $('.bnextb',t.el).disabled=sel>=segs.length-1;
   t.el.querySelectorAll('.bpal button').forEach(b=>b.classList.toggle('on',b.dataset.n==='-1'?cur.n==null:+b.dataset.n===cur.n));
   const fb=x=>String(Math.round(x*100)/100).replace('.',','), rts=segRoots(segs,t.kind);
-  $('.bselinfo',t.el).textContent=ra!==rb?('Blocs '+(ra+1)+' → '+(rb+1)+' : temps '+fb(segs[ra].s+1)+' → '+fb(segs[rb].e)+(segs.slice(ra,rb+1).every(x=>x.g&&x.g===segs[ra].g)?' · groupe':'')+' · touché : bloc '+(sel+1)+(cur.n!=null?' ('+noteName(rts[sel])+')':'')):('Bloc '+(sel+1)+' : temps '+fb(cur.s+1)+' → '+fb(cur.e)+(cur.n!=null?' · '+noteName(rts[sel]):' · silence')+(cur.g?' · groupé':''));
+  $('.bselinfo',t.el).textContent=ra!==rb?('Blocs '+(ra+1)+' → '+(rb+1)+' : temps '+fb(segs[ra].s+1)+' → '+fb(segs[rb].e)+(segs.slice(ra,rb+1).every(x=>x.g&&x.g===segs[ra].g)?' · groupe':'')+' · touché : bloc '+(sel+1)+(cur.n!=null?' ('+noteName(rts[sel])+')':'')):('Bloc '+(sel+1)+' : '+((Math.abs(cur.s-Math.round(cur.s))<1e-6&&Math.abs(cur.e-Math.round(cur.e))<1e-6)?'temps '+fb(cur.s+1)+' → '+fb(cur.e):beatLbl(cur.s)+', dure '+fb(cur.e-cur.s)+' temps')+(cur.n!=null?' · '+noteName(rts[sel]):' · silence')+(cur.g?' · groupé':''));
   { const m=$('.bmulti',t.el); if(m) m.checked=!!t.bmulti; const u=$('.bungrp',t.el); if(u) u.disabled=!segs.slice(ra,rb+1).some(x=>x.g); const gb=$('.bgrp',t.el); if(gb) gb.disabled=ra===rb; const db=$('.bdup',t.el); if(db) db.disabled=segs[rb].e>=nb; }
   t.el.querySelectorAll('.boct').forEach(b=>b.disabled=cur.n==null);
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':(t.kind==='synth'?'✓ Créer la mélodie':'✓ Créer la basse');
@@ -1830,6 +1843,7 @@ function drawBassTimeline(t){
   g.fillStyle='rgba(255,255,255,.06)'; g.fillRect(0,0,w,RH);
   const step=(w/nb)<26*dpr?(meter):(1);
   g.textAlign='center'; g.textBaseline='middle'; g.font=Math.round(RH*0.48)+"px 'Barlow Condensed','Arial Narrow',sans-serif";
+  { const gr=gridOf(t); if(gr<1){ g.fillStyle='rgba(255,255,255,.16)'; for(let p=gr;p<nb-1e-6;p=Math.round((p+gr)*192)/192){ if(Math.abs(p-Math.round(p))<1e-6) continue; const half=Math.abs(p*2-Math.round(p*2))<1e-6; g.fillRect(X(p),RH*(half?0.7:0.8),1,half?RH*0.3+(hh-RH)*0.0:RH*0.2); g.fillStyle='rgba(255,255,255,.07)'; g.fillRect(X(p),RH,1,hh-RH); g.fillStyle='rgba(255,255,255,.16)'; } } }
   for(let k=0;k<=nb;k++){
     g.fillStyle=k%meter===0?'rgba(255,255,255,.55)':'rgba(255,255,255,.22)';
     g.fillRect(X(k),k%meter===0?0:RH*0.55,1,k%meter===0?hh:RH*0.45);
@@ -1843,7 +1857,9 @@ function drawBassTimeline(t){
     if(inR(i)){ g.strokeStyle='#fff'; g.lineWidth=(i===sel?2.5:1.5)*dpr; if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.stroke(); } else g.strokeRect(x0,by0,x1-x0,by1-by0); }
     g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
     if(x.g&&(i===0||segs[i-1].g!==x.g)){ let j=i; while(j+1<segs.length&&segs[j+1].g===x.g) j++; g.fillStyle='#fff'; g.fillRect(X(x.s)+4*dpr,hh-3.5*dpr,X(segs[j].e)-X(x.s)-8*dpr,3*dpr); }
-    if(i<segs.length-1){ g.fillStyle='#FF8A00'; g.fillRect(X(x.e)-2*dpr,0,4*dpr,hh); g.font=Math.round(RH*0.5)+'px sans-serif'; g.fillText('✂',X(x.e),RH*0.42); g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; }
+    if(i<segs.length-1){ const nw=Math.min(X(x.e)-X(x.s),X(segs[i+1].e)-X(segs[i+1].e>x.e?x.e:segs[i+1].s)), roomy=nw>=34*dpr;
+      g.fillStyle='#FF8A00'; if(roomy){ g.fillRect(X(x.e)-2*dpr,0,4*dpr,hh); g.font=Math.round(RH*0.5)+'px sans-serif'; g.fillText('✂',X(x.e),RH*0.42); g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; }
+      else { g.fillRect(X(x.e)-1*dpr,RH*0.55,2*dpr,RH*0.45); g.globalAlpha=0.55; g.fillRect(X(x.e)-0.75*dpr,RH,1.5*dpr,hh-RH); g.globalAlpha=1; } }
   });
 }
 function bassChanged(t,live){ drawBassTimeline(t); drawBassViz(t); if(live!==false&&preview&&preview.t===t) startPreview(t); }
@@ -1877,15 +1893,15 @@ function initBassTimeline(t){
   // un toucher sélectionne le bloc ; la limite orange ne bouge que si le doigt glisse vraiment
   const toggleCut=k=>{
     const d=ensureDraft(t), segs=d.segs, nb=nbOf(t);
-    if(k<=0||k>=nb) return;
-    const bi=segs.findIndex(x=>x.e===k);
-    if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; t.brange=null; $('.bst',t.el).textContent='Coupe enlevée au temps '+(k+1)+'.'; }
-    else { const i=segs.findIndex(x=>k>x.s&&k<x.e); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au temps '+(k+1)+' : touche une note pour ce nouveau bloc.'; }
+    if(k<=1e-6||k>=nb-1e-6) return;
+    const bi=segs.findIndex(x=>Math.abs(x.e-k)<1e-6);
+    if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; t.brange=null; $('.bst',t.el).textContent='Coupe enlevée ('+beatLbl(k)+').'; }
+    else { const i=segs.findIndex(x=>k>x.s+1e-6&&k<x.e-1e-6); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au '+beatLbl(k)+' : touche une note pour ce nouveau bloc.'+ensureFollow(t); }
     bassChanged(t);
   };
   c.addEventListener('pointerdown',ev=>{
     const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), p=posAt(ev), r=c.getBoundingClientRect(), px=nb/(r.width||1);
-    if(r.height&&ev.clientY-(r.top||0)<r.height*0.32){ toggleCut(Math.round(p)); drag=null; return; }
+    if(r.height&&ev.clientY-(r.top||0)<r.height*0.32){ toggleCut(snapG(t,p)); drag=null; return; }
     let bi=-1, best=1e9;
     for(let i=0;i<segs.length-1;i++){
       const tol=Math.min(Math.max(0.3,px*18),0.3*(segs[i].e-segs[i].s),0.3*(segs[i+1].e-segs[i+1].s));
@@ -1897,10 +1913,10 @@ function initBassTimeline(t){
   c.addEventListener('pointermove',ev=>{
     if(!drag) return;
     if(!drag.moved){ if(Math.abs(ev.clientX-drag.x0)<8||drag.i<0) return; drag.moved=true; }
-    const segs=t.bdraft.segs, i=drag.i, v=clamp(Math.round(posAt(ev)),segs[i].s+1,segs[i+1].e-1);
+    const segs=t.bdraft.segs, i=drag.i, g=gridOf(t), v=clamp(snapG(t,posAt(ev)),segs[i].s+g,segs[i+1].e-g);
     if(v!==segs[i].e){ segs[i].e=v; segs[i+1].s=v; bassChanged(t,false); }
   });
-  const end=ev=>{ if(!drag) return; const d=drag; drag=null; if(d.moved) bassChanged(t); else pick(d.p0); };
+  const end=ev=>{ if(!drag) return; const d=drag; drag=null; if(d.moved){ const f=ensureFollow(t); bassChanged(t); if(f) $('.bst',t.el).textContent=f.trim(); } else pick(d.p0); };
   c.addEventListener('pointerup',end); c.addEventListener('pointercancel',()=>{ drag=null; });
   $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); t.brange=null; drawBassTimeline(t); };
   $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); t.brange=null; drawBassTimeline(t); };
@@ -1939,7 +1955,15 @@ function initBassTimeline(t){
   $('.tfvoice',t.el).onclick=()=>revertVoice(t);
   $('.tfswap',t.el).onclick=()=>convertGen(t,t.kind==='synth'?'bass':'synth');
   $('.bgl',t.el).onchange=e=>{ const d=ensureDraft(t); d.segs[t.bsel||0].glide=e.target.checked; bassChanged(t); };
-  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i]; if(x.e-x.s<2) return; const mid=Math.round((x.s+x.e)/2); d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=mid; x.glide=false; t.bsel=i+1; t.brange=null; bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'; };
+  $('.bgrid',t.el).onchange=e=>{ t.bgrid=+e.target.value; bassChanged(t,false); $('.bst',t.el).textContent='Grille : '+e.target.selectedOptions[0].textContent+'. Touche la règle pour couper sur les petites graduations.'; };
+  $('.bfill',t.el).onclick=()=>{
+    const d=ensureDraft(t), g=gridOf(t), [ra,rb]=bRange(t), out=[]; let made=0;
+    d.segs.forEach((x,i)=>{ if(i<ra||i>rb||x.e-x.s<2*g-1e-6){ out.push(x); return; } for(let s=x.s;s<x.e-1e-6;s=Math.round((s+g)*192)/192){ out.push({...x,s,e:Math.min(x.e,Math.round((s+g)*192)/192),glide:false}); made++; } });
+    if(!made){ msg('Ces blocs font déjà la taille de la grille : choisis une grille plus fine (croche, double croche).'); return; }
+    d.segs=out; t.bsel=ra; t.brange=[ra,ra+made-1]; const f=ensureFollow(t); bassChanged(t);
+    msg('Découpé en '+made+' notes de '+$('.bgrid',t.el).selectedOptions[0].textContent+'. Touche chaque bloc puis une note de la palette pour écrire ta ligne.'+f);
+  };
+  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i], g=gridOf(t); if(x.e-x.s<2*g-1e-6) return; const mid=Math.round((x.s+Math.max(g,Math.round((x.e-x.s)/2/g)*g))*192)/192; d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=mid; x.glide=false; t.bsel=i+1; t.brange=null; const f=ensureFollow(t); bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'+f; };
   $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } t.brange=null; bassChanged(t); };
 }
 function drawBassViz(t){
@@ -2343,6 +2367,7 @@ function buildTrackUI(t){
     </details>
     <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
     <p class="hint" style="margin:6px 0 0">✂ <b>Touche la règle</b> (les numéros de temps) pour couper à cet endroit, ou pour enlever une coupe. <b>Touche un bloc</b> pour le choisir, puis touche sa note ci-dessous.</p>
+    <div class="row wrap" style="margin-top:6px"><span class="lbl" data-help="bgrid">Grille</span><select class="bgrid" style="width:auto" aria-label="Grille de la ligne de temps"><option value="1">noire (1 temps)</option><option value="0.5">croche (½ temps)</option><option value="0.25">double croche (¼ temps)</option><option value="0.3333333333333333">triolet (⅓ temps)</option></select><button class="bfill">✂ Découper en notes de la grille</button></div>
     <canvas class="btl" style="width:100%;height:104px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
     <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button><button class="boct" data-d="-12" data-help="boct">▼ octave</button><button class="boct" data-d="12">▲ octave</button></div>
     <div class="bpal">${NOTE_FR.map((n,i)=>`<button data-n="${i}" style="--h:${NOTE_HUE[i]}">${n}</button>`).join('')}<button data-n="-1" style="--h:0;filter:saturate(0)">∅ Silence</button></div>

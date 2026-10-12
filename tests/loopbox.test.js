@@ -1550,6 +1550,36 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const f=freqOf({getChannelData:()=>P.lastBuf().getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))});
     ok(near(f,65.4,3)||near(f,130.8,5),'basse fretless sur Do2 : '+f.toFixed(1));
   });
+  await test('basse : grille en croches et doubles croches, coupes sur les sous-graduations, découpage rapide, notes jouées au bon endroit',async()=>{
+    const {P,tb}=await bassBoot();
+    const c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,top:0,width:800,height:104});
+    const tap=(x,y)=>{ c.dispatchEvent(new P.w.MouseEvent('pointerdown',{clientX:x,clientY:y,bubbles:true})); c.dispatchEvent(new P.w.MouseEvent('pointerup',{clientX:x,clientY:y,bubbles:true})); };
+    const at=b=>b/8*800, info=()=>tb.querySelector('.btlinfo').textContent, sel=()=>tb.querySelector('.bselinfo').textContent;
+    const gs=tb.querySelector('.bgrid'); gs.value='0.5'; gs.dispatchEvent(new P.w.Event('change'));
+    tap(at(0.55),15); await sleep(5);
+    ok(/^Do → Do · 2 blocs/.test(info())&&/temps 1 et demi, dure 7,5 temps/.test(sel()),'coupe sur la croche : '+info()+' / '+sel());
+    ok(tb.querySelector('.brhy').value==='melodie','rythme passé sur « Suivre les notes »');
+    tap(at(0.55),15); await sleep(5);
+    ok(/^Do · 1 bloc/.test(info()),'retoucher la même graduation enlève la coupe : '+info());
+    // découpage rapide du 1er temps en doubles croches
+    tap(at(1),15); gs.value='0.25'; gs.dispatchEvent(new P.w.Event('change'));
+    tap(at(0.5),60); tb.querySelector('.bfill').click(); await sleep(5);
+    ok(/^Do → Do → Do → Do → Do · 5 blocs/.test(info()),'1er temps en 4 doubles croches : '+info());
+    const notes=['0','4','7','4'];
+    for(let k=0;k<4;k++){ tap(at(k*0.25+0.1),60); tb.querySelector('.bpal button[data-n="'+notes[k]+'"]').click(); }
+    ok(info().startsWith('Do → Mi → Sol → Mi → Do'),'notes en doubles croches : '+info());
+    // glisser une limite : elle s'accroche au quart de temps
+    const ev=(ty,x)=>c.dispatchEvent(new P.w.MouseEvent(ty,{clientX:x,clientY:60,bubbles:true}));
+    ev('pointerdown',at(1)); ev('pointermove',at(1)+12); ev('pointermove',at(1.7)); ev('pointerup',at(1.7)); await sleep(5);
+    tap(at(1.8),60); await sleep(5);
+    ok(/temps 2 \+ ¾, dure 6,25 temps/.test(sel()),'limite accrochée au ¼ de temps : '+sel());
+    tb.querySelector('.bgo').click(); await sleep(40);
+    const b=P.lastBuf(), bl=b.length/8, d=b.getChannelData(0);
+    const on=k=>{ let s=0; for(let i=Math.round(k*bl);i<Math.round((k+0.2)*bl);i++) s+=Math.abs(d[i]); return s; };
+    ok([0,0.25,0.5,0.75].every(k=>on(k)>0),'une note sur chaque double croche');
+    const fq=(a,z)=>{ const x=d.subarray(Math.round(a*bl),Math.round(z*bl)); let best=0,bf=0; for(let f=60;f<=125;f+=0.5){ let re=0,im=0; const w=2*Math.PI*f/SR; for(let i=0;i<x.length;i++){ re+=x[i]*Math.cos(w*i); im+=x[i]*Math.sin(w*i); } const p=re*re+im*im; if(p>best){best=p;bf=f;} } return bf; };
+    ok(near(fq(0.26,0.49),82.4,5)&&near(fq(0.51,0.74),98,5),'Mi puis Sol en doubles croches : '+fq(0.27,0.47).toFixed(1)+' / '+fq(0.52,0.72).toFixed(1));
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

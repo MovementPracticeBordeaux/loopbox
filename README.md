@@ -34,7 +34,7 @@ Les sons de jeux vidéo et d'ASMR (pièce, saut, laser, goutte d'eau, cloche 808
 Les tests chargent l'appli dans un navigateur simulé, avec un faux micro et un faux moteur audio, et vérifient notamment :
 le calage de la boucle, la place des sons ajoutés, la durée ×N, annuler / rétablir, la partie propre, la hauteur,
 la pause, l'import, les projets, le recalage, l'envers, les fondus, le changement de tempo, le mode live, le partage,
-les pistes séparées, l'installation et le mode casque (84 tests).
+les pistes séparées, l'installation et le mode casque (85 tests).
 
 ```
 npm install
