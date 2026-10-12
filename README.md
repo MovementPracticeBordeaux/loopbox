@@ -20,12 +20,21 @@ recalage sur le rythme, jeu à l'envers, fondus, hauteur du son, changement de t
 effets empilables, tonalité, mode live avec scènes, annuler / rétablir (réglages compris), projets et fichier `.loopbox`,
 export WAV, partage direct, pistes séparées en `.zip`, diagnostic de l'appareil, nettoyage du bruit, piste de basse générée (aperçu, évolution vers une autre note), menus de piste en onglets.
 
+## Sons de la bibliothèque
+
+Les instruments réels (dossier `sounds/`) proviennent de la banque **FluidR3_GM** de **Frank Wen**,
+publiée sous licence [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/),
+dans la version distribuée par [gleitz/midi-js-soundfonts](https://github.com/gleitz/midi-js-soundfonts).
+Modification : seule une note sur trois est conservée (l'appli complète en décalant la hauteur).
+Pour refaire ces fichiers : `python3 tools/build_sounds.py` (liste des sons dans `tools/sounds_list.json`).
+Les sons de jeux vidéo et d'ASMR (pièce, saut, laser, goutte d'eau, cloche 808…) sont synthétisés par l'appli.
+
 ## Tests
 
 Les tests chargent l'appli dans un navigateur simulé, avec un faux micro et un faux moteur audio, et vérifient notamment :
 le calage de la boucle, la place des sons ajoutés, la durée ×N, annuler / rétablir, la partie propre, la hauteur,
 la pause, l'import, les projets, le recalage, l'envers, les fondus, le changement de tempo, le mode live, le partage,
-les pistes séparées, l'installation et le mode casque (83 tests).
+les pistes séparées, l'installation et le mode casque (84 tests).
 
 ```
 npm install

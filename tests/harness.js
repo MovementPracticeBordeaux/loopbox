@@ -18,6 +18,9 @@ function pageHtml(){
 }
 
 // faux serveur Supabase (auth par mot de passe + stockage privé par compte), pour tester les projets en ligne
+// décodage des MP3 de la bibliothèque de sons avec ffmpeg (comme le ferait le navigateur)
+const {spawnSync}=require('child_process');
+function ffDecode(ab){ try{ const r=spawnSync('ffmpeg',['-v','error','-i','pipe:0','-f','f32le','-ac','1','-ar',String(SR),'-'],{input:Buffer.from(ab),maxBuffer:64<<20}); if(r.status!==0||!r.stdout.length) return null; return new Float32Array(r.stdout.buffer.slice(r.stdout.byteOffset,r.stdout.byteOffset+r.stdout.length)); }catch(e){ return null; } }
 function fakeCloud(){
   const S={users:{},files:{},tokens:{},n:0,log:[],down:false,ttl:3600};
   const res=(status,body,raw)=>({ok:status<300,status,json:async()=>body,arrayBuffer:async()=>raw});
@@ -57,7 +60,7 @@ async function boot(opt={}){
     for(const m of ['createGain','createBiquadFilter','createDynamicsCompressor','createAnalyser','createStereoPanner','createOscillator','createMediaStreamSource','createDelay','createConvolver','createWaveShaper']) AC.prototype[m]=function(){ const o=mk(); o.getFloatTimeDomainData=()=>{}; return o; };
     AC.prototype.createBufferSource=function(){ return {buffer:null,loop:false,connect(){},disconnect(){},stop(){},start(when,off){ P.starts.push({when,off:off||0,buf:this.buffer}); }}; };
     AC.prototype.createScriptProcessor=function(){ P.proc={connect(){},onaudioprocess:null}; return P.proc; };
-    AC.prototype.decodeAudioData=function(){ return P.nextDecode?Promise.resolve(P.nextDecode):Promise.reject(new Error('illisible')); };
+    AC.prototype.decodeAudioData=function(ab){ if(P.nextDecode) return Promise.resolve(P.nextDecode); const d=ffDecode(ab); return d?Promise.resolve({length:d.length,sampleRate:SR,numberOfChannels:1,duration:d.length/SR,getChannelData:()=>d}):Promise.reject(new Error('illisible')); };
     if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(){ this.port={onmessage:null}; P.wnode=this; } connect(){} disconnect(){} }; }
     w.AudioContext=AC;
     w.OfflineAudioContext=class{ constructor(c,l,sr){ this.length=l; this.sampleRate=sr; this.destination={}; }
@@ -66,7 +69,8 @@ async function boot(opt={}){
     for(const m of ['createGain','createBiquadFilter','createDynamicsCompressor','createBufferSource','createStereoPanner','createDelay','createConvolver','createWaveShaper','createOscillator']) w.OfflineAudioContext.prototype[m]=function(){ return mk(); };
     if(opt.share){ w.navigator.canShare=()=>true; w.navigator.share=async d=>{ P.shared=d; }; }
     w.indexedDB=idb;
-    if(opt.cloud){ w.fetch=opt.cloud.fetch; w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }
+    w.fetch=async(url,o2)=>{ if(/^sounds\//.test(url)){ P.soundReqs=(P.soundReqs||[]).concat(url); if(P.offline) throw new TypeError('Failed to fetch'); const f=path.join(ROOT,url); if(!fs.existsSync(f)) return {ok:false,status:404,json:async()=>({})}; const txt=fs.readFileSync(f,'utf8'); return {ok:true,status:200,json:async()=>JSON.parse(txt)}; } if(opt.cloud) return opt.cloud.fetch(url,o2); throw new TypeError('Failed to fetch'); };
+    if(opt.cloud){ w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }
     w.navigator.mediaDevices={
       getUserMedia:c=>{ P.gum.push(c); const lab=(c&&c.audio&&c.audio.deviceId)?((P.devs.find(d=>d.deviceId===c.audio.deviceId.exact)||{}).label||'?'):P.defaultMic; return Promise.resolve({getTracks:()=>[{stop(){}}],getAudioTracks:()=>[{label:lab,stop(){}}]}); },
       enumerateDevices:async()=>P.devs.slice()

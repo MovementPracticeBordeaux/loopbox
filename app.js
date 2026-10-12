@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='59';
+const APPVER='60';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1192,6 +1192,7 @@ const HELP={
   bgroup:"<b>Motif</b> : coche <b>choisir plusieurs blocs</b>, touche le premier puis le dernier bloc d'un motif : tous les blocs entre les deux sont choisis (tant que la case est cochée, la palette de notes change tous ces blocs d'un coup ; sinon, seulement le bloc touché). <b>⛓ Grouper</b> les attache : ensuite, toucher l'un d'eux choisit tout le groupe (une ligne blanche les relie). <b>Dissocier</b> les détache. <b>⧉ Dupliquer à la suite</b> recopie le motif juste après lui, 1, 2, 3 fois ou jusqu'à la fin de la boucle, en remplaçant les blocs qui s'y trouvaient. ↶ annule.",
   tsdup:"<b>Copier la partie à la suite</b> : la partie choisie (entre les deux traits orange) est recopiée juste après elle, 1, 2, 3 fois ou jusqu'à la fin de la boucle. Le son qui se trouvait à ces endroits est remplacé, et la partie gardée s'agrandit pour inclure les copies. Pratique pour répéter un motif réussi. ↶ annule.",
   cloud:"<b>En ligne</b> : tes projets sont gardés dans ton espace privé (personne d'autre ne peut les voir), pour les retrouver sur la tablette, le téléphone ou un ordinateur. Connecte-toi avec le même e-mail et mot de passe sur chaque appareil. <b>Mettre ce projet en ligne</b> l'envoie ; avec <b>envoi automatique</b>, chaque modification est envoyée 20 secondes après ton dernier changement. Sur l'autre appareil : menu projet → En ligne → <b>Ouvrir</b>. Si tu modifies le même projet sur deux appareils, c'est le dernier envoi qui compte. Taille maximale : 50 Mo par projet (environ 4 minutes de son en tout). Il faut internet pour envoyer et ouvrir ; sans internet, l'appli marche comme avant.",
+  sonlib:"<b>Son</b> : en haut, les <b>styles prêts</b> (un son + ses effets). En dessous, la <b>bibliothèque</b> rangée par familles : clochettes (xylophone, marimba, kalimba, boîte à musique, clochette façon triangle…), cordes pincées (harpe, pizzicato, guitares, koto…), claviers (Rhodes, piano FM des ballades R&B, clavinet…), vents (flûtes, sax, ocarina…), voix et chœurs, orchestre, synthés 80-90 (stab d'orchestre new jack swing, cuivres synthé, lead G-funk…), nappes, sons de jeux vidéo 8-bit, bruitages et ASMR (pluie, vagues, souffle, goutte d'eau, cloche 808…). Choisir un son le fait entendre tout de suite sur la note du bloc choisi. Les sons de la bibliothèque gardent les effets de la piste (ajoute du lo-fi ou de la réverb dans ✨ Effets). La première fois, chaque instrument se télécharge (environ 0,5 Mo, il faut internet), puis il reste disponible hors connexion. Les instruments réels viennent de la banque FluidR3_GM de Frank Wen (licence Creative Commons BY 3.0) ; les sons de jeux vidéo et d'ASMR sont fabriqués par l'appli.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -1417,6 +1418,8 @@ const BASS_TYPES={sub:'Sub (rond, très grave)',elec:'Électrique (pincée)',aci
 const INSTR={soft:1,rhodes:1,pluck:1,bell:1,lead:1,pad:1,flute:1,chip:1,organ:1};
 function synthNote(out,st,dur,f,vel,type,f2){
   if(INSTR[type]) return instrNote(out,st,dur,f,vel,type,f2);
+  if(/^lib:/.test(type)) return libNote(out,st,dur,f,vel,type,f2);
+  if(/^sfx:/.test(type)) return sfxNote(out,st,dur,f,vel,type);
   const L=out.length, rel=0.03, n=Math.round((dur+rel)*SR), gl=f2&&f2!==f?Math.log(f2/f):0;
   let ph=0, x1=0,x2=0,y1=0,y2=0, b0=0,b1=0,b2=0,a1=0,a2=0;
   for(let i=0;i<n;i++){
@@ -1471,6 +1474,105 @@ function instrNote(out,st,dur,f,vel,type,f2){
     if(t<A) env*=t/A;
     if(t>dur) env*=Math.max(0,1-(t-dur)/rel);
     out[(st+i)%L]+=v*env*vel*0.5;
+  }
+}
+// ---------- bibliothèque de sons ----------
+// Instruments réels : banque FluidR3_GM de Frank Wen (licence Creative Commons BY 3.0), via github.com/gleitz/midi-js-soundfonts.
+// Les fichiers sounds/*.json sont fabriqués par tools/build_sounds.py (une note sur trois, l'appli complète).
+const SOUNDLIB=/*SOUNDLIB*/[{"c":"cloche","k":"xylophone","f":"xylophone","n":"Xylophone","ring":1},{"c":"cloche","k":"marimba","f":"marimba","n":"Marimba","ring":1},{"c":"cloche","k":"vibraphone","f":"vibraphone","n":"Vibraphone","ring":1},{"c":"cloche","k":"glockenspiel","f":"glockenspiel","n":"Glockenspiel (carillon)","ring":1},{"c":"cloche","k":"celesta","f":"celesta","n":"Célesta","ring":1},{"c":"cloche","k":"musicbox","f":"music_box","n":"Boîte à musique","ring":1},{"c":"cloche","k":"kalimba","f":"kalimba","n":"Kalimba","ring":1},{"c":"cloche","k":"tubular","f":"tubular_bells","n":"Cloches tubulaires","ring":1},{"c":"cloche","k":"steeldrum","f":"steel_drums","n":"Steel drum (Caraïbes)","ring":1},{"c":"cloche","k":"tinkle","f":"tinkle_bell","n":"Clochette (façon triangle)","ring":1},{"c":"cloche","k":"agogo","f":"agogo","n":"Agogo (cloche brésilienne)","ring":1},{"c":"cloche","k":"woodblock","f":"woodblock","n":"Wood block","ring":1},{"c":"cloche","k":"timpani","f":"timpani","n":"Timbales d'orchestre","ring":1,"r":"low"},{"c":"cloche","k":"taiko","f":"taiko_drum","n":"Tambour taiko","ring":1,"r":"low"},{"c":"corde","k":"harp","f":"orchestral_harp","n":"Harpe","ring":1},{"c":"corde","k":"pizz","f":"pizzicato_strings","n":"Pizzicato (cordes pincées)","ring":1},{"c":"corde","k":"nylon","f":"acoustic_guitar_nylon","n":"Guitare classique (nylon)","ring":1},{"c":"corde","k":"folk","f":"acoustic_guitar_steel","n":"Guitare folk","ring":1},{"c":"corde","k":"eguitar","f":"electric_guitar_clean","n":"Guitare électrique claire","ring":1},{"c":"corde","k":"muted","f":"electric_guitar_muted","n":"Guitare étouffée (funk)","ring":1},{"c":"corde","k":"jazzgtr","f":"electric_guitar_jazz","n":"Guitare jazz","ring":1},{"c":"corde","k":"koto","f":"koto","n":"Koto (Japon)","ring":1},{"c":"corde","k":"sitar","f":"sitar","n":"Sitar (Inde)","ring":1},{"c":"corde","k":"shamisen","f":"shamisen","n":"Shamisen (Japon)","ring":1},{"c":"corde","k":"banjo","f":"banjo","n":"Banjo","ring":1},{"c":"clavier","k":"rhodesr","f":"electric_piano_1","n":"Piano électrique Rhodes","ring":1},{"c":"clavier","k":"fmpiano","f":"electric_piano_2","n":"Piano FM (ballades R&B 80-90)","ring":1},{"c":"clavier","k":"piano","f":"acoustic_grand_piano","n":"Piano à queue","ring":1},{"c":"clavier","k":"clav","f":"clavinet","n":"Clavinet (funk)","ring":1},{"c":"clavier","k":"harpsi","f":"harpsichord","n":"Clavecin","ring":1},{"c":"clavier","k":"hammond","f":"drawbar_organ","n":"Orgue Hammond"},{"c":"clavier","k":"accordion","f":"accordion","n":"Accordéon"},{"c":"vent","k":"flutereal","f":"flute","n":"Flûte traversière"},{"c":"vent","k":"panflute","f":"pan_flute","n":"Flûte de Pan"},{"c":"vent","k":"piccolo","f":"piccolo","n":"Piccolo"},{"c":"vent","k":"recorder","f":"recorder","n":"Flûte à bec"},{"c":"vent","k":"ocarina","f":"ocarina","n":"Ocarina"},{"c":"vent","k":"shaku","f":"shakuhachi","n":"Shakuhachi (flûte japonaise)"},{"c":"vent","k":"whistle","f":"whistle","n":"Sifflement"},{"c":"vent","k":"bottle","f":"blown_bottle","n":"Bouteille soufflée"},{"c":"vent","k":"altosax","f":"alto_sax","n":"Saxophone alto"},{"c":"vent","k":"tenorsax","f":"tenor_sax","n":"Saxophone ténor"},{"c":"vent","k":"mutetpt","f":"muted_trumpet","n":"Trompette bouchée (jazz)"},{"c":"vent","k":"trumpet","f":"trumpet","n":"Trompette"},{"c":"vent","k":"clarinet","f":"clarinet","n":"Clarinette"},{"c":"vent","k":"harmonica","f":"harmonica","n":"Harmonica"},{"c":"voix","k":"aahs","f":"choir_aahs","n":"Chœur « aah »"},{"c":"voix","k":"oohs","f":"voice_oohs","n":"Voix « ouh » (R&B)"},{"c":"voix","k":"synchoir","f":"synth_choir","n":"Chœur synthétique"},{"c":"voix","k":"voxlead","f":"lead_6_voice","n":"Voix synthé (lead)"},{"c":"voix","k":"choirpad","f":"pad_4_choir","n":"Nappe de voix"},{"c":"orch","k":"strings","f":"string_ensemble_1","n":"Ensemble de cordes"},{"c":"orch","k":"tremolo","f":"tremolo_strings","n":"Cordes trémolo"},{"c":"orch","k":"violin","f":"violin","n":"Violon"},{"c":"orch","k":"cello","f":"cello","n":"Violoncelle"},{"c":"orch","k":"synstr","f":"synth_strings_1","n":"Cordes synthé (années 80)"},{"c":"orch","k":"horn","f":"french_horn","n":"Cor d'harmonie"},{"c":"orch","k":"brass","f":"brass_section","n":"Section de cuivres"},{"c":"synth","k":"orchhit","f":"orchestra_hit","n":"Stab d'orchestre (new jack swing)","ring":1},{"c":"synth","k":"synbrass","f":"synth_brass_1","n":"Cuivres synthé"},{"c":"synth","k":"synbrass2","f":"synth_brass_2","n":"Cuivres synthé doux"},{"c":"synth","k":"square","f":"lead_1_square","n":"Lead carré"},{"c":"synth","k":"saw","f":"lead_2_sawtooth","n":"Lead scie (G-funk)"},{"c":"synth","k":"calliope","f":"lead_3_calliope","n":"Calliope (orgue de manège)"},{"c":"synth","k":"chiff","f":"lead_4_chiff","n":"Lead « chiff » (souffle)"},{"c":"synth","k":"charang","f":"lead_5_charang","n":"Lead charang (saturé)"},{"c":"synth","k":"fifths","f":"lead_7_fifths","n":"Lead en quintes"},{"c":"synth","k":"basslead","f":"lead_8_bass__lead","n":"Lead basse + aigu"},{"c":"pad","k":"newage","f":"pad_1_new_age","n":"New age"},{"c":"pad","k":"warm","f":"pad_2_warm","n":"Nappe chaude"},{"c":"pad","k":"poly","f":"pad_3_polysynth","n":"Polysynth"},{"c":"pad","k":"bowed","f":"pad_5_bowed","n":"Nappe frottée"},{"c":"pad","k":"metal","f":"pad_6_metallic","n":"Nappe métallique"},{"c":"pad","k":"halo","f":"pad_7_halo","n":"Halo"},{"c":"pad","k":"sweep","f":"pad_8_sweep","n":"Balayage"},{"c":"pad","k":"soundtrack","f":"fx_2_soundtrack","n":"Bande originale"},{"c":"pad","k":"crystal","f":"fx_3_crystal","n":"Cristal","ring":1},{"c":"pad","k":"atmo","f":"fx_4_atmosphere","n":"Atmosphère","ring":1},{"c":"pad","k":"bright","f":"fx_5_brightness","n":"Brillance"},{"c":"pad","k":"goblins","f":"fx_6_goblins","n":"Lutins (étrange)"},{"c":"pad","k":"echoes","f":"fx_7_echoes","n":"Échos"},{"c":"pad","k":"scifi","f":"fx_8_scifi","n":"Science-fiction","ring":1},{"c":"jeu","k":"sq8","s":"sq8","n":"8-bit carré (console)"},{"c":"jeu","k":"tri8","s":"tri8","n":"8-bit triangle (console)"},{"c":"jeu","k":"coin","s":"coin","n":"Pièce ramassée"},{"c":"jeu","k":"jump","s":"jump","n":"Saut"},{"c":"jeu","k":"laser","s":"laser","n":"Laser"},{"c":"jeu","k":"powerup","s":"powerup","n":"Bonus (power-up)"},{"c":"fx","k":"drop","s":"drop","n":"Goutte d'eau (ASMR)"},{"c":"fx","k":"bubble","s":"bubble","n":"Bulle (ASMR)"},{"c":"fx","k":"cowbell","s":"cowbell","n":"Cloche 808 (cowbell)"},{"c":"fx","k":"claves","s":"claves","n":"Claves"},{"c":"fx","k":"rain","f":"fx_1_rain","n":"Pluie","r":"fx"},{"c":"fx","k":"sea","f":"seashore","n":"Vagues","r":"fx"},{"c":"fx","k":"breath","f":"breath_noise","n":"Souffle (ASMR)","r":"fx"},{"c":"fx","k":"bird","f":"bird_tweet","n":"Chant d'oiseau","r":"fx"},{"c":"fx","k":"phone","f":"telephone_ring","n":"Sonnerie de téléphone","r":"fx"},{"c":"fx","k":"heli","f":"helicopter","n":"Hélicoptère","r":"fx"},{"c":"fx","k":"applause","f":"applause","n":"Applaudissements","r":"fx"},{"c":"fx","k":"fret","f":"guitar_fret_noise","n":"Frottement de corde","r":"fx"},{"c":"fx","k":"revcym","f":"reverse_cymbal","n":"Cymbale inversée (montée)","r":"fx"},{"c":"fx","k":"shot","f":"gunshot","n":"Détonation","r":"fx"},{"c":"basse","k":"upright","f":"acoustic_bass","n":"Contrebasse","r":"bass"},{"c":"basse","k":"finger","f":"electric_bass_finger","n":"Basse électrique (doigts)","r":"bass"},{"c":"basse","k":"fretless","f":"fretless_bass","n":"Basse fretless (R&B)","r":"bass"},{"c":"basse","k":"slap","f":"slap_bass_1","n":"Basse slap","r":"bass"},{"c":"basse","k":"synbass1","f":"synth_bass_1","n":"Basse synthé 1","r":"bass"},{"c":"basse","k":"synbass2","f":"synth_bass_2","n":"Basse synthé 2","r":"bass"}]/*FIN*/;
+const LIBCAT={cloche:'🔔 Clochettes et percussions mélodiques',corde:'🪕 Cordes pincées',clavier:'🎹 Claviers',vent:'🎷 Vents',voix:'🎤 Voix et chœurs',orch:'🎻 Cordes et orchestre',synth:'📼 Synthés 80-90, R&B, new jack',pad:'🌌 Nappes et ambiances',jeu:'🎮 Jeux vidéo (8-bit)',fx:'🌧 Bruitages et ASMR',basse:'🎸 Basses réelles'};
+const LIBK={}; SOUNDLIB.forEach(x=>{ LIBK[x.k]=x; });
+const libOf=type=>{ const m=/^(lib|sfx):(.+)$/.exec(type||''); return m?LIBK[m[2]]:null; };
+const libName=type=>{ const x=libOf(type); return x?x.n:''; };
+const libCache={};
+SOUNDLIB.forEach(x=>{ const ty=(x.f?'lib:':'sfx:')+x.k; if(x.c==='basse') BASS_TYPES[ty]=x.n; else STYLES['L:'+x.k]=[x.n,ty,[],x.c]; });
+// menu « son » : styles prêts puis la bibliothèque, rangée par familles
+function soundOptions(syn){
+  const opt=(v,l)=>`<option value="${v}">${l.replace(/</g,'&lt;')}</option>`;
+  const grp=(l,items)=>items.length?`<optgroup label="${l}">${items.join('')}</optgroup>`:'';
+  if(syn){ const base=Object.keys(STYLES).filter(k=>!STYLES[k][3]).map(k=>opt(k,STYLES[k][0]));
+    return grp('✨ Styles prêts (son + effets)',base)+Object.keys(LIBCAT).filter(c=>c!=='basse').map(c=>grp(LIBCAT[c],Object.keys(STYLES).filter(k=>STYLES[k][3]===c).map(k=>opt(k,STYLES[k][0])))).join(''); }
+  return grp('Synthèse',Object.keys(BASS_TYPES).filter(k=>!libOf(k)).map(k=>opt(k,BASS_TYPES[k])))+grp(LIBCAT.basse,Object.keys(BASS_TYPES).filter(k=>libOf(k)).map(k=>opt(k,BASS_TYPES[k])));
+}
+function libReady(type){ const x=libOf(type); return !x||!x.f||!!(libCache[x.k]&&libCache[x.k].notes); }
+function b64ab(s){ const bin=atob(s), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u.buffer; }
+function decodeAB(ab){ return new Promise((res,rej)=>{ try{ const p=ctx.decodeAudioData(ab,res,rej); if(p&&p.then) p.then(res,rej); }catch(e){ rej(e); } }); }
+// charge un instrument (une seule fois ; ensuite il reste en mémoire et dans le cache hors connexion)
+function loadLib(type){
+  const x=libOf(type); if(!x||!x.f) return Promise.resolve();
+  const c=libCache[x.k]||(libCache[x.k]={});
+  if(c.notes) return Promise.resolve(); if(c.p) return c.p;
+  c.p=(async()=>{
+    let r; try{ r=await fetch('sounds/'+x.f+'.json'); }catch(e){ throw new Error('net'); }
+    if(!r.ok) throw new Error('net');
+    const j=await r.json(), notes=[];
+    for(const k of Object.keys(j.notes)){
+      const b=await decodeAB(b64ab(j.notes[k])); let d=b.getChannelData(0);
+      if(b.sampleRate!==SR){ const q=b.sampleRate/SR, n=Math.floor(d.length/q), o=new Float32Array(n); for(let i=0;i<n;i++){ const p=i*q, i0=Math.floor(p), fr=p-i0; o[i]=d[i0]*(1-fr)+(d[i0+1]||0)*fr; } d=o; }
+      let s=0; while(s<d.length&&Math.abs(d[s])<1e-4) s++;
+      const dd=d.slice(s); notes.push(Object.assign({m:+k,d:dd},x.ring?{}:findLoop(dd)));
+    }
+    let pk=0; notes.forEach(o=>{ for(let i=0;i<o.d.length;i+=4) pk=Math.max(pk,Math.abs(o.d[i])); });
+    const g=pk>0?0.9/pk:1; notes.forEach(o=>{ for(let i=0;i<o.d.length;i++) o.d[i]*=g; });
+    c.notes=notes.sort((p,q)=>p.m-q.m);
+    // les rendus déjà calculés avec le son de secours sont refaits
+    tracks.forEach(t=>{ if(t.bass&&t.bass.type===type){ t.pp=null; } }); try{ songCache.clear(); }catch(e){}
+  })().catch(e=>{ c.p=null; throw e; });
+  return c.p;
+}
+// point de bouclage d'une note tenue : là où le son ressemble le plus à la fin de la boucle (raccord sans creux)
+function findLoop(d){
+  const le=Math.floor(d.length-0.25*SR), W=1024, a0=Math.floor(d.length*0.3), a1=Math.floor(d.length*0.5);
+  if(le-W<a1) return {};
+  let e2=0; for(let i=le-W;i<le;i++) e2+=d[i]*d[i];
+  let best=-2, bs=a0;
+  const sc=s=>{ let c=0,s2=0; for(let i=0;i<W;i+=2){ const u=d[s-W+i]; c+=u*d[le-W+i]; s2+=u*u; } return c/Math.sqrt((s2||1e-12)*(e2/2||1e-12)); };
+  for(let s=a0;s<a1;s+=3){ const v=sc(s); if(v>best){ best=v; bs=s; } }
+  for(let s=bs-3;s<=bs+3;s++){ const v=sc(s); if(v>best){ best=v; bs=s; } }
+  return {ls:bs,le,lc:best};
+}
+// joue une note avec l'échantillon le plus proche (au plus 1,5 demi-ton de décalage)
+function libNote(out,st,dur,f,vel,type,f2){
+  const x=libOf(type), c=libCache[x.k];
+  if(!c||!c.notes){ loadLib(type).catch(()=>{}); return instrNote(out,st,dur,f,vel,'soft',f2); }
+  const m=69+12*Math.log2(f/440), m2=f2&&f2!==f?69+12*Math.log2(f2/440):m;
+  let best=c.notes[0]; c.notes.forEach(o=>{ if(Math.abs(o.m-m)<Math.abs(best.m-m)) best=o; });
+  const d=best.d, r1=Math.pow(2,(m-best.m)/12), r2=Math.pow(2,(m2-best.m)/12), L=out.length;
+  const ring=!!x.ring, rel=ring?0.3:0.12, natural=d.length/r1/SR;
+  const total=ring?Math.min(natural,dur+1.6):dur+rel;
+  const n=Math.round(total*SR), fadeAt=ring?Math.max(0,total-rel):dur;
+  // notes tenues plus longues que l'échantillon : on boucle sa partie stable avec un fondu enchaîné
+  // longueur de boucle = un nombre entier de périodes de la note, pour que le raccord soit en phase (pas de creux)
+  const le=best.le||0, ls=best.ls||0, xf=Math.floor(0.04*SR), canLoop=!ring&&le-ls>xf*3, ep=(best.lc||0)<0.9;
+  let p=0;
+  for(let i=0;i<n;i++){
+    const t=i/SR, rr=r1===r2?r1:r1*Math.pow(r2/r1,Math.min(1,t/Math.max(dur,0.01)));
+    if(canLoop&&p>=le) p-=le-ls;
+    const i0=Math.floor(p); if(i0>=d.length-1) break;
+    const fr=p-i0; let v=d[i0]*(1-fr)+d[i0+1]*fr;
+    if(canLoop&&p>le-xf&&p<le){ const w=(p-(le-xf))/xf, q=p-(le-ls), j=Math.floor(q), fq=q-j, gi=ep?Math.sin(w*Math.PI/2):w, go=ep?Math.cos(w*Math.PI/2):1-w; v=v*go+(d[j]*(1-fq)+d[j+1]*fq)*gi; }
+    let env=1; if(t>fadeAt) env=Math.max(0,1-(t-fadeAt)/rel);
+    out[(st+i)%L]+=v*env*vel*0.7;
+    p+=rr;
+  }
+}
+// sons de jeux vidéo et bruitages, fabriqués ici (à la hauteur de la note)
+function sfxNote(out,st,dur,f,vel,type){
+  const k=libOf(type).k, L=out.length, TW=2*Math.PI;
+  const len={coin:0.45,jump:0.32,laser:0.35,powerup:0.6,drop:0.35,bubble:0.18,cowbell:0.5,claves:0.15}[k]||dur+0.05;
+  const n=Math.round(len*SR); let ph=0, ph2=0, sd=(st*7919+7)%2147483647||1;
+  for(let i=0;i<n;i++){
+    const t=i/SR; let fr=f, v=0, env=1;
+    if(k==='sq8'||k==='tri8'){ ph+=f/SR; ph-=Math.floor(ph); v=k==='sq8'?(ph<0.5?0.5:-0.5):(2*Math.abs(2*ph-1)-1)*0.8; env=(t<0.004?t/0.004:1)*(t>dur?Math.max(0,1-(t-dur)/0.03):1); }
+    else if(k==='coin'){ fr=t<0.07?f*2:f*2*Math.pow(2,5/12)*1.335; ph+=fr/SR; ph-=Math.floor(ph); v=ph<0.5?0.45:-0.45; env=Math.exp(-Math.max(0,t-0.07)/0.12); }
+    else if(k==='jump'){ fr=f*Math.pow(2,1.5*t/len); ph+=fr/SR; ph-=Math.floor(ph); v=ph<0.5?0.45:-0.45; env=1-t/len; }
+    else if(k==='laser'){ fr=f*4*Math.pow(0.12,t/len); ph+=fr/SR; ph-=Math.floor(ph); v=ph<0.25?0.5:-0.5; env=1-t/len; }
+    else if(k==='powerup'){ const step=Math.floor(t/0.05), semi=[0,4,7,12,4,7,12,16,7,12,16,19][step%12]; fr=f*Math.pow(2,semi/12); ph+=fr/SR; ph-=Math.floor(ph); v=ph<0.5?0.4:-0.4; env=1-t/len; }
+    else if(k==='drop'){ fr=f*2*(1+1.4*Math.min(1,t/0.05)); ph+=fr/SR; ph-=Math.floor(ph); v=Math.sin(TW*ph); env=(t<0.002?t/0.002:1)*Math.exp(-t/0.06); }
+    else if(k==='bubble'){ fr=f*(1+2.5*t/len); ph+=fr/SR; ph-=Math.floor(ph); v=Math.sin(TW*ph); env=Math.sin(Math.PI*t/len); }
+    else if(k==='cowbell'){ ph+=f*1.0/SR; ph-=Math.floor(ph); ph2+=f*1.48/SR; ph2-=Math.floor(ph2); v=((ph<0.5?1:-1)+(ph2<0.5?1:-1))*0.3; env=(t<0.002?t/0.002:1)*(0.35*Math.exp(-t/0.02)+0.65*Math.exp(-t/0.18)); }
+    else if(k==='claves'){ ph+=f*2/SR; ph-=Math.floor(ph); sd=(sd*16807)%2147483647; v=Math.sin(TW*ph)+0.15*(sd/2147483647*2-1)*Math.exp(-t/0.003); env=Math.exp(-t/0.04); }
+    out[(st+i)%L]+=v*env*vel*0.7;
   }
 }
 function defaultBass(nb,kind){ return kind==='synth'?{kind:'synth',rhy:'melodie',mel:'same',type:'soft',style:'clean',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,m:60,glide:false}]}:{rhy:'noire',mel:'same',type:'sub',len:1,beats:8,segs:[{s:0,e:nb||8,n:0,glide:false}]}; }
@@ -1704,6 +1806,7 @@ function showBassOpts(t){
   const o=normBass(t.bass,nbOf(t),t.kind); t.bdraft=o;
   $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'clean'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
   drawBassTimeline(t);
+  { const ty=t.kind==='synth'?(STYLES[o.style||'clean']||STYLES.clean)[1]:o.type; if(!libReady(ty)) loadLib(ty).catch(()=>{}); }
 }
 function drawBassTimeline(t){
   const c=$('.btl',t.el); if(!c) return;
@@ -1746,11 +1849,16 @@ function drawBassTimeline(t){
 function bassChanged(t,live){ drawBassTimeline(t); drawBassViz(t); if(live!==false&&preview&&preview.t===t) startPreview(t); }
 // écoute immédiate d'une note (palette, octave) avec le son choisi pour la piste
 let auditionSrc=null;
+function libWait(type,then){
+  msg('Chargement du son « '+libName(type)+' »… (la première fois seulement)');
+  loadLib(type).then(()=>{ msg('Son « '+libName(type)+' » prêt.'); then(); }).catch(()=>msg('Impossible de charger « '+libName(type)+' » : il faut internet la première fois que tu utilises ce son.'));
+}
 function auditionNote(t,m){
   if(m==null||!isFinite(m)) return;
   try{ ctx.resume(); }catch(e){}
   if(auditionSrc){ try{ auditionSrc.stop(); }catch(e){} auditionSrc=null; }
-  const o=readBassOpts(t), dur=0.55, n=Math.round((dur+0.45)*SR), d=new Float32Array(n);
+  const o0=readBassOpts(t); if(!libReady(o0.type)){ libWait(o0.type,()=>auditionNote(t,m)); return; }
+  const o=o0, ring=(libOf(o.type)||{}).ring, dur=0.55, n=Math.round((dur+(ring?1.7:0.45))*SR), d=new Float32Array(n);
   synthNote(d,0,dur,440*Math.pow(2,(m-69)/12),1,o.type);
   let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(d[i])); if(pk>0){ const g=0.6/pk; for(let i=0;i<n;i++) d[i]*=g; }
   const b=ctx.createBuffer(1,n,SR); b.copyToChannel(d,0);
@@ -1858,6 +1966,7 @@ function stopPreview(restart){
 }
 function startPreview(t){
   stopPreview(false);
+  { const o0=readBassOpts(t); if(!libReady(o0.type)){ libWait(o0.type,()=>startPreview(t)); return; } }
   const o=readBassOpts(t), nb=loopLen?beats:o.beats, L=loopLen||Math.round(nb*60/bpm*SR);
   const r=renderBass(o,L,nb), b=ctx.createBuffer(1,L,SR); b.copyToChannel(r.data,0);
   try{ ctx.resume(); }catch(e){}
@@ -1873,6 +1982,7 @@ function startPreview(t){
 function genBass(t,noHist){
   if(recObj) return;
   const o=readBassOpts(t);
+  if(!libReady(o.type)){ libWait(o.type,()=>genBass(t,noHist)); return; }
   stopPreview(false);
   if(!noHist) pushHist();
   if(!loopLen){
@@ -1884,12 +1994,12 @@ function genBass(t,noHist){
   const prevStyle=t.bass&&t.buf?t.bass.style:null;
   t.buf=b; t.sel=null; t.bass=JSON.parse(JSON.stringify(o));
   let fxTxt='';
-  if(t.kind==='synth'&&o.style!==prevStyle){ const fl=STYLES[o.style][2]; t.fxs=fl.map(ty=>({type:ty,amt:0.45})); if(!t.fxs.length) t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t); fxTxt=fl.length?' Effets du style posés : '+fl.map(ty=>((FX_LIST.find(f=>f[0]===ty)||[0,''])[1]).split(' (')[0].toLowerCase()).join(' + ')+' (modifiables dans ✨ Effets).':''; }
+  if(t.kind==='synth'&&o.style!==prevStyle&&!STYLES[o.style][3]){ const fl=STYLES[o.style][2]; t.fxs=fl.map(ty=>({type:ty,amt:0.45})); if(!t.fxs.length) t.fxs=[{type:'none',amt:0.5}]; renderFx(t); setFx(t); updFxBadge(t); fxTxt=fl.length?' Effets du style posés : '+fl.map(ty=>((FX_LIST.find(f=>f[0]===ty)||[0,''])[1]).split(' (')[0].toLowerCase()).join(' + ')+' (modifiables dans ✨ Effets).':''; }
   if(masterTake&&masterTake.i===t.id) masterTake=null;
   syncTrackUI(t); drawWave(t); startSrc(t); buildDots(); lockUI(); updLive(); scheduleSave();
   $('.bst',t.el).textContent=''; drawBassTimeline(t); drawBassViz(t);
-  if(t.kind==='synth'){ msg('Mélodie créée : style « '+STYLES[o.style][0]+' », '+r.count+' notes.'+fxTxt); return; }
-  msg('Ligne de basse créée : '+o.segs.map(x=>x.n==null?'—':NOTE_FR[x.n]).join(' → ')+' · '+RHYTHMS[o.rhy][0].toLowerCase()+' · '+MELODIES[o.mel].split(' (')[0].toLowerCase()+' · son '+BASS_TYPES[o.type].split(' (')[0]+' ('+r.count+' notes).');
+  if(t.kind==='synth'){ msg('Mélodie créée : '+(STYLES[o.style][3]?'son':'style')+' « '+STYLES[o.style][0]+' », '+r.count+' notes.'+fxTxt); return; }
+  msg('Ligne de basse créée : '+o.segs.map(x=>x.n==null?'—':NOTE_FR[x.n]).join(' → ')+' · '+RHYTHMS[o.rhy][0].toLowerCase()+' · '+MELODIES[o.mel].split(' (')[0].toLowerCase()+' · son '+(BASS_TYPES[o.type]||'').split(' (')[0]+' ('+r.count+' notes).');
 }
 // ---------- transformer n'importe quelle piste en basse ou en mélodie ----------
 function updVoiceUI(t){
@@ -1982,11 +2092,11 @@ function setKindUI(t){
   t.el.classList.toggle('kbass',t.kind==='bass'); t.el.classList.toggle('ksynth',syn);
   const tb=$('.ttabs button[data-tab="bass"]',t.el); if(tb) tb.textContent=syn?'🎹 Mélodie':'🎸 Basse';
   const sel=$('.btype',t.el);
-  if(sel&&sel.dataset.k!==(syn?'s':'b')){ sel.dataset.k=syn?'s':'b'; const src=syn?Object.keys(STYLES).map(k=>[k,STYLES[k][0]]):Object.keys(BASS_TYPES).map(k=>[k,BASS_TYPES[k]]); sel.innerHTML=src.map(([k,l])=>`<option value="${k}">${l}</option>`).join(''); }
+  if(sel&&sel.dataset.k!==(syn?'s':'b')){ sel.dataset.k=syn?'s':'b'; sel.innerHTML=soundOptions(syn); }
   const sm=$('.mel2b summary',t.el); if(sm) sm.textContent=syn?'🎤 Transformer une mélodie chantée en notes':'🎤 Transformer une mélodie chantée en basse';
   const mh=$('.mel2b .hint',t.el); if(mh){ mh.textContent=syn?"Chante ou fredonne ta mélodie sur une piste normale, puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les joue avec le style choisi, à la hauteur de ta voix.":"Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves."; mh.dataset.help=syn?'synth':'mel2b'; }
   const bt=$('.bgo',t.el); if(bt&&!t.buf) bt.textContent=syn?'✓ Créer la mélodie':'✓ Créer la basse';
-  const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Style (son et effets)':'Son';
+  const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Son ou style':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
   { const tf=$('.ttabs button[data-tab="tf"]',t.el); if(tf) tf.hidden=bass; if(bass&&t.tab==='tf') t.tab='bass'; }
   updVoiceUI(t);
@@ -2246,7 +2356,7 @@ function buildTrackUI(t){
     <canvas class="bviz" style="width:100%;height:84px;display:block;margin-top:6px;border-radius:10px;background:rgba(255,255,255,.05)"></canvas>
     <div class="row wrap"><span class="lbl w2" data-help="bass">Rythme</span><select class="brhy bopt" style="width:auto">${Object.keys(RHYTHMS).map(k=>`<option value="${k}">${RHYTHMS[k][0]}</option>`).join('')}</select></div>
     <div class="row wrap"><span class="lbl w2">Mélodie</span><select class="bmel bopt" style="width:auto">${Object.keys(MELODIES).map(k=>`<option value="${k}">${MELODIES[k]}</option>`).join('')}</select></div>
-    <div class="row wrap"><span class="lbl w2 bsonlbl">Son</span><select class="btype bopt" style="width:auto">${Object.keys(BASS_TYPES).map(k=>`<option value="${k}">${BASS_TYPES[k]}</option>`).join('')}</select><select class="blen bopt" style="width:auto"><option value="0.5">notes courtes</option><option value="1" selected>notes normales</option><option value="1.6">notes longues</option></select></div>
+    <div class="row wrap"><span class="lbl w2 bsonlbl" data-help="sonlib">Son</span><select class="btype bopt" style="width:auto;max-width:100%">${soundOptions(false)}</select><select class="blen bopt" style="width:auto"><option value="0.5">notes courtes</option><option value="1" selected>notes normales</option><option value="1.6">notes longues</option></select></div>
     <div class="row wrap bbrow"><span class="lbl w2">Longueur</span><select class="bbeats bopt" style="width:auto"><option value="4">4 temps</option><option value="8" selected>8 temps</option><option value="16">16 temps</option></select><span class="hint" style="margin:0">(si aucune boucle n'existe encore)</span></div>
     <div class="row wrap"><button class="bprev">▶ Aperçu</button><button class="bgo primary">✓ Créer la basse</button></div>
     <p class="hint bst"></p>
@@ -2351,6 +2461,8 @@ function buildTrackUI(t){
   $('.bgo',el).onclick=()=>genBass(t);
   $('.bprev',el).onclick=()=>{ if(preview&&preview.t===t) stopPreview(); else startPreview(t); };
   el.querySelectorAll('.bopt').forEach(x=>x.onchange=()=>bassChanged(t));
+  // en choisissant un son, on l'entend tout de suite sur la note du bloc choisi
+  $('.btype',el).onchange=()=>{ bassChanged(t); const d=ensureDraft(t), r=segRoots(d.segs,t.kind), i=t.bsel||0; let m=r[i]; if(m==null) m=r.find(v=>v!=null); if(m==null) m=t.kind==='synth'?60:36; auditionNote(t,m); };
   initBassTimeline(t);
   el.querySelectorAll('.ttabs button').forEach(b=>b.onclick=()=>setTab(t,b.dataset.tab));
   el.querySelectorAll('.spseg button').forEach(b=>b.onclick=()=>setSpeed(t,+b.dataset.v));

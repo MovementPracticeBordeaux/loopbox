@@ -726,7 +726,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const tm=P.$$('.trk')[2];
     ok(/ksynth/.test(tm.className)&&tm.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tm.className+' / '+tm.querySelector('.tn').textContent);
     ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Mélodie'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
-    const st=tm.querySelector('.btype'); ok(st.options.length===9&&/Son simple/.test(st.options[0].textContent)&&st.value==='clean','styles : '+[...st.options].map(o=>o.textContent).join(' | '));
+    const st=tm.querySelector('.btype'); ok(st.querySelector('optgroup').children.length===9&&/Son simple/.test(st.options[0].textContent)&&st.value==='clean','styles : '+[...st.options].map(o=>o.textContent).join(' | '));
     ok(tm.querySelector('.bgo').textContent==='✓ Créer la mélodie'&&!/graves/.test(tm.querySelector('.mel2b .hint').textContent),'libellés de la piste mélodie : '+tm.querySelector('.bgo').textContent+' | '+tm.querySelector('.mel2b .hint').textContent);
     tm.querySelector('.mgo').click(); await sleep(60);
     ok(/^La → Do → — → Mi/.test(tm.querySelector('.btlinfo').textContent),'blocs : '+tm.querySelector('.btlinfo').textContent);
@@ -1518,6 +1518,37 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.starts.length=0; P.$('#mstop').click(); P.$('#mplay').click(); await sleep(20); P.$('#mplay').click();
     const w=P.starts.filter(x=>x.buf).map(x=>x.when).sort((a,b)=>a-b), bd=60/95.9;
     ok(w.length===2&&Math.abs((w[1]-w[0])/bd-6.4)<0.02,'le bloc de la piste 2 part 6,4 temps après le début : '+(w.length===2?((w[1]-w[0])/bd).toFixed(3):w.length));
+  });
+  await test('bibliothèque de sons : xylophone, son de jeu vidéo, basse fretless, chargement à la demande, sans internet',async()=>{
+    const P=await boot(); P.$('#addsynth').click(); await sleep(20);
+    const tb=P.$$('.trk')[1], sel=tb.querySelector('.btype');
+    const groups=[...sel.querySelectorAll('optgroup')].map(g=>g.label);
+    ok(groups.length>=10&&groups.some(g=>/Clochettes/.test(g))&&groups.some(g=>/ASMR/.test(g))&&groups.some(g=>/Jeux vidéo/.test(g)),'familles de sons : '+groups.join(' | '));
+    ok(sel.querySelectorAll('option').length>=100,'nombre de sons : '+sel.querySelectorAll('option').length);
+    // fréquence la plus forte entre 150 et 400 Hz (balayage au demi-hertz)
+    const peak=(b,a,z)=>{ const d=b.getChannelData(0).subarray(Math.round(a*SR),Math.round(z*SR)); let best=0,bf=0; for(let f=150;f<=400;f+=0.5){ let re=0,im=0; const w=2*Math.PI*f/SR; for(let i=0;i<d.length;i+=2){ re+=d[i]*Math.cos(w*i); im+=d[i]*Math.sin(w*i); } const p=re*re+im*im; if(p>best){best=p;bf=f;} } return bf; };
+    sel.value='L:xylophone'; P.starts.length=0; sel.dispatchEvent(new P.w.Event('change'));
+    for(let k=0;k<80&&!/prêt/.test(P.$('#msg').textContent);k++) await sleep(50); await sleep(30);
+    ok(/Xylophone » prêt/.test(P.$('#msg').textContent)&&(P.soundReqs||[]).join()==='sounds/xylophone.json','chargé une fois : '+P.$('#msg').textContent+' '+(P.soundReqs||[]).join());
+    const au=P.lastPlayed(); ok(au&&near(peak(au,0.03,0.4),261.6,4),'écoute du xylophone sur Do4 : '+(au?peak(au,0.03,0.4).toFixed(1):'rien'));
+    { const d=au.getChannelData(0); let a=0,z=0; for(let i=Math.round(0.02*SR);i<Math.round(0.12*SR);i++) a+=d[i]*d[i]; for(let i=Math.round(0.9*SR);i<Math.round(1.0*SR);i++) z+=d[i]*d[i]; ok(z<a*0.05,'son percussif qui s\'éteint (pas une note tenue)'); }
+    tb.querySelector('.bgo').click(); await sleep(60);
+    const b=P.lastBuf(); ok(b&&near(peak(b,0.05,0.45),261.6,4),'mélodie créée au xylophone : '+(b?peak(b,0.05,0.45).toFixed(1):'')+' | '+P.$('#msg').textContent);
+    ok(/son « Xylophone »/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
+    // son de jeu vidéo : fabriqué sur place, sans téléchargement
+    const n0=(P.soundReqs||[]).length; sel.value='L:coin'; sel.dispatchEvent(new P.w.Event('change')); await sleep(30);
+    ok((P.soundReqs||[]).length===n0&&!!P.lastPlayed(),'pièce de jeu vidéo jouée sans téléchargement');
+    // sans internet : message clair, rien ne casse
+    P.offline=true; sel.value='L:harp'; sel.dispatchEvent(new P.w.Event('change')); await sleep(60);
+    ok(/il faut internet/.test(P.$('#msg').textContent),'hors connexion : '+P.$('#msg').textContent);
+    P.offline=false;
+    // basse réelle
+    P.$('#addbass').click(); await sleep(20); const bb=P.$$('.trk')[2], bs=bb.querySelector('.btype');
+    ok([...bs.querySelectorAll('optgroup')].some(g=>/Basses réelles/.test(g.label)),'basses réelles proposées');
+    bs.value='lib:fretless'; bs.dispatchEvent(new P.w.Event('change')); for(let k=0;k<80&&!/prêt/.test(P.$('#msg').textContent);k++) await sleep(50);
+    bb.querySelector('.bgo').click(); await sleep(60);
+    const f=freqOf({getChannelData:()=>P.lastBuf().getChannelData(0).subarray(Math.round(0.05*SR),Math.round(0.45*SR))});
+    ok(near(f,65.4,3)||near(f,130.8,5),'basse fretless sur Do2 : '+f.toFixed(1));
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
