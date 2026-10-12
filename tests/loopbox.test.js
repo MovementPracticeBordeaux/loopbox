@@ -1597,6 +1597,28 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     tb.querySelectorAll('.bzm')[0].click(); tb.querySelectorAll('.bzm')[0].click(); await sleep(5);
     ok(sc.hidden&&tb.querySelector('.bzlbl').textContent==='×1','retour à la vue entière');
   });
+  await test('mélodie : accords plaqués et en arpège, suite d\'accords toute prête',async()=>{
+    const P=await boot(); P.$('#addsynth').click(); await sleep(20);
+    const tb=P.$$('.trk')[1], info=()=>tb.querySelector('.btlinfo').textContent;
+    ok(!tb.querySelector('.synonly').hidden,'réglages d\'accords visibles sur une piste mélodie');
+    const cs=tb.querySelector('.bchord'); cs.value='maj7'; cs.dispatchEvent(new P.w.Event('change')); await sleep(10);
+    ok(/^Domaj7 · 1 bloc/.test(info()),'bloc Do maj7 : '+info());
+    const au=P.lastPlayed();
+    const pw=(b,f,a,z)=>{ const d=b.getChannelData(0), bl=b.length/(z>0?1:1); let re=0,im=0; const w=2*Math.PI*f/SR; for(let i=Math.round(a*SR);i<Math.round(z*SR);i++){ re+=d[i]*Math.cos(w*i); im+=d[i]*Math.sin(w*i); } return Math.sqrt(re*re+im*im); };
+    { const ref=pw(au,300,0.1,0.5); ok([261.6,329.6,392,493.9].every(f=>pw(au,f,0.1,0.5)>4*ref),'on entend Do Mi Sol Si ensemble à l\'écoute'); }
+    tb.querySelector('.bgo').click(); await sleep(40);
+    let b=P.lastBuf(); const bt=b.length/8/SR;
+    { const ref=pw(b,300,0.1,1.5); ok([261.6,329.6,392,493.9].every(f=>pw(b,f,0.1,1.5)>4*ref),'accord plaqué dans la piste'); }
+    const cp=tb.querySelector('.bchplay'); cp.value='up'; cp.dispatchEvent(new P.w.Event('change')); tb.querySelector('.bgo').click(); await sleep(40);
+    b=P.lastBuf();
+    const at=(k)=>[261.6,329.6,392,493.9].map(f=>pw(b,f,(k*0.5+0.12)*bt,(k*0.5+0.42)*bt));
+    const best=k=>{ const v=at(k); return v.indexOf(Math.max(...v)); };
+    ok([0,1,2,3,4].map(best).join(',')==='0,1,2,3,0','arpège qui monte en croches (Do Mi Sol Si Do) : '+[0,1,2,3,4].map(best).join(','));
+    const ps=tb.querySelector('.bprog'); ps.value='lofi'; tb.querySelector('.bprogb').click(); await sleep(10);
+    ok(/^Rém7 → Sol7 → Domaj7 → Lam7 · 4 blocs/.test(info()),'suite lo-fi en Do : '+info());
+    P.$('#addbass').click(); await sleep(20);
+    ok(P.$$('.trk')[2].querySelector('.synonly').hidden,'pas d\'accords sur une piste de basse');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

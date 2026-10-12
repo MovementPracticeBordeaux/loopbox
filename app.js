@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='62';
+const APPVER='63';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1194,6 +1194,7 @@ const HELP={
   cloud:"<b>En ligne</b> : tes projets sont gardés dans ton espace privé (personne d'autre ne peut les voir), pour les retrouver sur la tablette, le téléphone ou un ordinateur. Connecte-toi avec le même e-mail et mot de passe sur chaque appareil. <b>Mettre ce projet en ligne</b> l'envoie ; avec <b>envoi automatique</b>, chaque modification est envoyée 20 secondes après ton dernier changement. Sur l'autre appareil : menu projet → En ligne → <b>Ouvrir</b>. Si tu modifies le même projet sur deux appareils, c'est le dernier envoi qui compte. Taille maximale : 50 Mo par projet (environ 4 minutes de son en tout). Il faut internet pour envoyer et ouvrir ; sans internet, l'appli marche comme avant.",
   sonlib:"<b>Son</b> : en haut, les <b>styles prêts</b> (un son + ses effets). En dessous, la <b>bibliothèque</b> rangée par familles : clochettes (xylophone, marimba, kalimba, boîte à musique, clochette façon triangle…), cordes pincées (harpe, pizzicato, guitares, koto…), claviers (Rhodes, piano FM des ballades R&B, clavinet…), vents (flûtes, sax, ocarina…), voix et chœurs, orchestre, synthés 80-90 (stab d'orchestre new jack swing, cuivres synthé, lead G-funk…), nappes, sons de jeux vidéo 8-bit, bruitages et ASMR (pluie, vagues, souffle, goutte d'eau, cloche 808…). Choisir un son le fait entendre tout de suite sur la note du bloc choisi. Les sons de la bibliothèque gardent les effets de la piste (ajoute du lo-fi ou de la réverb dans ✨ Effets). La première fois, chaque instrument se télécharge (environ 0,5 Mo, il faut internet), puis il reste disponible hors connexion. Les instruments réels viennent de la banque FluidR3_GM de Frank Wen (licence Creative Commons BY 3.0) ; les sons de jeux vidéo et d'ASMR sont fabriqués par l'appli.",
   bgrid:"<b>Grille</b> : règle la finesse de la ligne de temps. En <b>noire</b>, on coupe sur les temps ; en <b>croche</b> sur chaque demi-temps ; en <b>double croche</b> sur chaque quart de temps ; en <b>triolet</b> sur chaque tiers. Des petites graduations apparaissent sur la règle : touche-les pour couper, et les limites orange s'accrochent à la grille quand tu les fais glisser. <b>🔍+ / 🔍−</b> zooment la ligne de temps (×2, ×4, ×8) pour viser les petits blocs ; la barre qui apparaît dessous sert à se déplacer, et ◀ ▶ suivent le bloc choisi. <b>✂ Découper en notes de la grille</b> coupe le bloc choisi (ou tous les blocs choisis) en notes de la taille de la grille : pratique pour écrire une basse en croches ou en doubles croches, puis donner une note à chaque bloc. Quand des blocs font moins d'un temps, le rythme passe sur « Suivre les notes » pour que chacun soit joué.",
+  chords:"<b>Accords</b> : choisis un bloc (et sa note, qui sera la base de l'accord), puis un <b>accord</b> : majeur, mineur, 7, maj7 et m7 (très lo-fi et R&B), m9 et maj9 (néo-soul), add9, sus2, sus4, 6, diminué, augmenté, quinte. Tu l'entends tout de suite. Avec « choisir plusieurs blocs » coché, l'accord s'applique à tous les blocs choisis. <b>Jeu</b> : plaqué (toutes les notes ensemble), gratté (léger décalage, comme une guitare ou une harpe) ou en arpège (qui monte, qui descend, aller-retour, sur 2 octaves), à la vitesse choisie (noires, croches, doubles croches, triolets). <b>Suite d'accords</b> remplit la ligne de temps avec une progression toute prête (lo-fi, chill, néo-soul, pop, trap, jazz…) dans la tonalité de la note du 1er bloc. Superbe avec les sons de la bibliothèque : harpe en arpège, Rhodes ou piano FM plaqués, boîte à musique en arpège aller-retour…",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -1581,7 +1582,7 @@ function nbOf(t){ return loopLen?beats:(+$('.bbeats',t.el).value||8); }
 // les blocs couvrent toujours toute la boucle, sans trou ni chevauchement
 function normSegs(segs,nb){
   const q=v=>Math.round((+v||0)*192)/192;
-  let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide,g:x.g?String(x.g):undefined}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
+  let sg=(segs||[]).map(x=>{ const rest=x.n==null||+x.n<0; return {s:q(x.s),e:q(x.e),n:rest?null:((Math.round(+x.n)%12)+12)%12,m:(!rest&&x.m!=null)?Math.round(+x.m):undefined,glide:!!x.glide,g:x.g?String(x.g):undefined,ch:(!rest&&x.ch&&CHORDS[x.ch])?x.ch:undefined}; }).filter(x=>x.e>x.s).sort((a,b)=>a.s-b.s);
   if(!sg.length) return [{s:0,e:nb,n:0,glide:false}];
   const tot=sg[sg.length-1].e, ratio=nb/tot;
   if(tot<nb&&tot>0&&Math.abs(ratio-Math.round(ratio))<1e-9&&sg[0].s===0){ const base=sg.slice(); for(let k=1;k<Math.round(ratio);k++) base.forEach(x=>sg.push({...x,s:x.s+k*tot,e:x.e+k*tot})); }
@@ -1678,13 +1679,14 @@ function bassDup(t,cnt){
 }
 const rootOf=n=>n<=4?36+n:24+n;
 const nearOct=(m,ref)=>{ while(m-ref>6) m-=12; while(ref-m>6) m+=12; return m; };
-function bassEvents(o,nb){
+function bassEvents(o,nb){ const segs=normSegs(o.segs,nb); if(o.kind!=='synth') segs.forEach(x=>{ delete x.ch; }); return expandChords(bassEventsRaw(o,nb),o,segs); }
+function bassEventsRaw(o,nb){
   const segs=normSegs(o.segs,nb), bars=Math.max(1,Math.ceil(nb/meter)), roots=segRoots(segs,o.kind);
   const nextRoot=i=>{ for(let k=1;k<=segs.length;k++){ const r=roots[(i+k)%segs.length]; if(r!=null) return r; } return roots[i]; };
   if(o.rhy==='melodie') return segs.map((sg,i)=>{
     if(sg.n==null) return null;
     const root=roots[i], nr=nearOct(nextRoot(i),root);
-    return {pos:sg.s,m:root,m2:(sg.glide&&segs.length>1)?nr:root,len:Math.max(0.1,(sg.e-sg.s)*Math.min(1,o.len||1)-0.02),vel:1};
+    return {pos:sg.s,m:root,m2:(sg.glide&&segs.length>1)?nr:root,len:Math.max(0.1,(sg.e-sg.s)*Math.min(1,o.len||1)-0.02),vel:1,si:i};
   }).filter(Boolean);
   const rh=(RHYTHMS[o.rhy]||RHYTHMS.noire)[1];
   const segAt=p=>{ for(let i=0;i<segs.length;i++) if(p>=segs[i].s&&p<segs[i].e) return i; return segs.length-1; };
@@ -1700,9 +1702,38 @@ function bassEvents(o,nb){
     else if(o.mel==='walk') iv=(last&&cnt[r.si]>1)?nroot-1-root:[0,7,12][r.k%3];
     const len=Math.max(0.1,Math.min(r.len,sg.e-r.pos)), m=root+iv;
     const m2=(sg.glide&&last&&segs.length>1)?nroot+(iv===12?12:0):m;
-    return {pos:r.pos,m,m2,len,vel:r.vel};
+    return {pos:r.pos,m,m2,len,vel:r.vel,si:r.si};
   });
 }
+// ---------- accords ----------
+const CHORDS={'':['note seule',[0]],maj:['majeur',[0,4,7]],min:['mineur',[0,3,7]],'7':['7 (septième)',[0,4,7,10]],maj7:['maj7 (chill, lo-fi)',[0,4,7,11]],m7:['m7 (lo-fi, R&B)',[0,3,7,10]],m9:['m9 (néo-soul)',[0,3,7,10,14]],maj9:['maj9 (rêveur)',[0,4,7,11,14]],add9:['add9',[0,4,7,14]],sus2:['sus2',[0,2,7]],sus4:['sus4',[0,5,7]],'6':['6',[0,4,7,9]],dim:['diminué',[0,3,6]],aug:['augmenté',[0,4,8]],'5':['quinte (power)',[0,7,12]]};
+const CH_SUF={'':'',maj:'',min:'m','7':'7',maj7:'maj7',m7:'m7',m9:'m9',maj9:'maj9',add9:'add9',sus2:'sus2',sus4:'sus4','6':'6',dim:'dim',aug:'aug','5':'5'};
+const CHPLAY={plaque:'Plaqué (toutes les notes ensemble)',strum:'Gratté (léger décalage, façon guitare)',up:'Arpège qui monte',down:'Arpège qui descend',updown:'Arpège aller-retour',up2:'Arpège sur 2 octaves'};
+function expandChords(ev,o,segs){
+  if(!segs.some(x=>x.ch&&CHORDS[x.ch]&&x.ch!=='')) return ev.map(e=>{ const {si,...r}=e; return r; });
+  const mode=CHPLAY[o.chplay]?o.chplay:'plaque', step=+o.arp||0.5, out=[];
+  ev.forEach(e=>{
+    const sg=segs[e.si], ivs=(sg&&CHORDS[sg.ch]?CHORDS[sg.ch][1]:[0]);
+    const base={...e}; delete base.si;
+    if(ivs.length<2){ out.push(base); return; }
+    if(mode==='plaque'||mode==='strum'){ ivs.forEach((iv,k)=>out.push({pos:e.pos+(mode==='strum'?k*0.045:0),m:e.m+iv,m2:e.m2+iv,len:Math.max(0.1,e.len-(mode==='strum'?k*0.045:0)),vel:e.vel*0.8})); return; }
+    let seq=ivs.slice(); if(mode==='down') seq.reverse(); else if(mode==='updown') seq=ivs.concat(ivs.slice(1,-1).reverse()); else if(mode==='up2') seq=ivs.concat(ivs.map(v=>v+12));
+    const n=Math.max(1,Math.round(e.len/step+0.3));
+    for(let k=0;k<n;k++){ const p=e.pos+k*step; if(p>=e.pos+e.len-1e-6&&k>0) break; const iv=seq[k%seq.length]; out.push({pos:p,m:e.m+iv,m2:e.m+iv,len:Math.max(0.08,Math.min(step*0.95,e.pos+e.len-p)),vel:e.vel*(k%seq.length===0?1:0.85)}); }
+  });
+  return out;
+}
+// progressions toutes prêtes (degrés depuis la tonique, accord) : remplissent la ligne de temps en blocs égaux
+const PROGS={
+  lofi:['Lo-fi · ii – V – I – vi (7e)',[[2,'m7'],[7,'7'],[0,'maj7'],[9,'m7']]],
+  chill:['Chill · IV – iii – ii – I (maj7)',[[5,'maj7'],[4,'m7'],[2,'m7'],[0,'maj7']]],
+  neosoul:['Néo-soul / R&B · I – vi – ii – V (9e)',[[0,'maj9'],[9,'m9'],[2,'m9'],[7,'7']]],
+  pop:['Pop / rap · I – V – vi – IV',[[0,'maj'],[7,'maj'],[9,'min'],[5,'maj']]],
+  trap:['Trap mineur · i – VI – III – VII',[[0,'min'],[8,'maj'],[3,'maj'],[10,'maj']]],
+  sad:['Mélancolique · vi – IV – I – V',[[9,'min'],[5,'maj'],[0,'maj'],[7,'maj']]],
+  dream:['Rêveur · I – IV (add9, sus2)',[[0,'add9'],[5,'sus2'],[0,'add9'],[5,'maj7']]],
+  jazz:['Jazz · ii – V – I (2 temps chacun)',[[2,'m7'],[7,'7'],[0,'maj7'],[0,'6']]]
+};
 // ---------- mélodie chantée → notes ----------
 // suivi de la note chantée (méthode YIN), sur un son ramené à 12 kHz pour aller vite
 function pitchTrack(x){
@@ -1816,11 +1847,12 @@ function makeBass(o){ return renderBass(o,loopLen,beats); }
 function readBassOpts(t){
   const el=t.el, d=ensureDraft(t);
   const tv=$('.btype',el).value, syn=t.kind==='synth', st=syn?(STYLES[tv]?tv:'clean'):undefined;
-  return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,grid:gridOf(t),len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
+  return {kind:syn?'synth':undefined,rhy:$('.brhy',el).value,mel:$('.bmel',el).value,type:syn?STYLES[st][1]:tv,style:st,grid:gridOf(t),chplay:syn?$('.bchplay',el).value:undefined,arp:syn?+$('.barp',el).value:undefined,len:+$('.blen',el).value,beats:+$('.bbeats',el).value,segs:d.segs.map(x=>({...x}))};
 }
 function showBassOpts(t){
   const el=t.el; t.bdraft=null; t.bsel=0; t.brange=null;
   const o=normBass(t.bass,nbOf(t),t.kind); t.bdraft=o;
+  { const cp=$('.bchplay',el); if(cp) cp.value=CHPLAY[o.chplay]?o.chplay:'plaque'; const ar=$('.barp',el); if(ar) ar.value=String([1,0.5,0.25,1/3].find(v=>Math.abs(v-(+o.arp||0.5))<1e-6)||0.5); }
   t.bgrid=[1,0.5,0.25,1/3].find(v=>Math.abs(v-(+o.grid||1))<1e-6)||1; { const gs=$('.bgrid',el); if(gs) gs.value=String(t.bgrid); }
   $('.brhy',el).value=o.rhy; $('.bmel',el).value=o.mel; $('.btype',el).value=t.kind==='synth'?(o.style||'clean'):o.type; $('.blen',el).value=String(o.len); $('.bbeats',el).value=String(o.beats||8);
   drawBassTimeline(t);
@@ -1829,7 +1861,7 @@ function showBassOpts(t){
 function drawBassTimeline(t){
   const c=$('.btl',t.el); if(!c) return;
   const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), sel=t.bsel||0, cur=segs[sel], [ra,rb]=bRange(t), inR=i=>i>=ra&&i<=rb;
-  const lab=x=>x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''), rests=segs.filter(x=>x.n==null).length;
+  const lab=x=>x.n==null?'—':NOTE_FR[x.n]+(x.ch&&CH_SUF[x.ch]!=null?CH_SUF[x.ch]:'')+(x.glide?' ↝':''), rests=segs.filter(x=>x.n==null).length;
   $('.btlinfo',t.el).textContent=(segs.length<=10?segs.map(lab).join(' → ')+' · ':'')+segs.length+' bloc'+(segs.length>1?'s':'')+(rests?' (dont '+rests+' silence'+(rests>1?'s':'')+')':'');
   if(cur.n!=null) $('.bsn',t.el).value=String(cur.n); $('.bgl',t.el).checked=!!cur.glide; $('.bgl',t.el).disabled=segs.length<2;
   $('.bsplit',t.el).disabled=cur.e-cur.s<2*gridOf(t)-1e-6; $('.bdel',t.el).disabled=segs.length<2;
@@ -1839,6 +1871,7 @@ function drawBassTimeline(t){
   $('.bselinfo',t.el).textContent=ra!==rb?('Blocs '+(ra+1)+' → '+(rb+1)+' : temps '+fb(segs[ra].s+1)+' → '+fb(segs[rb].e)+(segs.slice(ra,rb+1).every(x=>x.g&&x.g===segs[ra].g)?' · groupe':'')+' · touché : bloc '+(sel+1)+(cur.n!=null?' ('+noteName(rts[sel])+')':'')):('Bloc '+(sel+1)+' : '+((Math.abs(cur.s-Math.round(cur.s))<1e-6&&Math.abs(cur.e-Math.round(cur.e))<1e-6)?'temps '+fb(cur.s+1)+' → '+fb(cur.e):beatLbl(cur.s)+', dure '+fb(cur.e-cur.s)+' temps')+(cur.n!=null?' · '+noteName(rts[sel]):' · silence')+(cur.g?' · groupé':''));
   { const m=$('.bmulti',t.el); if(m) m.checked=!!t.bmulti; const u=$('.bungrp',t.el); if(u) u.disabled=!segs.slice(ra,rb+1).some(x=>x.g); const gb=$('.bgrp',t.el); if(gb) gb.disabled=ra===rb; const db=$('.bdup',t.el); if(db) db.disabled=segs[rb].e>=nb; }
   t.el.querySelectorAll('.boct').forEach(b=>b.disabled=cur.n==null);
+  { const cs=$('.bchord',t.el); if(cs){ cs.value=cur.ch&&CHORDS[cur.ch]?cur.ch:''; cs.disabled=cur.n==null; } }
   const span=tlSpan(t,nb), view=tlView(t,nb);
   { const z=t.bzoom||1, sc=$('.bscroll',t.el), zi=$('.bzlbl',t.el); if(sc){ sc.hidden=z===1; sc.max=String(Math.max(0,nb-span)); sc.step='0.25'; sc.value=String(view); } if(zi) zi.textContent='×'+z; t.el.querySelectorAll('.bzm').forEach(b=>b.disabled=(+b.dataset.z<0&&z===1)||(+b.dataset.z>0&&z===ZOOMS[ZOOMS.length-1])); }
   $('.bgo',t.el).textContent=t.buf?'✓ Appliquer les changements':(t.kind==='synth'?'✓ Créer la mélodie':'✓ Créer la basse');
@@ -1862,7 +1895,7 @@ function drawBassTimeline(t){
     g.fillStyle=x.n==null?(inR(i)?'rgba(255,255,255,.2)':'rgba(255,255,255,.07)'):'hsl('+NOTE_HUE[x.n]+',70%,'+(inR(i)?'52%':'38%')+')';
     if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.fill(); } else g.fillRect(x0,by0,Math.max(2,x1-x0),by1-by0);
     if(inR(i)){ g.strokeStyle='#fff'; g.lineWidth=(i===sel?2.5:1.5)*dpr; if(g.roundRect){ g.beginPath(); g.roundRect(x0,by0,Math.max(2,x1-x0),by1-by0,8*dpr); g.stroke(); } else g.strokeRect(x0,by0,x1-x0,by1-by0); }
-    g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(x.n==null?'—':NOTE_FR[x.n]+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
+    g.fillStyle='#fff'; if(x1-x0>24*dpr) g.fillText(x.n==null?'—':NOTE_FR[x.n]+(x.ch&&CH_SUF[x.ch]!=null?CH_SUF[x.ch]:'')+(x.glide?' ↝':''),(x0+x1)/2,(by0+by1)/2);
     if(x.g&&(i===0||segs[i-1].g!==x.g)){ let j=i; while(j+1<segs.length&&segs[j+1].g===x.g) j++; g.fillStyle='#fff'; g.fillRect(X(x.s)+4*dpr,hh-3.5*dpr,X(segs[j].e)-X(x.s)-8*dpr,3*dpr); }
     if(i<segs.length-1){ const nw=Math.min(X(x.e)-X(x.s),X(segs[i+1].e)-X(segs[i+1].e>x.e?x.e:segs[i+1].s)), roomy=nw>=34*dpr;
       g.fillStyle='#FF8A00'; if(roomy){ g.fillRect(X(x.e)-2*dpr,0,4*dpr,hh); g.font=Math.round(RH*0.5)+'px sans-serif'; g.fillText('✂',X(x.e),RH*0.42); g.font=Math.round((by1-by0)*0.42)+"px 'Barlow Condensed','Arial Narrow',sans-serif"; }
@@ -1880,13 +1913,13 @@ function libWait(type,then){
   msg('Chargement du son « '+libName(type)+' »… (la première fois seulement)');
   loadLib(type).then(()=>{ msg('Son « '+libName(type)+' » prêt.'); then(); }).catch(()=>msg('Impossible de charger « '+libName(type)+' » : il faut internet la première fois que tu utilises ce son.'));
 }
-function auditionNote(t,m){
+function auditionNote(t,m,ch){
   if(m==null||!isFinite(m)) return;
   try{ ctx.resume(); }catch(e){}
   if(auditionSrc){ try{ auditionSrc.stop(); }catch(e){} auditionSrc=null; }
-  const o0=readBassOpts(t); if(!libReady(o0.type)){ libWait(o0.type,()=>auditionNote(t,m)); return; }
+  const o0=readBassOpts(t); if(!libReady(o0.type)){ libWait(o0.type,()=>auditionNote(t,m,ch)); return; }
   const o=o0, ring=(libOf(o.type)||{}).ring, dur=0.55, n=Math.round((dur+(ring?1.7:0.45))*SR), d=new Float32Array(n);
-  synthNote(d,0,dur,440*Math.pow(2,(m-69)/12),1,o.type);
+  ((CHORDS[ch]||CHORDS[''])[1]).forEach((iv,k)=>synthNote(d,Math.round(k*0.03*SR),dur,440*Math.pow(2,(m+iv-69)/12),1,o.type));
   let pk=0; for(let i=0;i<n;i++) pk=Math.max(pk,Math.abs(d[i])); if(pk>0){ const g=0.6/pk; for(let i=0;i<n;i++) d[i]*=g; }
   const b=ctx.createBuffer(1,n,SR); b.copyToChannel(d,0);
   const s=ctx.createBufferSource(), g=ctx.createGain(); s.buffer=b; g.gain.value=Math.max(0.2,t.vol||0.8);
@@ -1907,7 +1940,7 @@ function initBassTimeline(t){
     if(k<=1e-6||k>=nb-1e-6) return;
     const bi=segs.findIndex(x=>Math.abs(x.e-k)<1e-6);
     if(bi>=0&&bi<segs.length-1){ segs[bi].e=segs[bi+1].e; segs.splice(bi+1,1); t.bsel=bi; t.brange=null; $('.bst',t.el).textContent='Coupe enlevée ('+beatLbl(k)+').'; }
-    else { const i=segs.findIndex(x=>k>x.s+1e-6&&k<x.e-1e-6); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au '+beatLbl(k)+' : touche une note pour ce nouveau bloc.'+ensureFollow(t); }
+    else { const i=segs.findIndex(x=>k>x.s+1e-6&&k<x.e-1e-6); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g,ch:x.ch}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au '+beatLbl(k)+' : touche une note pour ce nouveau bloc.'+ensureFollow(t); }
     bassChanged(t);
   };
   c.addEventListener('pointerdown',ev=>{
@@ -1937,6 +1970,20 @@ function initBassTimeline(t){
     t.bzoom=z; t.bview=clamp(c0-tlSpan(t,nb)/2,0,Math.max(0,nb-tlSpan(t,nb))); drawBassTimeline(t);
     $('.bst',t.el).textContent=z>1?'Zoom ×'+z+' : fais glisser la barre sous la ligne pour te déplacer, ou utilise ◀ ▶.':'';
   });
+  { const cs=$('.bchord',t.el); if(cs) cs.onchange=()=>{
+      const d=ensureDraft(t), [ra,rb]=t.bmulti?bRange(t):[t.bsel||0,t.bsel||0], v=cs.value; let k=0;
+      for(let i=ra;i<=rb;i++){ if(d.segs[i].n==null) continue; if(v) d.segs[i].ch=v; else delete d.segs[i].ch; k++; }
+      if(!k){ msg('Choisis d\'abord une note pour ce bloc : l\'accord se construit à partir d\'elle.'); return; }
+      bassChanged(t); const r=segRoots(d.segs,t.kind)[t.bsel||0]; if(r!=null) auditionNote(t,r,v);
+      $('.bst',t.el).textContent=v?('Accord '+NOTE_FR[d.segs[t.bsel||0].n]+CH_SUF[v]+(k>1?' sur '+k+' blocs':'')+'. Règle « Jeu » pour le jouer plaqué, gratté ou en arpège.'):'Retour à la note seule.';
+    }; }
+  { const pb=$('.bprogb',t.el); if(pb) pb.onclick=()=>{
+      const key=$('.bprog',t.el).value; if(!PROGS[key]){ msg('Choisis d\'abord une suite d\'accords dans la liste.'); return; }
+      const d=ensureDraft(t), nb=nbOf(t), steps=PROGS[key][1], tonic=(d.segs.find(x=>x.n!=null)||{n:0}).n, L=nb/steps.length;
+      d.segs=steps.map(([deg,ch],i)=>{ const n=(tonic+deg)%12; let m=60+n; while(m>66) m-=12; return {s:Math.round(i*L*192)/192,e:Math.round((i+1)*L*192)/192,n,m,ch,glide:false}; });
+      d.segs[d.segs.length-1].e=nb; t.bsel=0; t.brange=null; bassChanged(t);
+      msg('Suite « '+PROGS[key][0]+' » en '+NOTE_FR[tonic]+' : '+d.segs.map(x=>NOTE_FR[x.n]+CH_SUF[x.ch]).join(' → ')+'. La tonalité vient de la note du 1er bloc ; « ▲▼ » et « Transposer » la changent.');
+    }; }
   $('.bscroll',t.el).oninput=e=>{ t.bview=+e.target.value; drawBassTimeline(t); };
   $('.bmulti',t.el).onchange=e=>{ t.bmulti=e.target.checked; if(!t.bmulti){ t.brange=null; } $('.bst',t.el).textContent=t.bmulti?'Touche le premier puis le dernier bloc du motif : tout ce qui est entre les deux est choisi.':''; drawBassTimeline(t); };
   $('.bgrp',t.el).onclick=()=>bassGroup(t,true);
@@ -1954,7 +2001,7 @@ function initBassTimeline(t){
       x.n=v; x.m=foldInto(ref!=null?nearOct(base,ref):base,pr[0],pr[1]);
       for(let i=ra;i<=rb;i++){ d.segs[i].n=v; d.segs[i].m=x.m; } }
     bassChanged(t); $('.bst',t.el).textContent='';
-    if(v>=0) auditionNote(t,segRoots(d.segs,t.kind)[t.bsel||0]); });
+    if(v>=0) auditionNote(t,segRoots(d.segs,t.kind)[t.bsel||0],t.kind==='synth'?d.segs[t.bsel||0].ch:''); });
   t.el.querySelectorAll('.btr').forEach(b=>b.onclick=()=>transposeBass(t,+b.dataset.d));
   // une octave plus grave / plus aiguë pour le bloc choisi seulement (les autres blocs ne bougent pas)
   t.el.querySelectorAll('.boct').forEach(b=>b.onclick=()=>{
@@ -1981,7 +2028,7 @@ function initBassTimeline(t){
     d.segs=out; t.bsel=ra; t.brange=[ra,ra+made-1]; const f=ensureFollow(t); bassChanged(t);
     msg('Découpé en '+made+' notes de '+$('.bgrid',t.el).selectedOptions[0].textContent+'. Touche chaque bloc puis une note de la palette pour écrire ta ligne.'+f);
   };
-  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i], g=gridOf(t); if(x.e-x.s<2*g-1e-6) return; const mid=Math.round((x.s+Math.max(g,Math.round((x.e-x.s)/2/g)*g))*192)/192; d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g}); x.e=mid; x.glide=false; t.bsel=i+1; t.brange=null; const f=ensureFollow(t); bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'+f; };
+  $('.bsplit',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0, x=d.segs[i], g=gridOf(t); if(x.e-x.s<2*g-1e-6) return; const mid=Math.round((x.s+Math.max(g,Math.round((x.e-x.s)/2/g)*g))*192)/192; d.segs.splice(i+1,0,{s:mid,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g,ch:x.ch}); x.e=mid; x.glide=false; t.bsel=i+1; t.brange=null; const f=ensureFollow(t); bassChanged(t); $('.bst',t.el).textContent='Bloc coupé : choisis la note du nouveau bloc, et fais glisser la limite orange pour régler sa durée.'+f; };
   $('.bdel',t.el).onclick=()=>{ const d=ensureDraft(t), i=t.bsel||0; if(d.segs.length<2) return; if(i>0){ d.segs[i-1].e=d.segs[i].e; d.segs.splice(i,1); t.bsel=i-1; } else { d.segs[1].s=0; d.segs.splice(0,1); t.bsel=0; } t.brange=null; bassChanged(t); };
 }
 function drawBassViz(t){
@@ -2140,6 +2187,7 @@ function setKindUI(t){
   const bt=$('.bgo',t.el); if(bt&&!t.buf) bt.textContent=syn?'✓ Créer la mélodie':'✓ Créer la basse';
   const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Son ou style':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
+  t.el.querySelectorAll('.synonly').forEach(e=>e.hidden=!syn);
   { const tf=$('.ttabs button[data-tab="tf"]',t.el); if(tf) tf.hidden=bass; if(bass&&t.tab==='tf') t.tab='bass'; }
   updVoiceUI(t);
   $('.ttabs button[data-tab="bass"]',t.el).hidden=!bass;
@@ -2390,6 +2438,11 @@ function buildTrackUI(t){
     <input type="range" class="bscroll" min="0" max="0" step="0.25" value="0" hidden aria-label="Se déplacer dans la ligne de temps" style="width:100%;margin-top:6px">
     <div class="row wrap"><button class="bprevb" aria-label="Bloc précédent" style="min-width:48px">◀</button><span class="bselinfo lbl"></span><button class="bnextb" aria-label="Bloc suivant" style="min-width:48px">▶</button><button class="boct" data-d="-12" data-help="boct">▼ octave</button><button class="boct" data-d="12">▲ octave</button></div>
     <div class="bpal">${NOTE_FR.map((n,i)=>`<button data-n="${i}" style="--h:${NOTE_HUE[i]}">${n}</button>`).join('')}<button data-n="-1" style="--h:0;filter:saturate(0)">∅ Silence</button></div>
+    <div class="synonly">
+      <div class="row wrap" style="margin-top:8px"><span class="lbl w2" data-help="chords">Accord</span><select class="bchord" style="width:auto" aria-label="Accord du bloc choisi">${Object.keys(CHORDS).map(k=>`<option value="${k}">${CHORDS[k][0]}</option>`).join('')}</select></div>
+      <div class="row wrap"><span class="lbl w2">Jeu</span><select class="bchplay bopt" style="width:auto;max-width:100%" aria-label="Façon de jouer les accords">${Object.keys(CHPLAY).map(k=>`<option value="${k}">${CHPLAY[k]}</option>`).join('')}</select><select class="barp bopt" style="width:auto;max-width:100%" aria-label="Vitesse de l'arpège"><option value="1">arpège en noires</option><option value="0.5" selected>arpège en croches</option><option value="0.25">arpège en doubles croches</option><option value="0.3333333333333333">arpège en triolets</option></select></div>
+      <div class="row wrap"><span class="lbl w2">Suite d'accords</span><select class="bprog" style="width:auto;max-width:100%" aria-label="Suite d'accords toute prête"><option value="">— choisir —</option>${Object.keys(PROGS).map(k=>`<option value="${k}">${PROGS[k][0]}</option>`).join('')}</select><button class="bprogb">Remplir la ligne</button></div>
+    </div>
     <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
     <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label><button class="bsplit">✂ Couper le bloc choisi en deux</button><button class="bdel">🗑 Retirer le bloc</button></div>
