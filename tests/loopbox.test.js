@@ -1619,6 +1619,18 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#addbass').click(); await sleep(20);
     ok(P.$$('.trk')[2].querySelector('.synonly').hidden,'pas d\'accords sur une piste de basse');
   });
+  await test('métronome : coupé par défaut, et le choix est gardé après un rafraîchissement',async()=>{
+    const idb=new FI.IDBFactory();
+    let P=await boot({idb}); await sleep(50);
+    ok(!P.$('#metro').classList.contains('on'),'coupé au premier démarrage');
+    P.$('#metro').click(); await sleep(500);
+    ok(P.$('#metro').classList.contains('on'),'activé au toucher');
+    P=await boot({idb}); await sleep(80);
+    ok(P.$('#metro').classList.contains('on'),'toujours activé après rafraîchissement');
+    P.$('#metro').click(); await sleep(500);
+    P=await boot({idb}); await sleep(80);
+    ok(!P.$('#metro').classList.contains('on'),'toujours coupé après rafraîchissement');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

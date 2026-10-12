@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=64">
+<link rel="stylesheet" href="style.css?v=65">
 </head>
 <body>
 <header>
@@ -48,7 +48,7 @@
 <details class="card how" id="how" open>
   <summary>Comment ça marche ?</summary>
   <ol>
-    <li><b>Règle le tempo</b> (la vitesse), puis appuie sur <b>● REC</b> sur la piste 1. Après 4 clics de décompte, joue ta boucle de base.</li>
+    <li><b>Règle le tempo</b> (la vitesse), puis appuie sur <b>● REC</b> sur la piste 1. Joue ta boucle de base (si tu as activé le <b>🔔 Métronome</b>, attends d'abord ses 4 clics de décompte).</li>
     <li>Appuie sur <b>■ STOP</b> : l'appli repère ton rythme et crée une boucle parfaitement calée.</li>
     <li>Appuie sur <b>+ Ajouter une piste</b> (en bas de la liste), puis <b>● REC</b> sur la nouvelle piste : tout se superpose en boucle.</li>
     <li>Les boutons <b>↶ ↷</b> en haut annulent ou rétablissent tes dernières actions.</li>
@@ -66,7 +66,7 @@
     </div>
   </div>
   <div class="row wrap">
-    <button id="metro" class="on" data-help="metro">🔔 Métronome</button>
+    <button id="metro" data-help="metro">🔔 Métronome</button>
     <button id="snap" class="on" data-help="snap">🎯 Auto-caler</button>
     <button id="mix" data-help="mix">Prise : remplace</button>
     <button id="montbtn" class="primary" aria-expanded="false" data-help="mont">🎬 Montage du morceau</button><button id="livebtn" hidden aria-expanded="false">🎛 Mode live</button>
@@ -176,6 +176,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=64"></script>
+<script src="app.js?v=65"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='64';
+const APPVER='65';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -17,7 +17,7 @@ const mod=(a,b)=>((a%b)+b)%b;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
 // ---------- état ----------
-let bpm=90, metroOn=true, fin=0, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
+let bpm=90, metroOn=false, fin=0, snap=true, mixMode=false, mvol=0.9, ingain=2, comp=0.1;
 let baseLen=0, baseBeats=4, rep=1, loopHist=null;
 const H={past:[],future:[],pend:null}, HMAX=200, HISTMB=120;
 let gridOff=0, liveQ='bar'; const scenes=[null,null,null,null];
@@ -3481,7 +3481,7 @@ $('#meterseg').onclick=e=>{ const b=e.target.closest('button'); if(!b) return; m
 document.querySelectorAll('.tstep').forEach(b=>b.onclick=()=>{ if(tempoTarget==null) tempoTarget=Math.round(curBpm()); tempoTarget=clamp(tempoTarget+(+b.dataset.d),40,240); updTempoRow(); });
 $('#tapply').onclick=()=>changeTempo(tempoTarget);
 $('#dnallb').onclick=()=>{ if(!tracks.some(t=>t.buf)){ msg('Aucune piste à nettoyer.'); return; } denoiseTracks(tracks,$('#dnall').value); };
-$('#metro').onclick=e=>{ metroOn=!metroOn; e.target.classList.toggle('on',metroOn); };
+$('#metro').onclick=e=>{ metroOn=!metroOn; $('#metro').classList.toggle('on',metroOn); scheduleSave(true); msg(metroOn?'Métronome activé (il le restera, même après un rafraîchissement).':'Métronome coupé (il le restera, même après un rafraîchissement).'); };
 $('#mvol').onchange=commitSettings;
 $('#mvol').oninput=e=>{ touchSettings(); mvol=+e.target.value; chain.vol.gain.value=mvol; scheduleSave(true); };
 function showFin(){ $('#finseg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',+b.dataset.l===fin)); }
@@ -3732,7 +3732,7 @@ async function saveProj(){
     const sm=summary(), i=projIndex.list.findIndex(p=>p.id===projId);
     if(i>=0) projIndex.list[i]=sm; else projIndex.list.push(sm);
     projIndex.cur=projId;
-    const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn,eng:devEng,mv:metroVol,ms:metroSub,setup,lats,latAt,micId}]];
+    const pairs=[['p:'+projId+':main',main],['index',projIndex],['device',{comp,ingain,normOn,mo:metroOn,eng:devEng,mv:metroVol,ms:metroSub,setup,lats,latAt,micId}]];
     if(audio) pairs.push(['p:'+projId+':audio',audio]);
     await idbPut(db,pairs);
     setSaveState('ok'); updProjList(); cloudAfterSave();
@@ -3804,7 +3804,7 @@ async function loadProj(){
   try{
     const db=await idb();
     const dev=await idbGet(db,'device');
-    if(dev){ devLoaded=true; if(dev.comp!=null) comp=dev.comp; if(dev.ingain) ingain=dev.ingain; normOn=dev.normOn!==false; devEng=dev.eng||''; if(dev.mv!=null) metroVol=dev.mv; if(dev.ms) metroSub=dev.ms; if(dev.lats){ Object.assign(lats,dev.lats); Object.assign(latAt,dev.latAt||{}); } else if(dev.comp!=null){ lats.speaker=dev.comp; } if(SETUPS[dev.setup]) setup=dev.setup; micId=dev.micId||''; }
+    if(dev){ devLoaded=true; if(dev.comp!=null) comp=dev.comp; if(dev.ingain) ingain=dev.ingain; normOn=dev.normOn!==false; devEng=dev.eng||''; if(dev.mv!=null) metroVol=dev.mv; if(dev.ms) metroSub=dev.ms; metroOn=dev.mo===true; { const mb=$('#metro'); if(mb) mb.classList.toggle('on',metroOn); } if(dev.lats){ Object.assign(lats,dev.lats); Object.assign(latAt,dev.latAt||{}); } else if(dev.comp!=null){ lats.speaker=dev.comp; } if(SETUPS[dev.setup]) setup=dev.setup; micId=dev.micId||''; }
     let idx=await idbGet(db,'index');
     if(!idx){
       // première ouverture avec les projets : on reprend l'ancien projet unique s'il existe
