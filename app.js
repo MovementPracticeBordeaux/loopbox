@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='63';
+const APPVER='64';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -329,9 +329,10 @@ function makeEq(c,v){
 function dbText(v){ return (v>0?'+':'')+v+' dB'; }
 // ---------- effets par piste ----------
 const SRC_LIST=[
- {id:'beatbox',name:'Beatbox / bruits de bouche',hp:40,mul:0.8,gate:0},
+ // coupe-bas très bas : la grosse caisse de beatbox a sa note entre 25 et 45 Hz (mesuré sur de vraies prises), il ne faut pas y toucher
+ {id:'beatbox',name:'Beatbox / bruits de bouche',hp:18,mul:0.8,gate:0},
  {id:'voice',name:'Voix (chant, parole)',hp:90,mul:1,gate:0.012},
- {id:'perc',name:'Percussions (table, objets)',hp:35,mul:1.25,gate:0},
+ {id:'perc',name:'Percussions (table, objets)',hp:20,mul:1.25,gate:0},
  {id:'env',name:'Environnement proche (clés, papier…)',hp:120,mul:2,gate:0}
 ];
 const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (son sale)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
@@ -507,7 +508,7 @@ async function ensureMic(){
   let engNotice=false;
   if(!inGainNode){
     inGainNode=ctx.createGain(); inGainNode.gain.value=ingain;
-    hpNode=ctx.createBiquadFilter(); hpNode.type='highpass'; hpNode.Q.value=0.707;
+    hpNode=ctx.createBiquadFilter(); hpNode.type='highpass'; hpNode.Q.value=-3.01; // dans Web Audio, Q du passe-haut est en dB : −3 dB = réponse plate (Butterworth)
     inGainNode.connect(hpNode);
     inAn=ctx.createAnalyser(); inAn.fftSize=1024; hpNode.connect(inAn);
     applyProfile(curProf||profOf('beatbox'));
