@@ -1631,6 +1631,12 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P=await boot({idb}); await sleep(80);
     ok(!P.$('#metro').classList.contains('on'),'toujours coupé après rafraîchissement');
   });
+  await test('sortie : limiteur de sécurité en place dès le démarrage, enregistrement toujours possible ensuite',async()=>{
+    const P=await boot(); await sleep(50);
+    ok((P.wnames||[]).includes('lb-lim'),'limiteur créé : '+(P.wnames||[]).join(','));
+    const r=await recordBase(P); ok(r&&r.buf&&P.hits(r.buf).length===16,'la prise fonctionne toujours (16 coups)');
+    ok((P.wnames||[]).filter(n=>n==='lb-cap').length>=1,'capture créée après le limiteur');
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

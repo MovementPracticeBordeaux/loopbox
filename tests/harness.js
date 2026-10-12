@@ -61,7 +61,7 @@ async function boot(opt={}){
     AC.prototype.createBufferSource=function(){ return {buffer:null,loop:false,connect(){},disconnect(){},stop(){},start(when,off){ P.starts.push({when,off:off||0,buf:this.buffer}); }}; };
     AC.prototype.createScriptProcessor=function(){ P.proc={connect(){},onaudioprocess:null}; return P.proc; };
     AC.prototype.decodeAudioData=function(ab){ if(P.nextDecode) return Promise.resolve(P.nextDecode); const d=ffDecode(ab); return d?Promise.resolve({length:d.length,sampleRate:SR,numberOfChannels:1,duration:d.length/SR,getChannelData:()=>d}):Promise.reject(new Error('illisible')); };
-    if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(){ this.port={onmessage:null}; P.wnode=this; } connect(){} disconnect(){} }; }
+    if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(c,name){ this.port={onmessage:null}; P.wnames=(P.wnames||[]).concat(name); if(name!=='lb-lim') P.wnode=this; } connect(){} disconnect(){} }; }
     w.AudioContext=AC;
     w.OfflineAudioContext=class{ constructor(c,l,sr){ this.length=l; this.sampleRate=sr; this.destination={}; }
       createBuffer(c,l,sr){ return {length:l,sampleRate:sr}; }

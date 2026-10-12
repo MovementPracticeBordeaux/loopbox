@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='65';
+const APPVER='67';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -61,6 +61,7 @@ const chain=makeChain(ctx);
 chain.vol.gain.value=mvol;
 const outAn=ctx.createAnalyser(); outAn.fftSize=1024;
 chain.out.connect(outAn); chain.out.connect(ctx.destination);
+setTimeout(()=>{ try{ setupLimiter(); }catch(e){} },0);
 const metroGain=ctx.createGain(); metroGain.gain.value=0.36; metroGain.connect(ctx.destination);
 
 // ---------- pistes ----------
@@ -330,9 +331,9 @@ function dbText(v){ return (v>0?'+':'')+v+' dB'; }
 // ---------- effets par piste ----------
 const SRC_LIST=[
  // coupe-bas très bas : la grosse caisse de beatbox a sa note entre 25 et 45 Hz (mesuré sur de vraies prises), il ne faut pas y toucher
- {id:'beatbox',name:'Beatbox / bruits de bouche',hp:18,mul:0.8,gate:0},
+ {id:'beatbox',name:'Beatbox / bruits de bouche',hp:10,mul:0.8,gate:0},
  {id:'voice',name:'Voix (chant, parole)',hp:90,mul:1,gate:0.012},
- {id:'perc',name:'Percussions (table, objets)',hp:20,mul:1.25,gate:0},
+ {id:'perc',name:'Percussions (table, objets)',hp:12,mul:1.25,gate:0},
  {id:'env',name:'Environnement proche (clés, papier…)',hp:120,mul:2,gate:0}
 ];
 const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (son sale)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
@@ -491,7 +492,9 @@ function stopTransport(){
 
 // ---------- micro ----------
 async function openStream(){
-  const base={echoCancellation:false,noiseSuppression:false,autoGainControl:false};
+  // on demande un signal brut : aucun traitement « téléphone » (écho, bruit, volume automatique, isolation de la voix)
+  const base={echoCancellation:false,noiseSuppression:false,autoGainControl:false,voiceIsolation:false,sampleRate:{ideal:48000},latency:{ideal:0.01},
+    advanced:[{googEchoCancellation:false,googAutoGainControl:false,googAutoGainControl2:false,googNoiseSuppression:false,googHighpassFilter:false,googTypingNoiseDetection:false}]};
   if(micId){
     try{ return await navigator.mediaDevices.getUserMedia({audio:{...base,deviceId:{exact:micId}}}); }
     catch(e){ micId=''; msg("Le micro choisi n'est plus disponible : retour au micro par défaut."); }
@@ -540,12 +543,67 @@ async function listMics(){
 }
 // nom du micro réellement utilisé (le navigateur le donne une fois le micro autorisé)
 let rawMics=null;
+function micSettings(){ try{ const tr=micStream&&micStream.getAudioTracks?micStream.getAudioTracks()[0]:null; return tr&&tr.getSettings?tr.getSettings():null; }catch(e){ return null; } }
+function micProcessingWarn(s){ if(!s) return ''; const on=[]; if(s.echoCancellation===true) on.push('suppression d\'écho'); if(s.noiseSuppression===true) on.push('réduction de bruit'); if(s.autoGainControl===true) on.push('volume automatique'); if(s.voiceIsolation===true) on.push('isolation de la voix'); return on.length?'⚠ Le navigateur applique encore : '+on.join(', ')+' (il ignore la demande de l\'appli). Ces traitements « téléphone » abîment le beatbox.':''; }
 function showMicUsed(n){
   const e=$('#micused'); if(!e) return;
   let lab='';
   try{ const tr=micStream&&micStream.getAudioTracks?micStream.getAudioTracks()[0]:null; lab=tr&&tr.label?tr.label:''; }catch(x){}
   if(!micStream){ e.textContent='Touche « Chercher les micros » (ou fais une prise) pour autoriser le micro et voir la liste.'; return; }
-  e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.')+(rawMics?' — Ce que le navigateur annonce ('+rawMics.length+') : '+(rawMics.join(' · ')||'rien')+'.':'');
+  const pw=micProcessingWarn(micSettings());
+  e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.')+(rawMics?' — Ce que le navigateur annonce ('+rawMics.length+') : '+(rawMics.join(' · ')||'rien')+'.':'')+(pw?' '+pw:'');
+}
+// ----- test de fidélité : 4 s enregistrées en même temps « brut » (sortie du micro) et « après l'appli » -----
+let fidRes=null;
+function specInfo(x){
+  const N=4096; if(x.length<N*2) return null; const S=new Float64Array(N/2+1);
+  for(let k=0;k+N<=x.length;k+=N/2){ const re=new Float64Array(N), im=new Float64Array(N); for(let i=0;i<N;i++) re[i]=x[k+i]*(0.5-0.5*Math.cos(2*Math.PI*i/(N-1)));
+    // FFT radix-2
+    for(let i=1,j=0;i<N;i++){ let bit=N>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit; if(i<j){ const t=re[i]; re[i]=re[j]; re[j]=t; } }
+    for(let len=2;len<=N;len<<=1){ const ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang); for(let i=0;i<N;i+=len){ let cr=1,ci=0; for(let j=0;j<len/2;j++){ const ur=re[i+j], ui=im[i+j], vr=re[i+j+len/2]*cr-im[i+j+len/2]*ci, vi=re[i+j+len/2]*ci+im[i+j+len/2]*cr; re[i+j]=ur+vr; im[i+j]=ui+vi; re[i+j+len/2]=ur-vr; im[i+j+len/2]=ui-vi; const nr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=nr; } } }
+    for(let i=0;i<=N/2;i++) S[i]+=re[i]*re[i]+im[i]*im[i]; }
+  const bin=SR/N, band=(a,b)=>{ let s=0; for(let i=Math.ceil(a/bin);i<=Math.min(N/2,Math.floor(b/bin));i++) s+=S[i]; return s; }, tot=band(150,5000)||1e-12; // repère : les médiums
+  let mx=0; for(let i=1;i<=N/2;i++) mx=Math.max(mx,S[i]); let roll=0; for(let i=N/2;i>0;i--){ if(S[i]>mx*1e-6){ roll=i*bin; break; } }
+  return {sub:10*Math.log10(band(20,60)/tot), low:10*Math.log10(band(60,150)/tot), high:10*Math.log10(band(5000,SR/2)/tot), roll};
+}
+async function fidTest(){
+  if(recObj){ msg('Termine d\'abord l\'enregistrement en cours.'); return; }
+  if(!(await ensureMic())) return;
+  if(!(await ensureWorklet())){ msg('Ce navigateur ne permet pas ce test (moteur AudioWorklet absent).'); return; }
+  const btn=$('#fidtest'); btn.disabled=true;
+  const sink=ctx.createGain(); sink.gain.value=0; sink.connect(ctx.destination);
+  const mk=src=>{ const node=new AudioWorkletNode(ctx,'lb-cap',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,channelCountMode:'explicit'}), parts=[]; node.port.onmessage=e=>parts.push(e.data.d); src.connect(node); node.connect(sink); return {node,parts,src}; };
+  const raw=mk(micSrc), proc=mk(hpNode);
+  for(let k=4;k>0;k--){ msg('🎙 Test de fidélité : fais ton beatbox maintenant… '+k); await new Promise(r=>setTimeout(r,1000)); }
+  [raw,proc].forEach(o=>{ try{ o.src.disconnect(o.node); o.node.disconnect(); }catch(e){} }); await new Promise(r=>setTimeout(r,120)); try{ sink.disconnect(); }catch(e){}
+  const join=p=>{ let n=0; p.forEach(d=>n+=d.length); const o=new Float32Array(n); let k=0; p.forEach(d=>{ o.set(d,k); k+=d.length; }); return o; };
+  const R=join(raw.parts), Q=join(proc.parts); btn.disabled=false;
+  if(R.length<SR){ msg('Le test n\'a pas reçu de son du micro.'); return; }
+  const pk=x=>{ let m=0; for(let i=0;i<x.length;i++){ const v=x[i]<0?-x[i]:x[i]; if(v>m) m=v; } return m; }, nclip=x=>{ let c=0; for(let i=0;i<x.length;i++) if(Math.abs(x[i])>=0.999) c++; return c; };
+  const s=micSettings()||{}, a=specInfo(R), b=specInfo(Q), pR=pk(R), pQ=pk(Q), db=v=>(20*Math.log10(v||1e-9)).toFixed(1).replace('.',',');
+  const L=[];
+  L.push('Micro : '+(s.deviceId&&micStream.getAudioTracks()[0].label||'micro par défaut')+' · '+(s.sampleRate||'?')+' Hz · '+(s.channelCount||'?')+' canal(aux) · appli '+SR+' Hz');
+  L.push('Traitements du navigateur : écho '+(s.echoCancellation===true?'⚠ OUI':'non')+', bruit '+(s.noiseSuppression===true?'⚠ OUI':'non')+', volume auto '+(s.autoGainControl===true?'⚠ OUI':'non')+(s.voiceIsolation!=null?', isolation voix '+(s.voiceIsolation?'⚠ OUI':'non'):''));
+  L.push('Brut (sortie du micro) : crête '+db(pR)+' dB'+(nclip(R)>8?' ⚠ SATURÉ ('+nclip(R)+' échantillons au maximum : le micro ou la tablette sature AVANT l\'appli, baisse le gain du micro ou éloigne-toi un peu)':' (pas de saturation)'));
+  if(a) L.push('Brut (niveaux par rapport aux médiums) : graves 20-60 Hz '+a.sub.toFixed(0)+' dB, 60-150 Hz '+a.low.toFixed(0)+' dB, aigus >5 kHz '+a.high.toFixed(0)+' dB, son jusqu\'à '+String(Math.round(a.roll/100)/10).replace('.',',')+' kHz'+(a.roll<9000?' ⚠ bande étroite (traitement « téléphone » probable)':''));
+  if(a&&b) L.push('Après l\'appli : crête '+db(pQ)+' dB (gain '+(pR>0?(pQ/pR).toFixed(2).replace('.',','):'?')+'×), graves 20-60 Hz '+b.sub.toFixed(0)+' dB ('+(b.sub-a.sub>=0?'+':'')+(b.sub-a.sub).toFixed(1).replace('.',',')+'), aigus '+(b.high-a.high>=0?'+':'')+(b.high-a.high).toFixed(1).replace('.',',')+' dB : '+(Math.abs(b.sub-a.sub)<1.5&&Math.abs(b.high-a.high)<1.5?'l\'appli ne change pas le son ✓':'⚠ l\'appli modifie le son'));
+  L.push('Sortie : '+(safeLim?'limiteur de sécurité actif ('+safeLim+')':'pas de limiteur')+(ctx.outputLatency?' · latence de sortie '+Math.round(ctx.outputLatency*1000)+' ms':''));
+  const w=micProcessingWarn(s); if(w) L.push(w);
+  fidRes={R,Q};
+  const box=$('#fidout'); box.hidden=false; box.innerHTML=''; L.forEach(t=>{ const p=document.createElement('div'); p.textContent=t; box.appendChild(p); });
+  const row=document.createElement('div'); row.className='row wrap';
+  [['▶ Brut','R'],['▶ Après l\'appli','Q']].forEach(([l,k])=>{ const bt=document.createElement('button'); bt.textContent=l; bt.onclick=()=>fidPlay(k); row.appendChild(bt); });
+  const dl=document.createElement('button'); dl.textContent='⬇ Les deux en fichiers'; dl.onclick=()=>{ const mkb=x=>{ const b=ctx.createBuffer(1,x.length,SR); b.copyToChannel(x,0); return b; }; downloadBlob(new Blob([makeZipMulti([{name:'1-brut-micro.wav',data:wav16(mkb(fidRes.R))},{name:'2-apres-appli.wav',data:wav16(mkb(fidRes.Q))}])],{type:'application/zip'}),'test-fidelite-micro.zip'); };
+  row.appendChild(dl); box.appendChild(row);
+  msg('Test terminé : compare « Brut » et « Après l\'appli » au casque. Les deux sont joués au même volume, sans passer par les pistes.');
+}
+let fidSrc=null;
+function fidPlay(k){
+  if(!fidRes) return; try{ ctx.resume(); }catch(e){}
+  if(fidSrc){ try{ fidSrc.stop(); }catch(e){} fidSrc=null; }
+  const x=fidRes[k]; let pk=0; for(let i=0;i<x.length;i++) pk=Math.max(pk,Math.abs(x[i]));
+  const y=new Float32Array(x.length), g=pk>0?0.7/pk:1; for(let i=0;i<x.length;i++) y[i]=x[i]*g;
+  const b=ctx.createBuffer(1,y.length,SR); b.copyToChannel(y,0); const s=ctx.createBufferSource(); s.buffer=b; s.connect(ctx.destination); s.start(); fidSrc=s;
 }
 async function scanMics(){
   if(recObj) return;
@@ -564,7 +622,30 @@ if(navigator.mediaDevices){
 }
 // Le processeur reçoit le son du micro par blocs de 128 échantillons, chacun avec son numéro exact
 // dans la ligne de temps du moteur audio (currentFrame) : plus besoin d'estimer le temps.
-const WORKLET_SRC=`class LbCap extends AudioWorkletProcessor{
+const WORKLET_SRC=`// limiteur de sécurité en sortie : ne touche à rien sous -0,3 dB, rabote les crêtes sans les écrêter (anticipation de 3 ms)
+class LbLim extends AudioWorkletProcessor{
+  constructor(){ super(); const sr=sampleRate; this.L=Math.max(16,Math.round(0.003*sr)); this.N=this.L+1; this.d0=new Float32Array(this.N); this.d1=new Float32Array(this.N); this.w=0;
+    this.qi=new Int32Array(this.N+2); this.qv=new Float32Array(this.N+2); this.qh=0; this.qt=0; this.k=0; this.g=1; this.ceil=0.966; this.att=1-Math.exp(-1/(0.0008*sr)); this.rel=1-Math.exp(-1/(0.12*sr)); this.minG=1; this.rep=0; this.rk=Math.round(0.25*sr); }
+  process(inputs,outputs){
+    const i0=inputs[0]||[], o=outputs[0], a=i0[0], b=i0[1]||a, oa=o[0], ob=o[1]||o[0], n=oa.length, N=this.N, L=this.L, cap=N+2;
+    for(let i=0;i<n;i++){
+      const x0=a?a[i]:0, x1=b?b[i]:0, v=Math.max(x0<0?-x0:x0,x1<0?-x1:x1), k=this.k++;
+      while(this.qt!==this.qh&&this.qv[(this.qt-1+cap)%cap]<=v) this.qt=(this.qt-1+cap)%cap;
+      this.qi[this.qt]=k; this.qv[this.qt]=v; this.qt=(this.qt+1)%cap;
+      while(this.qi[this.qh]<=k-N) this.qh=(this.qh+1)%cap;
+      const pk=this.qv[this.qh], need=pk>this.ceil?this.ceil/pk:1;
+      this.g+=(need-this.g)*(need<this.g?this.att:this.rel);
+      const w=this.w, y0=this.d0[w], y1=this.d1[w]; this.d0[w]=x0; this.d1[w]=x1; this.w=(w+1)%N;
+      let u0=y0*this.g, u1=y1*this.g; if(u0>0.99) u0=0.99; else if(u0<-0.99) u0=-0.99; if(u1>0.99) u1=0.99; else if(u1<-0.99) u1=-0.99;
+      oa[i]=u0; if(ob!==oa) ob[i]=u1;
+      if(this.g<this.minG) this.minG=this.g;
+    }
+    this.rep+=n; if(this.rep>=this.rk){ this.rep=0; if(this.minG<0.999) this.port.postMessage({red:-20*Math.log10(this.minG)}); this.minG=1; }
+    return true;
+  }
+}
+registerProcessor('lb-lim',LbLim);
+class LbCap extends AudioWorkletProcessor{
   constructor(){ super(); this.buf=new Float32Array(2048); this.n=0; this.start=0; }
   flush(){ if(!this.n) return; const d=this.n===this.buf.length?this.buf:this.buf.slice(0,this.n); this.port.postMessage({s:this.start,d},[d.buffer]); this.buf=new Float32Array(2048); this.n=0; }
   process(inputs){
@@ -578,11 +659,45 @@ const WORKLET_SRC=`class LbCap extends AudioWorkletProcessor{
   }
 }
 registerProcessor('lb-cap',LbCap);`;
+async function ensureWorklet(){
+  if(workletReady) return true;
+  if(!(ctx.audioWorklet&&typeof AudioWorkletNode!=='undefined')) return false;
+  try{ const url=URL.createObjectURL(new Blob([WORKLET_SRC],{type:'application/javascript'})); await ctx.audioWorklet.addModule(url); workletReady=true; return true; }catch(e){ return false; }
+}
+// même limiteur, pour les exports (calculé après le rendu)
+function limitBuffer(r){
+  const sr=r.sampleRate, L=Math.max(16,Math.round(0.003*sr)), n=r.length, ch=[]; for(let c=0;c<r.numberOfChannels;c++) ch.push(r.getChannelData(c));
+  const pk=new Float32Array(n); for(let i=0;i<n;i++){ let v=0; for(const d of ch){ const x=d[i]<0?-d[i]:d[i]; if(x>v) v=x; } pk[i]=v; }
+  let any=false; for(let i=0;i<n;i++) if(pk[i]>0.966){ any=true; break; } if(!any) return 0;
+  // maximum glissant sur les 3 ms à venir
+  const ahead=new Float32Array(n), q=new Int32Array(n+1); let h=0,t=0;
+  for(let i=n-1;i>=0;i--){ while(t>h&&pk[q[t-1]]<=pk[i]) t--; q[t++]=i; while(q[h]>i+L) h++; ahead[i]=pk[q[h]]; }
+  const att=1-Math.exp(-1/(0.0008*sr)), rel=1-Math.exp(-1/(0.12*sr)); let g=1, mn=1;
+  const gs=new Float32Array(n); for(let i=0;i<n;i++){ const need=ahead[i]>0.966?0.966/ahead[i]:1; g+=(need-g)*(need<g?att:rel); gs[i]=g; if(g<mn) mn=g; }
+  for(const d of ch) for(let i=0;i<n;i++){ let u=d[i]*gs[i]; if(u>0.99) u=0.99; else if(u<-0.99) u=-0.99; d[i]=u; }
+  return -20*Math.log10(mn);
+}
+let safeLim='', limT=null;
+function limReport(d){ const e=$('#limst'); if(!e||!d||!(d.red>0.5)) return; e.hidden=false; e.textContent='Limiteur de sécurité : crêtes réduites de '+d.red.toFixed(1).replace('.',',')+' dB pour éviter la saturation. Si ça arrive souvent, baisse un peu le volume général ou celui des pistes.'; clearTimeout(limT); limT=setTimeout(()=>{ e.hidden=true; },4000); }
+async function setupLimiter(){
+  if(safeLim) return;
+  if(await ensureWorklet()){
+    try{ const lim=new AudioWorkletNode(ctx,'lb-lim',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:'explicit'});
+      lim.port.onmessage=e=>limReport(e.data);
+      try{ chain.out.disconnect(ctx.destination); }catch(e){}
+      chain.out.connect(lim); lim.connect(ctx.destination); safeLim='worklet'; return; }catch(e){}
+  }
+  // repli (navigateur sans AudioWorklet) : compresseur rapide + arrondi doux des crêtes
+  try{ const c=ctx.createDynamicsCompressor(); c.threshold.value=-1; c.knee.value=0; c.ratio.value=20; c.attack.value=0.001; c.release.value=0.1;
+    const g=ctx.createGain(); g.gain.value=0.937; const ws=ctx.createWaveShaper(); const N=2049, cv=new Float32Array(N); for(let i=0;i<N;i++){ const x=i/(N-1)*2-1, ax=Math.abs(x); cv[i]=ax<0.9?x:Math.sign(x)*(0.9+0.09*Math.tanh((ax-0.9)/0.09)); } ws.curve=cv; ws.oversample='4x';
+    try{ chain.out.disconnect(ctx.destination); }catch(e){}
+    chain.out.connect(c); c.connect(g); g.connect(ws); ws.connect(ctx.destination); safeLim='compresseur'; }catch(e){}
+}
 async function setupCapture(srcNode){
   const sink=ctx.createGain(); sink.gain.value=0; sink.connect(ctx.destination);
   if(ctx.audioWorklet&&typeof AudioWorkletNode!=='undefined'){
     try{
-      if(!workletReady){ const url=URL.createObjectURL(new Blob([WORKLET_SRC],{type:'application/javascript'})); await ctx.audioWorklet.addModule(url); workletReady=true; }
+      if(!(await ensureWorklet())) throw new Error('worklet');
       const node=new AudioWorkletNode(ctx,'lb-cap',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,channelCountMode:'explicit'});
       node.port.onmessage=e=>onCapBlock(e.data.s,e.data.d);
       srcNode.connect(node); node.connect(sink);
@@ -1196,6 +1311,7 @@ const HELP={
   sonlib:"<b>Son</b> : en haut, les <b>styles prêts</b> (un son + ses effets). En dessous, la <b>bibliothèque</b> rangée par familles : clochettes (xylophone, marimba, kalimba, boîte à musique, clochette façon triangle…), cordes pincées (harpe, pizzicato, guitares, koto…), claviers (Rhodes, piano FM des ballades R&B, clavinet…), vents (flûtes, sax, ocarina…), voix et chœurs, orchestre, synthés 80-90 (stab d'orchestre new jack swing, cuivres synthé, lead G-funk…), nappes, sons de jeux vidéo 8-bit, bruitages et ASMR (pluie, vagues, souffle, goutte d'eau, cloche 808…). Choisir un son le fait entendre tout de suite sur la note du bloc choisi. Les sons de la bibliothèque gardent les effets de la piste (ajoute du lo-fi ou de la réverb dans ✨ Effets). La première fois, chaque instrument se télécharge (environ 0,5 Mo, il faut internet), puis il reste disponible hors connexion. Les instruments réels viennent de la banque FluidR3_GM de Frank Wen (licence Creative Commons BY 3.0) ; les sons de jeux vidéo et d'ASMR sont fabriqués par l'appli.",
   bgrid:"<b>Grille</b> : règle la finesse de la ligne de temps. En <b>noire</b>, on coupe sur les temps ; en <b>croche</b> sur chaque demi-temps ; en <b>double croche</b> sur chaque quart de temps ; en <b>triolet</b> sur chaque tiers. Des petites graduations apparaissent sur la règle : touche-les pour couper, et les limites orange s'accrochent à la grille quand tu les fais glisser. <b>🔍+ / 🔍−</b> zooment la ligne de temps (×2, ×4, ×8) pour viser les petits blocs ; la barre qui apparaît dessous sert à se déplacer, et ◀ ▶ suivent le bloc choisi. <b>✂ Découper en notes de la grille</b> coupe le bloc choisi (ou tous les blocs choisis) en notes de la taille de la grille : pratique pour écrire une basse en croches ou en doubles croches, puis donner une note à chaque bloc. Quand des blocs font moins d'un temps, le rythme passe sur « Suivre les notes » pour que chacun soit joué.",
   chords:"<b>Accords</b> : choisis un bloc (et sa note, qui sera la base de l'accord), puis un <b>accord</b> : majeur, mineur, 7, maj7 et m7 (très lo-fi et R&B), m9 et maj9 (néo-soul), add9, sus2, sus4, 6, diminué, augmenté, quinte. Tu l'entends tout de suite. Avec « choisir plusieurs blocs » coché, l'accord s'applique à tous les blocs choisis. <b>Jeu</b> : plaqué (toutes les notes ensemble), gratté (léger décalage, comme une guitare ou une harpe) ou en arpège (qui monte, qui descend, aller-retour, sur 2 octaves), à la vitesse choisie (noires, croches, doubles croches, triolets). <b>Suite d'accords</b> remplit la ligne de temps avec une progression toute prête (lo-fi, chill, néo-soul, pop, trap, jazz…) dans la tonalité de la note du 1er bloc. Superbe avec les sons de la bibliothèque : harpe en arpège, Rhodes ou piano FM plaqués, boîte à musique en arpège aller-retour…",
+  fid:"<b>Test de fidélité</b> : pendant 4 secondes, l'appli enregistre en même temps ton micro <b>brut</b> (exactement ce que le navigateur lui donne) et le son <b>après l'appli</b> (gain et filtre d'entrée). Elle affiche les traitements que le navigateur applique vraiment (écho, réduction de bruit, volume automatique), la saturation éventuelle, les graves et les aigus, puis te laisse écouter les deux au même volume. Si le <b>brut</b> est déjà abîmé, le problème vient du micro, de la tablette ou du navigateur ; s'il est bon mais que « après l'appli » ne l'est pas, c'est l'appli. « Les deux en fichiers » te permet de me les envoyer.",
   denoise:"<b>Nettoyer le bruit</b> : retire le souffle du micro. <b>Léger</b> coupe le bruit dans les silences entre les sons, sans toucher aux sons eux-mêmes : à essayer en premier. <b>Fort</b> retire aussi le souffle qui reste sous les sons, en analysant les fréquences ; il peut rendre le son un peu « métallique » sur une voix. L'appli repère le bruit dans les passages calmes de la piste : il en faut un peu. ↶ annule. Astuce : un gain micro trop élevé et un micro loin de la bouche augmentent le souffle.",
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (✂) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
@@ -3270,7 +3386,7 @@ async function renderSong(opt){
     cl.forEach(c=>schedClip(off,t,c,0,0,bd,song.end,q.inp,[]));
   });
   song.fx.forEach(fx=>schedFx(off,fx,0,0,bd,song.end,ch.inp,[]));
-  const r=await off.startRendering();
+  const r=await off.startRendering(); limitBuffer(r);
   if(opt.fadeEnd){ const fl=Math.min(r.length,Math.round(Math.min(4,song.end*bd)*SR)); for(let c=0;c<r.numberOfChannels;c++){ const d=r.getChannelData(c); for(let i=0;i<fl;i++) d[r.length-fl+i]*=1-i/fl; } }
   return r;
 }
@@ -3505,6 +3621,7 @@ function selectSetup(id){
   msg('Configuration « '+SETUPS[id]+' » : latence '+Math.round(comp*1000)+' ms'+(lats[id]==null?' (estimation, pense à calibrer).':'.'));
 }
 $('#setupseg').onclick=e=>{ const b=e.target.closest('button'); if(b) selectSetup(b.dataset.s); };
+$('#fidtest').onclick=()=>fidTest();
 $('#micscan').onclick=scanMics;
 $('#micsel').onchange=e=>{ micId=e.target.value; scheduleSave(true); reopenMic(); };
 $('#comp').oninput=e=>{ comp=(+e.target.value)/1000; lats[setup]=comp; $('#compv').textContent=e.target.value+'ms'; showSetupUI(); scheduleSave(true); };
@@ -3659,7 +3776,7 @@ async function renderMix(opt){
     prev.connect(g);
     s.start(0);
   });
-  const r=await off.startRendering();
+  const r=await off.startRendering(); limitBuffer(r);
   if(opt.fadeEnd){
     const n=r.length, fl=Math.min(n,Math.round(Math.min(loopSec(),4)*SR));
     for(let c=0;c<r.numberOfChannels;c++){ const d=r.getChannelData(c); for(let i=0;i<fl;i++) d[n-fl+i]*=1-i/fl; }
