@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='67';
+const APPVER='68';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -553,6 +553,25 @@ function showMicUsed(n){
   const pw=micProcessingWarn(micSettings());
   e.textContent='Micro utilisé : '+(lab||'celui choisi par la tablette (le navigateur ne donne pas son nom)')+(n===0?'. Le navigateur ne fournit pas la liste des micros : sur Android, un micro USB branché est en général utilisé automatiquement comme « Micro par défaut ».':'.')+(rawMics?' — Ce que le navigateur annonce ('+rawMics.length+') : '+(rawMics.join(' · ')||'rien')+'.':'')+(pw?' '+pw:'');
 }
+// analyse du signal BRUT du micro : écrêtage avant l'appli (crêtes tassées contre un plafond, même s'il est sous 1) et souffle d'air (infrason)
+function rawCheck(x){
+  const n=x.length; if(n<SR*0.3) return null;
+  let pk=0; for(let i=0;i<n;i++){ const v=x[i]<0?-x[i]:x[i]; if(v>pk) pk=v; }
+  if(pk<0.15) return {pk,clip:0,runs:0,infra:0,aud:pk};
+  let near=0, runs=0, run=0; const th=pk*0.985;
+  for(let i=0;i<n;i++){ const v=x[i]<0?-x[i]:x[i]; if(v>=th){ near++; run++; } else { if(run>=3) runs++; run=0; } }
+  // infrason : passe-bas 12 Hz (2 pôles simples), et le reste = ce qu'on entend
+  const a=1-Math.exp(-2*Math.PI*12/SR); let y1=0,y2=0, ipk=0, apk=0;
+  for(let i=0;i<n;i++){ y1+=a*(x[i]-y1); y2+=a*(y1-y2); const lo=y2<0?-y2:y2, hi=x[i]-y2, ah=hi<0?-hi:hi; if(lo>ipk) ipk=lo; if(ah>apk) apk=ah; }
+  return {pk,clip:near,runs,infra:ipk,aud:apk,clipped:runs>=4||near>n*0.002};
+}
+function rawAdvice(r){
+  if(!r) return '';
+  const L=[];
+  if(r.clipped) L.push('⚠ Le son est écrêté AVANT l\'appli (dans le micro ou la tablette) : ses crêtes butent sur un plafond, d\'où le son déformé. L\'appli ne peut pas le réparer.');
+  if(r.infra>0.2&&r.infra>0.4*r.aud) L.push('⚠ Gros souffle d\'air dans le micro (vague d\'air inaudible, plus forte que tes sons) : c\'est elle qui fait saturer. Solution : une bonnette en mousse ou un filtre anti-pop, et ne souffle pas droit dans la grille (bouche de biais, à 5-10 cm, face au logo).');
+  return L.join(' ');
+}
 // ----- test de fidélité : 4 s enregistrées en même temps « brut » (sortie du micro) et « après l'appli » -----
 let fidRes=null;
 function specInfo(x){
@@ -584,7 +603,9 @@ async function fidTest(){
   const L=[];
   L.push('Micro : '+(s.deviceId&&micStream.getAudioTracks()[0].label||'micro par défaut')+' · '+(s.sampleRate||'?')+' Hz · '+(s.channelCount||'?')+' canal(aux) · appli '+SR+' Hz');
   L.push('Traitements du navigateur : écho '+(s.echoCancellation===true?'⚠ OUI':'non')+', bruit '+(s.noiseSuppression===true?'⚠ OUI':'non')+', volume auto '+(s.autoGainControl===true?'⚠ OUI':'non')+(s.voiceIsolation!=null?', isolation voix '+(s.voiceIsolation?'⚠ OUI':'non'):''));
-  L.push('Brut (sortie du micro) : crête '+db(pR)+' dB'+(nclip(R)>8?' ⚠ SATURÉ ('+nclip(R)+' échantillons au maximum : le micro ou la tablette sature AVANT l\'appli, baisse le gain du micro ou éloigne-toi un peu)':' (pas de saturation)'));
+  const rc=rawCheck(R);
+  L.push('Brut (sortie du micro) : crête '+db(pR)+' dB'+(rc&&rc.clipped?' ⚠ ÉCRÊTÉ ('+rc.runs+' crêtes coupées net contre un plafond)':' (pas d\'écrêtage)')+(rc?' · souffle d\'air (infrason) '+db(rc.infra)+' dB, sons audibles '+db(rc.aud)+' dB':''));
+  { const ad=rawAdvice(rc); if(ad) L.push(ad); }
   if(a) L.push('Brut (niveaux par rapport aux médiums) : graves 20-60 Hz '+a.sub.toFixed(0)+' dB, 60-150 Hz '+a.low.toFixed(0)+' dB, aigus >5 kHz '+a.high.toFixed(0)+' dB, son jusqu\'à '+String(Math.round(a.roll/100)/10).replace('.',',')+' kHz'+(a.roll<9000?' ⚠ bande étroite (traitement « téléphone » probable)':''));
   if(a&&b) L.push('Après l\'appli : crête '+db(pQ)+' dB (gain '+(pR>0?(pQ/pR).toFixed(2).replace('.',','):'?')+'×), graves 20-60 Hz '+b.sub.toFixed(0)+' dB ('+(b.sub-a.sub>=0?'+':'')+(b.sub-a.sub).toFixed(1).replace('.',',')+'), aigus '+(b.high-a.high>=0?'+':'')+(b.high-a.high).toFixed(1).replace('.',',')+' dB : '+(Math.abs(b.sub-a.sub)<1.5&&Math.abs(b.high-a.high)<1.5?'l\'appli ne change pas le son ✓':'⚠ l\'appli modifie le son'));
   L.push('Sortie : '+(safeLim?'limiteur de sécurité actif ('+safeLim+')':'pas de limiteur')+(ctx.outputLatency?' · latence de sortie '+Math.round(ctx.outputLatency*1000)+' ms':''));
@@ -769,9 +790,18 @@ async function toggleRec(i){
     if(!running){ startTransport(metroOn); tp=t0; } else tp=ctx.currentTime+0.04;
     recObj={i,master:false,tp,stopT:null,len:0};
   }
-  cap={blocks:[],check:capCheck};
+  cap={blocks:[],check:capCheck,raw:[]};
+  rawTapStart();
   lockUI();
 }
+let rawTap=null;
+function rawTapStart(){
+  rawTapStop(); if(!workletReady||!micSrc||typeof AudioWorkletNode==='undefined') return;
+  try{ const sink=ctx.createGain(); sink.gain.value=0; sink.connect(ctx.destination);
+    const node=new AudioWorkletNode(ctx,'lb-cap',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,channelCountMode:'explicit'}), parts=[];
+    node.port.onmessage=e=>{ if(parts.length<6000) parts.push(e.data.d); }; micSrc.connect(node); node.connect(sink); rawTap={node,sink,parts}; }catch(e){ rawTap=null; }
+}
+function rawTapStop(){ if(!rawTap) return null; const t=rawTap; rawTap=null; try{ micSrc.disconnect(t.node); t.node.disconnect(); t.sink.disconnect(); }catch(e){} let n=0; t.parts.forEach(d=>n+=d.length); const o=new Float32Array(n); let k=0; t.parts.forEach(d=>{ o.set(d,k); k+=d.length; }); return o; }
 function capCheck(endIdx){
   const r=recObj; if(!r) return;
   const now=ctx.currentTime;
@@ -800,6 +830,7 @@ function stopRec(atTime){
 }
 function cancelRec(){
   if(!recObj) return;
+  rawTapStop();
   cap=null; recObj=null;
   lockUI();
 }
@@ -1231,6 +1262,7 @@ function finishRec(s,e){
   pushHist();
   const blocks=cap.blocks;
   cap=null; recObj=null;
+  { const rr=rawTapStop(); const rc=rr?rawCheck(rr):null, ad=rawAdvice(rc); if(ad) setTimeout(()=>msg(ad),1400); }
   const raw=gather(blocks,s,e);
   // prise trop forte : on la baisse d'un bloc (rien n'est rasé) et on règle le gain des prochaines prises
   let pk=0; for(let i=0;i<raw.length;i++){ const v=raw[i]<0?-raw[i]:raw[i]; if(v>pk) pk=v; }

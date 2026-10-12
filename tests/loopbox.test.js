@@ -1637,6 +1637,12 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const r=await recordBase(P); ok(r&&r.buf&&P.hits(r.buf).length===16,'la prise fonctionne toujours (16 coups)');
     ok((P.wnames||[]).filter(n=>n==='lb-cap').length>=1,'capture créée après le limiteur');
   });
+  await test('prise : souffle d\'air et écrêtage AVANT l\'appli détectés et expliqués, rien sur une prise propre',async()=>{
+    let P=await boot(); await recordBase(P); await sleep(1700);
+    ok(!/écrêté AVANT|souffle d'air/.test(P.$('#msg').textContent),'prise propre : pas d\'alerte ('+P.$('#msg').textContent+')');
+    P=await boot(); P.infra=0.9; P.ceil=0.79; P.amp=0.7; await recordBase(P); await sleep(1700);
+    ok(/écrêté AVANT l'appli/.test(P.$('#msg').textContent)&&/souffle d'air/.test(P.$('#msg').textContent)&&/anti-pop/.test(P.$('#msg').textContent),'alerte et conseil : '+P.$('#msg').textContent);
+  });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));
   console.log('\n'+okN+' / '+results.length+' tests réussis');

@@ -61,7 +61,7 @@ async function boot(opt={}){
     AC.prototype.createBufferSource=function(){ return {buffer:null,loop:false,connect(){},disconnect(){},stop(){},start(when,off){ P.starts.push({when,off:off||0,buf:this.buffer}); }}; };
     AC.prototype.createScriptProcessor=function(){ P.proc={connect(){},onaudioprocess:null}; return P.proc; };
     AC.prototype.decodeAudioData=function(ab){ if(P.nextDecode) return Promise.resolve(P.nextDecode); const d=ffDecode(ab); return d?Promise.resolve({length:d.length,sampleRate:SR,numberOfChannels:1,duration:d.length/SR,getChannelData:()=>d}):Promise.reject(new Error('illisible')); };
-    if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(c,name){ this.port={onmessage:null}; P.wnames=(P.wnames||[]).concat(name); if(name!=='lb-lim') P.wnode=this; } connect(){} disconnect(){} }; }
+    if(engine==='worklet'){ AC.prototype.audioWorklet={addModule:async()=>{}}; w.AudioWorkletNode=class{ constructor(c,name){ this.port={onmessage:null}; P.wnames=(P.wnames||[]).concat(name); if(name!=='lb-lim'){ P.wnode=P.wnode||this; P.wcaps=(P.wcaps||[]).concat(this); } } connect(){} disconnect(){ this.dead=true; } }; }
     w.AudioContext=AC;
     w.OfflineAudioContext=class{ constructor(c,l,sr){ this.length=l; this.sampleRate=sr; this.destination={}; }
       createBuffer(c,l,sr){ return {length:l,sampleRate:sr}; }
@@ -88,7 +88,11 @@ async function boot(opt={}){
     const blk=new Float32Array(L);
     for(const n of P.impulses) if(n>=k*L&&n<(k+1)*L) blk[n-k*L]=P.amp;
     if(P.noise) for(let i=0;i<L;i++) blk[i]+=P.noise*(Math.random()*2-1);
-    if(engine==='worklet'){ if(P.wnode&&P.wnode.port.onmessage) P.wnode.port.onmessage({data:{s:k*L,d:blk}}); }
+    // souffle d'air (infrason) et plafond d'écrêtage simulés, comme sur une vraie tablette saturée
+    if(P.infra) for(let i=0;i<L;i++){ const n=k*L+i; blk[i]+=P.infra*Math.sin(2*Math.PI*5.5*n/SR); }
+    for(const n of P.impulses) if(P.infra&&n>=k*L&&n<(k+1)*L){ for(let j=0;j<400&&n-k*L+j<L;j++) blk[n-k*L+j]+=P.amp*0.8*Math.sin(2*Math.PI*40*j/SR)*Math.exp(-j/200); }
+    if(P.ceil) for(let i=0;i<L;i++) blk[i]=Math.max(-P.ceil,Math.min(P.ceil,blk[i]));
+    if(engine==='worklet'){ (P.wcaps||[]).forEach(n=>{ if(!n.dead&&n.port.onmessage) n.port.onmessage({data:{s:k*L,d:n===P.wnode?blk:blk.slice()}}); }); }
     else if(P.proc&&P.proc.onaudioprocess) P.proc.onaudioprocess({inputBuffer:{getChannelData:()=>blk}});
     P.k++;
   };
