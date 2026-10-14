@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=70">
+<link rel="stylesheet" href="style.css?v=71">
 </head>
 <body>
 <header>
@@ -154,6 +154,11 @@
   </div>
   <div class="row wrap"><span class="lbl" style="flex-basis:100%"><i class="ic" data-ic="film"></i> Le morceau (montage)</span><button id="mexp" class="primary"><i class="ic" data-ic="download"></i> Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
   <div class="row wrap"><button id="share" data-help="share"><i class="ic" data-ic="share"></i> Partager le mix</button><button id="stems" data-help="stems"><i class="ic" data-ic="sliders"></i> Pistes séparées (.zip)</button></div></div>
+  <div class="field" id="libsec"><div class="row"><span class="lbl" data-help="lib"><i class="ic" data-ic="folder"></i> Ma bibliothèque de morceaux</span><span id="libinfo" class="lbl" style="margin-left:auto"></span></div>
+  <div class="row wrap" style="margin-top:6px"><button id="libaddloop" class="primary"><i class="ic" data-ic="loop"></i> Ranger la boucle</button><button id="libaddsong" class="primary"><i class="ic" data-ic="film"></i> Ranger le morceau</button></div>
+  <div class="row wrap"><input id="libq" type="search" placeholder="chercher un titre" style="flex:1;min-width:140px" aria-label="Chercher dans la bibliothèque"><select id="libdir" style="width:auto;max-width:100%" aria-label="Dossier affiché"><option value="">Tous les dossiers</option></select></div>
+  <datalist id="libdirs"></datalist>
+  <div id="liblist"></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="denoise">Nettoyage</span></div>
   <div class="row wrap"><select id="dnall" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button id="dnallb"><i class="ic" data-ic="broom"></i> Nettoyer toutes les pistes</button></div></div>
 </section>
@@ -199,6 +204,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=70"></script>
+<script src="app.js?v=71"></script>
 </body>
 </html>

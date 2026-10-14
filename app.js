@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='70';
+const APPVER='71';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -189,7 +189,7 @@ async function changeTempo(nb){
   if(a<0.5||a>2){ msg('Changement trop grand : de la moitié au double du tempo actuel au maximum.'); return; }
   const newBase=Math.round(baseLen*a), newLen=newBase*rep;
   if(newLen>MAXLOOP*SR){ msg('Trop long : '+MAXLOOP+' s maximum pour la boucle.'); return; }
-  const btn=$('#tapply'); btn.disabled=true; const old=btn.textContent; btn.textContent='Calcul…';
+  const btn=$('#tapply'); btn.disabled=true; const old=btn.innerHTML; btn.textContent='Calcul…';
   await new Promise(r=>setTimeout(r,30));
   try{
     const oldL=loopSec(), now=ctx.currentTime, phase=running&&now>=t0?mod(now-t0,oldL):0;
@@ -207,7 +207,7 @@ async function changeTempo(nb){
     if(running) playFrom(phase*a); else tracks.forEach(startSrc);
     buildDots(); lockUI(); scheduleSave();
     msg('Tempo changé : '+cur.toFixed(1).replace('.',',')+' → '+curBpm().toFixed(1).replace('.',',')+' BPM, sans changer la note (↶ pour revenir).');
-  }finally{ btn.textContent=old; updTempoRow(); }
+  }finally{ btn.innerHTML=old; updTempoRow(); }
 }
 function pitchFinish(data,sr){
   const F=Math.min(72,data.length>>1);
@@ -1379,6 +1379,7 @@ const HELP={
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
   clear:"<b>Effacer</b> : vide cette piste. Tu peux annuler juste après avec « Annuler ».",
+  lib:"<b>Ma bibliothèque</b> : garde tes morceaux finis en WAV (qualité CD) dans l'appli. <b>Ranger la boucle</b> ou <b>Ranger le morceau</b> crée le son et le range dans un dossier au nom du projet. Touche un titre pour le renommer, le changer de dossier (écris un nouveau nom pour créer un dossier), le télécharger ou le supprimer. <b>Partager</b> ouvre le menu de partage du téléphone : choisis WhatsApp et la personne reçoit le fichier son. La bibliothèque est gardée <b>sur cet appareil</b> (dans le navigateur) : si tu effaces les données du site, elle disparaît ; télécharge les morceaux importants pour en garder une copie. Un WAV pèse environ 10 Mo par minute.",
   mvol:"<b>Volume général</b> : la force de toutes les pistes ensemble, juste avant la sortie.",
   mout:"<b>Niveau de sortie</b> : le volume réel de ton mix. Si la barre devient <b>rouge</b>, c'est trop fort et le son sature : baisse le volume général ou celui de certaines pistes.",
   min:"<b>Niveau micro</b> : ce que capte ton micro. Quand tu joues, la barre doit bouger bien franchement sans devenir rouge. Trop faible : augmente le gain micro dans « Réglages ». Rouge : baisse-le.",
@@ -3842,10 +3843,10 @@ async function renderMix(opt){
 }
 async function withBusy(btn,label,fn){
   if(!tracks.some(t=>t.buf)){ msg("Rien à exporter : enregistre au moins une piste."); return; }
-  btn.disabled=true; const old=btn.textContent; btn.textContent=label; msg('');
+  btn.disabled=true; const old=btn.innerHTML; btn.textContent=label; msg('');
   try{ await fn(); }
   catch(e){ msg("Opération impossible : "+((e&&(e.message||e.code))||'erreur')); }
-  finally{ btn.disabled=false; btn.textContent=old; }
+  finally{ btn.disabled=false; btn.innerHTML=old; }
 }
 $('#exp').onclick=()=>withBusy($('#exp'),'Rendu en cours…',async()=>{
   const r=await renderMix({fadeEnd:$('#expfade').checked});
@@ -3865,6 +3866,85 @@ $('#share').onclick=()=>withBusy($('#share'),'Préparation…',async()=>{
     msg("Le partage direct n'est pas disponible dans ce navigateur : le fichier "+name+" a été téléchargé, tu peux l'envoyer depuis tes fichiers.");
   }
 });
+// ======================= BIBLIOTHÈQUE DE MORCEAUX (WAV gardés sur l'appareil) =======================
+let lib=null, libOpen=null, libAudio=null, libPlaying=null;
+async function libLoad(){ if(lib) return lib; try{ const db=await idb(); lib=(await idbGet(db,'lib'))||[]; }catch(e){ lib=[]; } return lib; }
+async function libSave(pairs,dels){ const db=await idb(); await idbPut(db,[['lib',lib]].concat(pairs||[]),dels); }
+const fmtDur=s=>{ const m=Math.floor(s/60); return m+':'+String(Math.round(s-m*60)).padStart(2,'0'); };
+const fmtMo=b=>(b/1048576).toFixed(1).replace('.',',')+' Mo';
+async function libAdd(kind){
+  if(!tracks.some(t=>t.buf)||!loopLen){ msg('Rien à ranger : enregistre d\'abord une piste.'); return; }
+  const r=kind==='song'?await renderSong({fadeEnd:$('#mfade').checked}):await renderMix({fadeEnd:$('#expfade').checked});
+  const w=wav16(r), data=w instanceof ArrayBuffer?w:(w.buffer?w.buffer.slice(w.byteOffset,w.byteOffset+w.byteLength):w);
+  await libLoad();
+  const base=projName+(kind==='song'?' – morceau':' – boucle'), names=new Set(lib.map(x=>x.name));
+  let name=base, k=2; while(names.has(name)) name=base+' '+(k++);
+  const it={id:newId(),name,dir:projName,kind,dur:r.length/r.sampleRate,size:data.byteLength,at:Date.now(),proj:projName};
+  lib.unshift(it);
+  try{ await libSave([['lw:'+it.id,data]]); }catch(e){ lib.shift(); msg('Rangement impossible : plus de place sur l\'appareil ?'); return; }
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+  libOpen=null; renderLib();
+  msg('« '+name+' » rangé dans la bibliothèque (dossier « '+it.dir+' », '+fmtDur(it.dur)+', '+fmtMo(it.size)+').');
+}
+async function libData(id){ const db=await idb(); return await idbGet(db,'lw:'+id); }
+async function libFile(it){ const d=await libData(it.id); if(!d) throw new Error('son introuvable'); return {blob:new Blob([d],{type:'audio/wav'}),name:safeName(it.name)+'.wav'}; }
+async function libShare(it){
+  try{
+    const {blob,name}=await libFile(it); let file=null; try{ file=new File([blob],name,{type:'audio/wav'}); }catch(e){}
+    let can=false; try{ can=!!(file&&navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})); }catch(e){}
+    if(can){ try{ await navigator.share({files:[file],title:it.name,text:'Fait avec LoopBox'}); msg('« '+it.name+' » partagé.'); }catch(e){ if(!(e&&e.name==='AbortError')) msg('Partage impossible : '+(e.message||e)+'.'); } return; }
+    downloadBlob(blob,name); msg('Le partage direct n\'est pas possible dans ce navigateur : « '+name+' » est dans tes téléchargements, envoie-le depuis WhatsApp (trombone → Document).');
+  }catch(e){ msg('Partage impossible : '+e.message+'.'); }
+}
+function libStop(){ if(libAudio){ try{ libAudio.pause(); }catch(e){} if(libAudio._u) URL.revokeObjectURL(libAudio._u); } libAudio=null; libPlaying=null; }
+async function libPlay(it){
+  if(libPlaying===it.id){ libStop(); renderLib(); return; }
+  libStop();
+  try{ const {blob}=await libFile(it), u=URL.createObjectURL(blob), a=new Audio(u); a._u=u; libAudio=a; libPlaying=it.id; a.onended=()=>{ libStop(); renderLib(); }; const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }
+  catch(e){ msg('Lecture impossible.'); libStop(); }
+  renderLib();
+}
+async function libDel(it){ lib=lib.filter(x=>x.id!==it.id); if(libPlaying===it.id) libStop(); libOpen=null; await libSave([],['lw:'+it.id]); renderLib(); msg('« '+it.name+' » supprimé de la bibliothèque.'); }
+function libBtn(icon,label,fn){ const b=document.createElement('button'); b.innerHTML=ic(icon); b.setAttribute('aria-label',label); b.title=label; b.onclick=fn; return b; }
+function renderLib(){
+  const box=$('#liblist'); if(!box||!lib) return;
+  const dirs=[...new Set(lib.map(x=>x.dir||'Sans dossier'))].sort((a,b)=>a.localeCompare(b,'fr'));
+  const sel=$('#libdir'), cur=sel.value; sel.innerHTML='<option value="">Tous les dossiers</option>'; dirs.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d+' ('+lib.filter(x=>(x.dir||'Sans dossier')===d).length+')'; sel.appendChild(o); }); sel.value=dirs.includes(cur)?cur:'';
+  const dl=$('#libdirs'); dl.innerHTML=''; dirs.forEach(d=>{ const o=document.createElement('option'); o.value=d; dl.appendChild(o); });
+  $('#libinfo').textContent=lib.length?lib.length+' morceau'+(lib.length>1?'x':'')+' · '+fmtMo(lib.reduce((a,x)=>a+(x.size||0),0)):'';
+  box.innerHTML='';
+  if(!lib.length){ const p=document.createElement('p'); p.className='hint'; p.textContent='Ta bibliothèque est vide : quand une boucle ou un morceau te plaît, touche « Ranger » pour le garder ici.'; box.appendChild(p); return; }
+  const q=($('#libq').value||'').trim().toLowerCase();
+  const list=lib.filter(x=>(!sel.value||(x.dir||'Sans dossier')===sel.value)&&(!q||x.name.toLowerCase().includes(q)||(x.dir||'').toLowerCase().includes(q)));
+  if(!list.length){ const p=document.createElement('p'); p.className='hint'; p.textContent='Aucun morceau ne correspond.'; box.appendChild(p); return; }
+  dirs.forEach(d=>{
+    const items=list.filter(x=>(x.dir||'Sans dossier')===d).sort((a,b)=>b.at-a.at); if(!items.length) return;
+    const h=document.createElement('div'); h.className='libdir'; h.innerHTML=ic('folder',16)+' '; h.append(d+' · '+items.length); box.appendChild(h);
+    items.forEach(it=>{
+      const row=document.createElement('div'); row.className='prow librow';
+      const pn=document.createElement('div'); pn.className='pn'; pn.innerHTML='<b></b><small></small>'; $('b',pn).textContent=it.name;
+      $('small',pn).textContent=(it.kind==='song'?'morceau':'boucle')+' · '+fmtDur(it.dur)+' · '+fmtMo(it.size)+' · '+fmtDate(it.at);
+      pn.setAttribute('role','button'); pn.tabIndex=0; pn.onclick=()=>{ libOpen=libOpen===it.id?null:it.id; renderLib(); };
+      const pb=libBtn(libPlaying===it.id?'pause':'speaker',libPlaying===it.id?'Arrêter':'Écouter '+it.name,()=>libPlay(it)); pb.className='libplay'+(libPlaying===it.id?' on':'');
+      const sb=libBtn('share','Partager '+it.name+' (WhatsApp…)',()=>libShare(it)); sb.className='libshare';
+      row.append(pb,pn,sb); box.appendChild(row);
+      if(libOpen===it.id){
+        const ed=document.createElement('div'); ed.className='libedit';
+        ed.innerHTML='<div class="row wrap"><input class="libname" type="text" maxlength="60" style="flex:1;min-width:150px" aria-label="Titre"><input class="libfold" type="text" list="libdirs" maxlength="40" style="flex:1;min-width:120px" aria-label="Dossier" placeholder="dossier"></div><div class="row wrap"><button class="libok primary">Valider</button><button class="libdl">'+ic('download')+' Télécharger</button><button class="libdel">'+ic('trash')+' Supprimer</button></div>';
+        $('.libname',ed).value=it.name; $('.libfold',ed).value=it.dir||'';
+        $('.libok',ed).onclick=async()=>{ const n=$('.libname',ed).value.trim(), f=$('.libfold',ed).value.trim(); if(n) it.name=n.slice(0,60); it.dir=f?f.slice(0,40):'Sans dossier'; libOpen=null; await libSave(); renderLib(); msg('« '+it.name+' » rangé dans « '+it.dir+' ».'); };
+        $('.libdl',ed).onclick=async()=>{ try{ const {blob,name}=await libFile(it); downloadBlob(blob,name); msg('« '+name+' » est dans tes téléchargements.'); }catch(e){ msg('Téléchargement impossible.'); } };
+        const db=$('.libdel',ed); db.onclick=()=>{ if(db.dataset.arm!=='1'){ db.dataset.arm='1'; db.textContent='Confirmer la suppression ?'; setTimeout(()=>{ if(db.isConnected){ db.dataset.arm='0'; db.innerHTML=ic('trash')+' Supprimer'; } },3000); return; } libDel(it); };
+        box.appendChild(ed);
+      }
+    });
+  });
+}
+$('#libaddloop').onclick=()=>withBusy($('#libaddloop'),'Rangement…',()=>libAdd('loop'));
+$('#libaddsong').onclick=()=>withBusy($('#libaddsong'),'Rangement…',()=>libAdd('song'));
+$('#libq').oninput=()=>renderLib();
+$('#libdir').onchange=()=>renderLib();
+libLoad().then(renderLib);
 $('#stems').onclick=()=>withBusy($('#stems'),'Rendu des pistes…',async()=>{
   const list=tracks.filter(t=>t.buf);
   let reps=+$('#reps').value;

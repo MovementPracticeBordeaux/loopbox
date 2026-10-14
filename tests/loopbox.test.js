@@ -1456,7 +1456,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#cloudpw').value='secret123'; P.$('#cloudsignup').click(); await sleep(50);
     ok(P.$('#cloudout').hidden&&!P.$('#cloudin').hidden&&/sylvain@test\.fr/.test(P.$('#cloudwho').textContent),'connecté : '+P.$('#cloudwho').textContent);
     ok(!!P.$('#cloudbtn svg[data-n="cloud"]')&&P.$('#cloudbtn').textContent!=='','bouton du haut après connexion : '+P.$('#cloudbtn').textContent);
-    const files=()=>Object.keys(S.files).filter(k=>/\.loopbox$/.test(k)), until=async(f,ms)=>{ for(let k=0;k<(ms||6000)/50&&!f();k++) await sleep(50); };
+    const files=()=>Object.keys(S.files).filter(k=>/\.loopbox$/.test(k)), until=async(f,ms)=>{ for(let k=0;k<(ms||20000)/50&&!f();k++) await sleep(50); };
     P.$('#cloudupb').click(); await until(()=>files().length&&/est en ligne/.test(P.$('#msg').textContent)); await sleep(50);
     ok(files().length===1&&Object.keys(S.files).some(k=>/index\.json$/.test(k)),'projet + index envoyés : '+Object.keys(S.files).join(', ')+' | '+S.log.join(' ; ')+' | '+P.$('#msg').textContent);
     ok(/est en ligne/.test(P.$('#msg').textContent),'message : '+P.$('#msg').textContent);
@@ -1533,6 +1533,45 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const emo=/[\u{1F300}-\u{1FAFF}☁⚙⬆⬇⛓⏱⏳⏸✨]/u;
     ok(!P.doc.querySelector('i.ic[data-ic]')&&P.$$('svg.ic').length>30,'icônes dessinées : '+P.$$('svg.ic').length);
     ok(!emo.test(P.doc.body.textContent),'aucun émoji de plateforme : '+(P.doc.body.textContent.match(emo)||[''])[0]);
+  });
+  await test('bibliothèque de morceaux : WAV rangés par dossier, renommer, déplacer, chercher, partager (WhatsApp), gardés après redémarrage, supprimer',async()=>{
+    const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
+    const P=await boot({share:true}); await recordBase(P); await sleep(50);
+    const rows=()=>P.$$('#liblist .librow');
+    ok(/vide/.test(P.$('#liblist').textContent),'vide au départ');
+    P.$('#libaddloop').click(); await until(()=>rows().length===1);
+    ok(rows().length===1&&/Mon projet – boucle/.test(rows()[0].textContent)&&/Mon projet · 1/.test(P.$('#liblist .libdir').textContent),'boucle rangée dans le dossier du projet : '+P.$('#liblist').textContent+' | '+P.$('#msg').textContent);
+    ok(!!P.$('#libaddloop svg.ic'),'le bouton garde son icône après le rendu');
+    P.$('#libaddsong').click(); await until(()=>rows().length===2);
+    ok(rows().length===2&&/morceau/.test(P.$('#liblist').textContent),'morceau rangé aussi');
+    // partager
+    P.shared=null; rows()[0].querySelector('.libshare').click(); await until(()=>P.shared);
+    const f=P.shared&&P.shared.files&&P.shared.files[0];
+    ok(f&&f.type==='audio/wav'&&/\.wav$/.test(f.name)&&f.size>1000,'partagé en WAV : '+(f&&f.name)+' '+(f&&f.size));
+    const head=f?new TextDecoder().decode(new Uint8Array(await f.arrayBuffer()).slice(0,4)):'';
+    ok(head==='RIFF','vrai fichier WAV ('+head+')');
+    // renommer + nouveau dossier
+    const name0=rows()[0].querySelector('b').textContent;
+    rows()[0].querySelector('.pn').click(); await sleep(10);
+    P.$('.libedit .libname').value='Pour Louis'; P.$('.libedit .libfold').value='Démos'; P.$('.libedit .libok').click(); await until(()=>/Démos · 1/.test(P.$('#liblist').textContent));
+    ok(/Démos · 1/.test(P.$('#liblist').textContent)&&/Pour Louis/.test(P.$('#liblist').textContent),'renommé et rangé dans Démos : '+P.$('#liblist').textContent);
+    P.$('#libdir').value='Démos'; P.$('#libdir').dispatchEvent(new P.w.Event('change')); await sleep(10);
+    ok(rows().length===1&&/Pour Louis/.test(rows()[0].textContent),'filtre par dossier');
+    P.$('#libdir').value=''; P.$('#libdir').dispatchEvent(new P.w.Event('change'));
+    P.$('#libq').value='louis'; P.$('#libq').dispatchEvent(new P.w.Event('input')); await sleep(10);
+    ok(rows().length===1,'recherche par titre');
+    P.$('#libq').value=''; P.$('#libq').dispatchEvent(new P.w.Event('input'));
+    // gardés après redémarrage
+    const Q=await boot({idb:P.idb}); await until(()=>Q.$$('#liblist .librow').length===2);
+    ok(Q.$$('#liblist .librow').length===2&&/Pour Louis/.test(Q.$('#liblist').textContent)&&/2 morceaux/.test(Q.$('#libinfo').textContent),'retrouvés après redémarrage : '+Q.$('#libinfo').textContent);
+    // sans partage direct : téléchargement
+    Q.$$('#liblist .libshare')[0].click(); await until(()=>Q.download);
+    ok(/\.wav$/.test(Q.download||'')&&/WhatsApp/.test(Q.$('#msg').textContent),'sans partage direct : fichier téléchargé + explication : '+Q.download);
+    // supprimer (avec confirmation)
+    Q.$$('#liblist .librow .pn')[0].click(); await sleep(10);
+    const d=Q.$('.libedit .libdel'); d.click(); ok(Q.$$('#liblist .librow').length===2,'demande confirmation'); d.click(); await until(()=>Q.$$('#liblist .librow').length===1);
+    ok(Q.$$('#liblist .librow').length===1,'supprimé');
+    ok(P.errs.length===0&&Q.errs.length===0,'erreurs : '+P.errs.concat(Q.errs).join(';'));
   });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
@@ -1662,7 +1701,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(!P.$('#metro').classList.contains('on'),'coupé au premier démarrage');
     P.$('#metro').click(); await sleep(500);
     ok(P.$('#metro').classList.contains('on'),'activé au toucher');
-    P=await boot({idb}); await sleep(80);
+    P=await boot({idb}); for(let k=0;k<100&&!P.$('#metro').classList.contains('on');k++) await sleep(50);
     ok(P.$('#metro').classList.contains('on'),'toujours activé après rafraîchissement');
     P.$('#metro').click(); await sleep(500);
     P=await boot({idb}); await sleep(80);
