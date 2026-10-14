@@ -1608,6 +1608,16 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
       else ok(P.download==='test-fidelite-micro.zip'&&/Téléchargements/.test(P.$('#msg').textContent),'zip téléchargé + message : '+P.$('#msg').textContent);
     }
   });
+  await test('effets Saturation et Son beatbox de scène : choisis, joués, exportés sans erreur',async()=>{
+    const P=await boot(); await recordBase(P); await sleep(50);
+    for(const k of ['sat','stage']){
+      const sel=P.$('.trk .fxsel'); ok(!!sel&&[...sel.options].some(o=>o.value===k),'effet '+k+' proposé');
+      sel.value=k; sel.dispatchEvent(new P.w.Event('change')); await sleep(30);
+      P.download=null; P.$('#exp').click(); for(let i=0;i<60&&!P.download;i++) await sleep(50);
+      ok(/\.wav$/.test(P.download||''),'export avec '+k+' : '+P.$('#msg').textContent);
+    }
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+  });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
     const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };

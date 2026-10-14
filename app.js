@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='76';
+const APPVER='77';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -345,7 +345,7 @@ const SRC_LIST=[
  {id:'perc',name:'Percussions (table, objets)',hp:12,mul:1.25,gate:0},
  {id:'env',name:'Environnement proche (clés, papier…)',hp:120,mul:2,gate:0}
 ];
-const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (grain dans les graves)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
+const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (grain dans les graves)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées'],['stage','Son beatbox de scène (grosse caisse qui claque)']];
 const irCache=new WeakMap();
 function makeIR(c){
   if(irCache.has(c)) return irCache.get(c);
@@ -377,6 +377,20 @@ function makeFx(c,type,amt,beat){
     ws.oversample='4x'; { const n=2048, cu=new Float32Array(n), t=Math.tanh(2.5); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=Math.tanh(2.5*x)/t; } ws.curve=cu; }
     inp.disconnect(dry); inp.connect(hp); hp.connect(dry); hp.connect(lp); lp.connect(drv); drv.connect(ws); ws.connect(wet);
     upd=a=>{ drv.gain.value=1+a*6; dry.gain.value=1-a*0.25; wet.gain.value=a*0.5; };
+  } else if(type==='stage'){
+    // « son beatbox de scène » : imite micro dynamique collé à la bouche + compresseur de sono + grain dans le bas,
+    // appliqué sur une prise propre (au lieu de la coupure numérique qui aplatit les grosses caisses)
+    const hp=nd(c.createBiquadFilter()), prox=nd(c.createBiquadFilter()), cut=nd(c.createBiquadFilter()), cmp=nd(c.createDynamicsCompressor()), mk=nd(c.createGain());
+    const lp=nd(c.createBiquadFilter()), drv=nd(c.createGain()), ws=nd(c.createWaveShaper()), sat=nd(c.createGain());
+    hp.type='highpass'; hp.frequency.value=28; hp.Q.value=0.707;
+    prox.type='lowshelf'; prox.frequency.value=110;           // effet de proximité : graves gonflés
+    cut.type='peaking'; cut.frequency.value=400; cut.Q.value=1; // un peu moins de « carton » dans le bas-médium
+    cmp.knee.value=6; cmp.ratio.value=4; cmp.attack.value=0.012; cmp.release.value=0.15;
+    lp.type='lowpass'; lp.frequency.value=300; lp.Q.value=0.707;
+    ws.oversample='4x'; { const n=2048, cu=new Float32Array(n), t=Math.tanh(2.5); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=Math.tanh(2.5*x)/t; } ws.curve=cu; }
+    inp.disconnect(dry); inp.connect(hp); hp.connect(prox); prox.connect(cut); cut.connect(cmp); cmp.connect(mk); mk.connect(wet);
+    mk.connect(lp); lp.connect(drv); drv.connect(ws); ws.connect(sat); sat.connect(wet);
+    upd=a=>{ prox.gain.value=4+6*a; cut.gain.value=-2*a; cmp.threshold.value=-6-14*a; mk.gain.value=Math.pow(10,(1+3*a)/20); drv.gain.value=1+4*a; sat.gain.value=0.3*a; dry.gain.value=0; wet.gain.value=0.7; };
   } else if(type==='lofi'){
     const ws=nd(c.createWaveShaper()), lp=nd(c.createBiquadFilter()); lp.type='lowpass'; lp.frequency.value=5000;
     inp.connect(ws); ws.connect(lp); lp.connect(wet);
