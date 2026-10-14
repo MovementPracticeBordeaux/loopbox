@@ -725,7 +725,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#addsynth').click(); await sleep(20);
     const tm=P.$$('.trk')[2];
     ok(/ksynth/.test(tm.className)&&tm.querySelector('.tn').textContent==='Mélodie','piste mélodie : '+tm.className+' / '+tm.querySelector('.tn').textContent);
-    ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Mélodie'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
+    ok(tm.querySelector('.ttabs button[data-tab="bass"]').textContent==='🎹 Notes'&&tm.querySelector('.mel2b').open,'onglet / transformation ouverte');
     const st=tm.querySelector('.btype'); ok(st.querySelector('optgroup').children.length===9&&/Son simple/.test(st.options[0].textContent)&&st.value==='clean','styles : '+[...st.options].map(o=>o.textContent).join(' | '));
     ok(tm.querySelector('.bgo').textContent==='✓ Créer la mélodie'&&!/graves/.test(tm.querySelector('.mel2b .hint').textContent),'libellés de la piste mélodie : '+tm.querySelector('.bgo').textContent+' | '+tm.querySelector('.mel2b .hint').textContent);
     tm.querySelector('.mgo').click(); await sleep(60);
@@ -1642,6 +1642,26 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(!/écrêté AVANT|souffle d'air/.test(P.$('#msg').textContent),'prise propre : pas d\'alerte ('+P.$('#msg').textContent+')');
     P=await boot(); P.infra=0.9; P.ceil=0.79; P.amp=0.7; await recordBase(P); await sleep(1700);
     ok(/écrêté AVANT l'appli/.test(P.$('#msg').textContent)&&/souffle d'air/.test(P.$('#msg').textContent)&&/anti-pop/.test(P.$('#msg').textContent),'alerte et conseil : '+P.$('#msg').textContent);
+  });
+  await test('onglets de l\'appli : Pistes, Morceau (ouvre le montage), Mix & export, Réglages',async()=>{
+    const P=await boot(); await recordBase(P); await sleep(20);
+    const vis=v=>!P.$('.view[data-view="'+v+'"]').hidden, tab=v=>P.$('#vtabs button[data-v="'+v+'"]');
+    ok(vis('pistes')&&!vis('morceau')&&!vis('mix')&&!vis('reglages'),'au départ : les pistes');
+    tab('morceau').click(); await sleep(20);
+    ok(vis('morceau')&&!vis('pistes')&&!P.$('#mont').hidden,'Morceau ouvre le montage');
+    P.starts.length=0; P.$('#dplay').click(); await sleep(20); ok(/Morceau|mesure/.test(P.$('#dtxt').textContent)||P.starts.filter(x=>x.buf).length>0,'▶ en bas joue le morceau');
+    P.$('#dstop').click();
+    tab('mix').click(); await sleep(10);
+    ok(vis('mix')&&P.$('#mont').hidden,'quitter Morceau ferme le montage');
+    ok(!!P.$('.view[data-view="mix"] #exp')&&!!P.$('.view[data-view="mix"] #mexp')&&!!P.$('.view[data-view="mix"] #stems'),'tous les exports dans Mix & export');
+    tab('reglages').click(); await sleep(10);
+    ok(vis('reglages')&&!!P.$('.view[data-view="reglages"] #micsel')&&!!P.$('.view[data-view="reglages"] #clearAll')&&!!P.$('.view[data-view="reglages"] #mIn'),'micro, niveau micro et « Tout effacer » dans Réglages');
+    P.$('#montbtn').click(); await sleep(10);
+    ok(vis('morceau'),'ouvrir le montage par le code bascule sur l\'onglet Morceau');
+    tab('pistes').click(); await sleep(10);
+    ok(vis('pistes')&&!!P.$('.view[data-view="pistes"] #loopset #tempoRow')&&!!P.$('#loopset #grow'),'tempo et durée de boucle rangés dans « Boucle, tempo et métronome »');
+    const t1=P.$('.trk'); t1.querySelector('.tog').click(); t1.querySelector('.ttabs button[data-tab="fx"]').click(); await sleep(10);
+    ok(!!t1.querySelector('[data-pane="fx"] .revb')&&!!t1.querySelector('[data-pane="son"] .dnb')&&t1.querySelector('.ttabs button[data-tab="cut"]').textContent==='⏱ Temps','fondus/envers dans Effets, nettoyage dans Son, onglet Temps');
   });
   const okN=results.filter(r=>r[0]).length;
   for(const [pass,name,ms,err] of results) console.log((pass?'✔':'✘')+' '+name+'  ('+ms+' ms)'+(err?'\n    → '+err:''));

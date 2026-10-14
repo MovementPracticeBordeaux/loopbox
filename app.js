@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='68';
+const APPVER='69';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -62,6 +62,7 @@ chain.vol.gain.value=mvol;
 const outAn=ctx.createAnalyser(); outAn.fftSize=1024;
 chain.out.connect(outAn); chain.out.connect(ctx.destination);
 setTimeout(()=>{ try{ setupLimiter(); }catch(e){} },0);
+setTimeout(()=>{ let v='pistes'; try{ v=localStorage.getItem('lbx-view')||'pistes'; }catch(e){} if(v!=='pistes') setView(v); },0);
 const metroGain=ctx.createGain(); metroGain.gain.value=0.36; metroGain.connect(ctx.destination);
 
 // ---------- pistes ----------
@@ -1029,7 +1030,7 @@ function importFirst(i,raw){
     const last=fb.beats[fb.beats.length-1], n=fb.beats.length-1+((raw.length-last)>=0.85*fb.T*SR?1:0), o1=fb.beats[0], pre=Math.round(0.003*SR);
     masterTake={i,ref:tracks[i],raw,tp,anchor:o1,pre:Math.min(pre,o1),T:fb.T,s:0,n,rep:1,det:true};
     buildFromSel();
-    msg('Rythme détecté : '+n+' temps à '+(60/fb.T).toFixed(1).replace('.',',')+' BPM en moyenne.'+(vary>0.06?' Le tempo du musicien varie (jusqu\'à '+Math.round(vary*100)+' % d\'écart entre ses temps) : pour caler chaque temps sur la grille, utilise « 🎯 Caler sur le tempo du morceau » (onglet ✂ Découpe de la piste).':''));
+    msg('Rythme détecté : '+n+' temps à '+(60/fb.T).toFixed(1).replace('.',',')+' BPM en moyenne.'+(vary>0.06?' Le tempo du musicien varie (jusqu\'à '+Math.round(vary*100)+' % d\'écart entre ses temps) : pour caler chaque temps sur la grille, utilise « 🎯 Caler sur le tempo du morceau » (onglet ⏱ Temps de la piste).':''));
   } else if(an){
     const pre=Math.round(0.003*SR);
     masterTake={i,ref:tracks[i],raw,tp,anchor:an.o1,pre:Math.min(pre,an.o1),T:an.T,s:0,n:an.n,rep:1,det:true};
@@ -1207,7 +1208,7 @@ function peaksOf(raw,w){
   for(let i=0;i<w;i++){ let m=0; const a=Math.floor(i*step), z=Math.min(raw.length,Math.floor((i+1)*step)); for(let j=a;j<z;j+=8){ const v=Math.abs(raw[j]); if(v>m) m=v; } p[i]=m; }
   return p;
 }
-// l'outil de coupe de la prise de base vit dans l'onglet ✂ Découpe de sa piste (avant : un cadre à part, loin sur téléphone)
+// l'outil de coupe de la prise de base vit dans l'onglet ⏱ Temps de sa piste (avant : un cadre à part, loin sur téléphone)
 let edHome=null, edWas=false;
 function edOut(t){ const e=document.getElementById('editor'); if(e&&edHome&&t.el&&t.el.contains(e)){ edHome.parentNode.insertBefore(e,edHome.nextSibling); edWas=false; } }
 function placeEditor(ed){
@@ -1216,7 +1217,7 @@ function placeEditor(ed){
   const t=ed&&masterTake?tracks[masterTake.i]:null, slot=t&&t.el?$('.edslot',t.el):null;
   if(slot){ if(e.parentNode!==slot) slot.appendChild(e); }
   else if(e.parentNode!==edHome.parentNode||e.previousSibling!==edHome) edHome.parentNode.insertBefore(e,edHome.nextSibling);
-  // juste après la prise de base : on ouvre directement l'onglet Découpe de la piste
+  // juste après la prise de base : on ouvre directement l'onglet ⏱ Temps de la piste
   if(slot&&!edWas){ const b=$('.tbody',t.el); if(b.hidden){ b.hidden=false; $('.tog',t.el).setAttribute('aria-expanded','true'); try{ updFold(); }catch(x){} } setTab(t,'cut'); }
   edWas=!!slot;
 }
@@ -2328,7 +2329,7 @@ function setTab(t,tab){
 function setKindUI(t){
   const bass=isGen(t), syn=t.kind==='synth';
   t.el.classList.toggle('kbass',t.kind==='bass'); t.el.classList.toggle('ksynth',syn);
-  const tb=$('.ttabs button[data-tab="bass"]',t.el); if(tb) tb.textContent=syn?'🎹 Mélodie':'🎸 Basse';
+  const tb=$('.ttabs button[data-tab="bass"]',t.el); if(tb) tb.textContent=syn?'🎹 Notes':'🎸 Notes';
   const sel=$('.btype',t.el);
   if(sel&&sel.dataset.k!==(syn?'s':'b')){ sel.dataset.k=syn?'s':'b'; sel.innerHTML=soundOptions(syn); }
   const sm=$('.mel2b summary',t.el); if(sm) sm.textContent=syn?'🎤 Transformer une mélodie chantée en notes':'🎤 Transformer une mélodie chantée en basse';
@@ -2337,6 +2338,7 @@ function setKindUI(t){
   const lb=$('.bsonlbl',t.el); if(lb) lb.textContent=syn?'Son ou style':'Son';
   t.el.querySelectorAll('.reconly').forEach(e=>e.hidden=bass);
   t.el.querySelectorAll('.synonly').forEach(e=>e.hidden=!syn);
+  { const pf=$('.pitchf',t.el); if(pf) pf.hidden=bass&&!t.pitch; }
   { const tf=$('.ttabs button[data-tab="tf"]',t.el); if(tf) tf.hidden=bass; if(bass&&t.tab==='tf') t.tab='bass'; }
   updVoiceUI(t);
   $('.ttabs button[data-tab="bass"]',t.el).hidden=!bass;
@@ -2572,15 +2574,13 @@ function buildTrackUI(t){
   <div class="tbody" hidden>
   <div class="row" style="margin-top:12px"><span class="lbl" data-help="vol">Volume</span><input type="range" class="vol" min="0" max="1.2" step="0.01" value="${t.vol}" aria-label="Volume piste ${t.id+1}" style="flex:1"></div>
   <div class="row tb"><button class="m" aria-label="Muet">🔇 Muet</button><button class="s" aria-label="Solo">🎧 Solo</button></div>
-  <div class="seg ttabs" style="margin-top:14px"><button data-tab="bass" hidden>🎸 Basse</button><button data-tab="son">🎚 Son</button><button data-tab="cut">✂ Découpe</button><button data-tab="fx">✨ Effets</button><button data-tab="trk">⚙ Piste</button><button data-tab="tf">🪄 Transformer</button></div>
+  <div class="seg ttabs" style="margin-top:14px"><button data-tab="bass" hidden>🎸 Basse</button><button data-tab="son">🎚 Son</button><button data-tab="cut">⏱ Temps</button><button data-tab="fx">✨ Effets</button><button data-tab="trk">⚙ Piste</button><button data-tab="tf">🪄 Transformer</button></div>
   <div class="pane" data-pane="bass" hidden>
-    <div class="row wrap tfback" hidden style="margin-top:12px"><button class="tfvoice">🎙 Revenir au son enregistré</button><button class="tfswap"></button></div>
-    <details class="field mel2b" style="margin-top:12px"><summary class="lbl" style="font-size:18px">🎤 Transformer une mélodie chantée en basse</summary>
-      <p class="hint" data-help="mel2b">Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves.</p>
-      <div class="row wrap"><span class="lbl w2">Piste</span><select class="msrc" style="width:auto" aria-label="Piste chantée"></select><select class="mq" style="width:auto" aria-label="Calage des notes"><option value="0.25" selected>notes calées à la double-croche</option><option value="0.5">calées à la croche</option><option value="1">calées au temps</option></select></div>
-      <div class="row"><button class="mgo primary">🎤 Repérer les notes et créer les blocs</button></div>
-    </details>
-    <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
+    <div class="row wrap"><span class="lbl w2 bsonlbl" data-help="sonlib">Son</span><select class="btype bopt" style="width:auto;max-width:100%">${soundOptions(false)}</select><select class="blen bopt" style="width:auto"><option value="0.5">notes courtes</option><option value="1" selected>notes normales</option><option value="1.6">notes longues</option></select></div>
+    <div class="row wrap bbrow"><span class="lbl w2">Longueur</span><select class="bbeats bopt" style="width:auto"><option value="4">4 temps</option><option value="8" selected>8 temps</option><option value="16">16 temps</option></select><span class="hint" style="margin:0">(si aucune boucle n'existe encore)</span></div>
+    <div class="row wrap"><button class="bprev">▶ Aperçu</button><button class="bgo primary">✓ Créer la basse</button></div>
+    <p class="hint bst"></p>
+      <div class="row" style="margin-top:12px"><span class="lbl" data-help="btl">Notes sur la ligne de temps</span><span class="btlinfo lbl" style="margin-left:auto"></span></div>
     <p class="hint" style="margin:6px 0 0">✂ <b>Touche la règle</b> (les numéros de temps) pour couper à cet endroit, ou pour enlever une coupe. <b>Touche un bloc</b> pour le choisir, puis touche sa note ci-dessous.</p>
     <div class="row wrap" style="margin-top:6px"><span class="lbl" data-help="bgrid">Grille</span><select class="bgrid" style="width:auto" aria-label="Grille de la ligne de temps"><option value="1">noire (1 temps)</option><option value="0.5">croche (½ temps)</option><option value="0.25">double croche (¼ temps)</option><option value="0.3333333333333333">triolet (⅓ temps)</option></select><button class="bfill">✂ Découper en notes de la grille</button><span style="display:inline-flex;align-items:center;gap:6px"><button class="bzm" data-z="-1" aria-label="Dézoomer la ligne de temps">🔍−</button><span class="bzlbl lbl">×1</span><button class="bzm" data-z="1" aria-label="Zoomer la ligne de temps">🔍+</button></span></div>
     <canvas class="btl" style="width:100%;height:104px;display:block;margin-top:8px;border-radius:10px;background:rgba(255,255,255,.05);touch-action:none"></canvas>
@@ -2592,24 +2592,28 @@ function buildTrackUI(t){
       <div class="row wrap"><span class="lbl w2">Jeu</span><select class="bchplay bopt" style="width:auto;max-width:100%" aria-label="Façon de jouer les accords">${Object.keys(CHPLAY).map(k=>`<option value="${k}">${CHPLAY[k]}</option>`).join('')}</select><select class="barp bopt" style="width:auto;max-width:100%" aria-label="Vitesse de l'arpège"><option value="1">arpège en noires</option><option value="0.5" selected>arpège en croches</option><option value="0.25">arpège en doubles croches</option><option value="0.3333333333333333">arpège en triolets</option></select></div>
       <div class="row wrap"><span class="lbl w2">Suite d'accords</span><select class="bprog" style="width:auto;max-width:100%" aria-label="Suite d'accords toute prête"><option value="">— choisir —</option>${Object.keys(PROGS).map(k=>`<option value="${k}">${PROGS[k][0]}</option>`).join('')}</select><button class="bprogb">Remplir la ligne</button></div>
     </div>
-    <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
-    <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bgl" style="width:22px;height:22px"> glisser vers le bloc suivant</label><button class="bsplit">✂ Couper le bloc choisi en deux</button><button class="bdel">🗑 Retirer le bloc</button></div>
     <div class="row" style="margin-top:12px"><span class="lbl" data-help="bgroup">Motif : grouper et dupliquer</span></div>
     <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="bmulti" style="width:22px;height:22px"> choisir plusieurs blocs</label><button class="bgrp">⛓ Grouper</button><button class="bungrp">Dissocier</button></div>
     <div class="row wrap"><select class="bdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="fill">jusqu'à la fin</option></select><button class="bdup primary">⧉ Dupliquer à la suite</button></div>
     <div class="row" style="margin-top:14px"><span class="lbl">Notes jouées</span></div>
     <canvas class="bviz" style="width:100%;height:84px;display:block;margin-top:6px;border-radius:10px;background:rgba(255,255,255,.05)"></canvas>
+    <div class="row" style="margin-top:14px"><span class="lbl">🥁 Rythme et notes ajoutées</span></div>
     <div class="row wrap"><span class="lbl w2" data-help="bass">Rythme</span><select class="brhy bopt" style="width:auto">${Object.keys(RHYTHMS).map(k=>`<option value="${k}">${RHYTHMS[k][0]}</option>`).join('')}</select></div>
     <div class="row wrap"><span class="lbl w2">Mélodie</span><select class="bmel bopt" style="width:auto">${Object.keys(MELODIES).map(k=>`<option value="${k}">${MELODIES[k]}</option>`).join('')}</select></div>
-    <div class="row wrap"><span class="lbl w2 bsonlbl" data-help="sonlib">Son</span><select class="btype bopt" style="width:auto;max-width:100%">${soundOptions(false)}</select><select class="blen bopt" style="width:auto"><option value="0.5">notes courtes</option><option value="1" selected>notes normales</option><option value="1.6">notes longues</option></select></div>
-    <div class="row wrap bbrow"><span class="lbl w2">Longueur</span><select class="bbeats bopt" style="width:auto"><option value="4">4 temps</option><option value="8" selected>8 temps</option><option value="16">16 temps</option></select><span class="hint" style="margin:0">(si aucune boucle n'existe encore)</span></div>
-    <div class="row wrap"><button class="bprev">▶ Aperçu</button><button class="bgo primary">✓ Créer la basse</button></div>
-    <p class="hint bst"></p>
-  </div>
+    <div class="row" style="margin-top:14px"><span class="lbl">🛠 Outils</span></div>
+    <div class="row wrap"><span class="lbl w2" data-help="btrans">Transposer</span><button class="btr" data-d="-12">−1 octave</button><button class="btr" data-d="-1">−1 demi-ton</button><button class="btr" data-d="1">+1 demi-ton</button><button class="btr" data-d="12">+1 octave</button></div>
+    <select class="bsn" hidden aria-hidden="true">${NOTE_FR.map((n,i)=>`<option value="${i}">${n}</option>`).join('')}</select>
+    <div class="row wrap tfback" hidden style="margin-top:6px"><button class="tfvoice">🎙 Revenir au son enregistré</button><button class="tfswap"></button></div>
+    <details class="field mel2b" style="margin-top:12px"><summary class="lbl" style="font-size:18px">🎤 Transformer une mélodie chantée en basse</summary>
+      <p class="hint" data-help="mel2b">Chante ou fredonne ta ligne de basse sur une piste normale (à ta hauteur, même aiguë), puis choisis-la ici : l'appli repère les notes, les cale sur la boucle et les descend dans les graves.</p>
+      <div class="row wrap"><span class="lbl w2">Piste</span><select class="msrc" style="width:auto" aria-label="Piste chantée"></select><select class="mq" style="width:auto" aria-label="Calage des notes"><option value="0.25" selected>notes calées à la double-croche</option><option value="0.5">calées à la croche</option><option value="1">calées au temps</option></select></div>
+      <div class="row"><button class="mgo primary">🎤 Repérer les notes et créer les blocs</button></div>
+    </details>
+</div>
   <div class="pane" data-pane="son">
     <div class="field"><div class="row"><span class="lbl" data-help="pan">Gauche ⇄ Droite</span><span class="pv val" style="margin-left:auto">Centre</span></div><input type="range" class="pan" min="-1" max="1" step="0.05" value="0" aria-label="Panoramique piste ${t.id+1}"></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="pitch">Hauteur du son (la note)</span><span class="ptv val" style="margin-left:auto">0 (son d'origine)</span></div>
+    <div class="field pitchf"><div class="row"><span class="lbl" data-help="pitch">Hauteur du son (la note)</span><span class="ptv val" style="margin-left:auto">0 (son d'origine)</span></div>
       <input type="range" class="pitch" min="-12" max="12" step="1" value="0" aria-label="Hauteur piste ${t.id+1}">
       <div class="row wrap"><button class="p1">−1 octave</button><button class="p0">0</button><button class="p2">+1 octave</button><span class="pst lbl" style="margin-left:auto"></span></div></div>
     <div class="field"><div class="row"><span class="lbl" data-help="speed">Vitesse de la piste</span><span class="spv val" style="margin-left:auto">100 %</span></div>
@@ -2620,6 +2624,8 @@ function buildTrackUI(t){
       <div class="row"><span class="lbl w2">Graves</span><input type="range" class="eq" data-b="0" min="-12" max="12" step="1" value="0" aria-label="Graves piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Médiums</span><input type="range" class="eq" data-b="1" min="-12" max="12" step="1" value="0" aria-label="Médiums piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div>
       <div class="row"><span class="lbl w2">Aigus</span><input type="range" class="eq" data-b="2" min="-12" max="12" step="1" value="0" aria-label="Aigus piste ${t.id+1}"><span class="val ev" style="width:60px;text-align:right">0 dB</span></div></div>
+    <div class="field reconly"><div class="row"><span class="lbl" data-help="denoise">Nettoyer le bruit</span></div>
+      <div class="row wrap" style="margin-top:6px"><select class="dnl" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button class="dnb">🧹 Nettoyer</button></div></div>
   </div>
   <div class="pane" data-pane="cut" hidden>
   <div class="edslot"></div>
@@ -2637,18 +2643,16 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="slip">Décaler la piste dans le temps</span><span class="offv val" style="margin-left:auto">0 ms</span></div>
       <div class="row wrap" style="margin-top:6px"><button class="ofb" data-d="-10">−10 ms</button><button class="ofb" data-d="-1">−1 ms</button><button class="ofb" data-d="1">+1 ms</button><button class="ofb" data-d="10">+10 ms</button><button class="ofz">0</button></div>
       <div class="row wrap"><button class="ofauto primary">🎯 Caler la piste sur le rythme (sans couper)</button></div></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="quant">Grille de rythme et recalage son par son</span></div>
+    <div class="field reconly"><div class="row"><span class="lbl" data-help="quant">Grille de rythme et recalage son par son</span></div>
       <div class="row wrap" style="margin-top:6px"><select class="qgrid" style="width:auto" aria-label="Grille de recalage"><option value="1">sur les temps</option><option value="2" selected>sur les croches</option><option value="4">sur les doubles-croches</option></select><select class="qstr" style="width:auto" aria-label="Force du recalage"><option value="1">100 % (exact)</option><option value="0.75" selected>75 %</option><option value="0.5">50 % (naturel)</option></select><button class="qbtn">✂ Recaler chaque son</button></div></div>
-    <div class="field"><div class="row"><span class="lbl" data-help="fades">Fondus et sens</span></div>
-      <div class="row wrap" style="margin-top:6px"><span class="lbl">Entrée</span><select class="fdi" style="width:auto" aria-label="Fondu d'entrée">${FADE_OPTS}</select><span class="lbl">Sortie</span><select class="fdo" style="width:auto" aria-label="Fondu de sortie">${FADE_OPTS}</select></div>
-      <div class="row"><button class="revb">↔ Jouer à l'envers</button></div></div>
-    <div class="field reconly"><div class="row"><span class="lbl" data-help="denoise">Nettoyer le bruit</span></div>
-      <div class="row wrap" style="margin-top:6px"><select class="dnl" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button class="dnb">🧹 Nettoyer</button></div></div>
   </div>
   <div class="pane" data-pane="fx" hidden>
     <div class="field"><div class="row"><span class="lbl" data-help="fx">Effets (tu peux en empiler)</span></div>
       <div class="fxlist"></div>
       <div class="row"><button class="fxadd">+ Ajouter un effet</button></div></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="fades">Fondus et sens</span></div>
+      <div class="row wrap" style="margin-top:6px"><span class="lbl">Entrée</span><select class="fdi" style="width:auto" aria-label="Fondu d'entrée">${FADE_OPTS}</select><span class="lbl">Sortie</span><select class="fdo" style="width:auto" aria-label="Fondu de sortie">${FADE_OPTS}</select></div>
+      <div class="row"><button class="revb">↔ Jouer à l'envers</button></div></div>
   </div>
   <div class="pane" data-pane="tf" hidden>
     <p class="hint" style="margin-top:12px">Transforme ce que tu as enregistré sur cette piste (chant, fredonnement, sifflement…) en notes jouées par un instrument. <b>Le son d'origine est gardé</b> : tu pourras y revenir à tout moment.</p>
@@ -2661,8 +2665,8 @@ function buildTrackUI(t){
     <div class="field"><div class="row"><span class="lbl" data-help="tname">Nom et place de la piste</span></div>
       <div class="row" style="margin-top:6px"><input type="text" class="tnin" maxlength="24" style="flex:1" aria-label="Nom de la piste"><button class="tnok">Renommer</button></div>
       <div class="row wrap"><button class="tup">▲ Monter</button><button class="tdown">▼ Descendre</button><button class="tdup">⧉ Dupliquer</button></div></div>
-    <div class="row wrap"><button class="x" data-help="clear">✕ Effacer</button></div>
-    <div class="row"><button class="del" hidden>🗑 Supprimer cette piste</button></div>
+    <div class="field"><div class="row"><span class="lbl" data-help="clear">Effacer</span></div>
+      <div class="row wrap" style="margin-top:6px"><button class="x">✕ Vider le son (la piste reste)</button><button class="del" hidden>🗑 Supprimer la piste</button></div></div>
   </div>
   </div>`;
   wrap.appendChild(el);
@@ -3365,9 +3369,23 @@ function updFxList(){
   });
 }
 function songAct(fn){ if(!loopLen||recObj) return; pushHist(); fn(); scheduleSave(true); songRestartIfPlaying(); drawSong(); }
+// ----- 4 onglets de l'appli : Pistes · Morceau · Mix & export · Réglages
+let curView='pistes', viewBusy=false;
+function setView(v,fromMont){
+  if(!document.querySelector('.view[data-view="'+v+'"]')) v='pistes';
+  const was=curView; curView=v;
+  document.querySelectorAll('.view').forEach(e=>e.hidden=e.dataset.view!==v);
+  document.querySelectorAll('#vtabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  try{ localStorage.setItem('lbx-view',v); }catch(e){}
+  if(!fromMont&&!viewBusy){ viewBusy=true; try{ const open=!$('#mont').hidden; if(v==='morceau'&&!open) $('#montbtn').click(); else if(v!=='morceau'&&was==='morceau'&&open) $('#montbtn').click(); } finally{ viewBusy=false; } }
+  if(v==='pistes'){ tracks.forEach(t=>{ try{ drawWave(t); if(!$('.tbody',t.el).hidden){ if(t.tab==='cut') drawTsel(t); if(t.tab==='bass'){ drawBassTimeline(t); drawBassViz(t); } } }catch(e){} }); }
+  if(v==='morceau'){ $('#montempty').hidden=!!loopLen; if(!loopLen) $('#montempty').textContent='Le montage s\'utilise une fois ta boucle créée : enregistre d\'abord une piste dans l\'onglet 🎙 Pistes.'; }
+}
+document.querySelectorAll('#vtabs button').forEach(b=>b.onclick=()=>{ setView(b.dataset.v); try{ window.scrollTo({top:0}); }catch(e){} });
 $('#montbtn').onclick=()=>{
   const m=$('#mont'); m.hidden=!m.hidden; $('#montbtn').classList.toggle('on',!m.hidden); $('#montbtn').setAttribute('aria-expanded',String(!m.hidden));
-  if(!m.hidden){ songPrepare(); drawSong(); try{ m.scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} if(!loopLen) msg('Le montage s\'utilise une fois la boucle créée.'); }
+  if(!m.hidden){ if(!viewBusy&&curView!=='morceau'){ viewBusy=true; setView('morceau',true); viewBusy=false; } songPrepare(); drawSong(); if(!loopLen) msg('Le montage s\'utilise une fois la boucle créée.'); }
+  else if(!viewBusy&&curView==='morceau'){ viewBusy=true; setView('pistes',true); viewBusy=false; }
   else songStop();
 };
 $('#msecs').onclick=()=>{ song.rs=Math.max(0,songSnap(songPos())); if(song.re!=null&&song.re<=song.rs) song.re=null; drawSong(); };
