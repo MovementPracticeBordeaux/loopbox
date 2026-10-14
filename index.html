@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=69">
+<link rel="stylesheet" href="style.css?v=70">
 </head>
 <body>
 <header>
@@ -20,41 +20,47 @@
 </header>
 <section class="card projbar">
   <div class="row" style="margin-top:0">
-    <button id="projbtn" class="grow1" aria-expanded="false">📁 <span id="projname">Mon projet</span> ▾</button>
+    <button id="projbtn" class="grow1" aria-expanded="false"><i class="ic" data-ic="folder"></i> <span id="projname">Mon projet</span> ▾</button>
     <button id="undo" class="hbtn" aria-label="Annuler la dernière action" disabled>↶</button>
     <button id="redo" class="hbtn" aria-label="Rétablir" disabled>↷</button>
-    <button id="cloudbtn" class="hbtn" aria-label="Projets en ligne : se connecter" title="Projets en ligne">☁</button>
+    <button id="cloudbtn" class="hbtn" aria-label="Projets en ligne : se connecter" title="Projets en ligne"><i class="ic" data-ic="cloud"></i></button>
     <span id="savestate" class="lbl" style="white-space:nowrap">✓</span>
   </div>
-  <nav class="seg vtabs" id="vtabs" aria-label="Parties de l'appli"><button data-v="pistes" class="on"><i>🎙</i>Pistes</button><button data-v="morceau"><i>🎬</i>Morceau</button><button data-v="mix"><i>🎚</i>Mix &amp; export</button><button data-v="reglages"><i>⚙</i>Réglages</button></nav>
+  <nav class="seg vtabs" id="vtabs" aria-label="Parties de l'appli"><button data-v="pistes" class="on"><i class="ic" data-ic="mic"></i>Pistes</button><button data-v="morceau"><i class="ic" data-ic="film"></i>Morceau</button><button data-v="mix"><i class="ic" data-ic="sliders"></i>Mix &amp; export</button><button data-v="reglages"><i class="ic" data-ic="gear"></i>Réglages</button></nav>
   <div id="projmenu" hidden>
     <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="proj">Nom du projet</span></div>
       <div class="row" style="margin-top:6px"><input id="projinp" type="text" maxlength="40" style="flex:1" aria-label="Nom du projet"><button id="projren">Renommer</button></div></div>
-    <div class="row wrap"><button id="projsave" class="primary">💾 Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
+    <div class="row wrap"><button id="projsave" class="primary"><i class="ic" data-ic="save"></i> Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl">Mes projets</span></div><div id="projlist"></div></div>
-    <div class="field" id="cloudsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="cloud">☁ En ligne (tous tes appareils)</span><span id="cloudst" class="lbl" style="margin-left:auto"></span></div>
+    <div class="field" id="cloudsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="cloud"><i class="ic" data-ic="cloud"></i> En ligne (tous tes appareils)</span><span id="cloudst" class="lbl" style="margin-left:auto"></span></div>
       <div id="cloudout"><div class="row wrap" style="margin-top:6px"><input id="cloudmail" type="email" autocomplete="username" placeholder="ton e-mail" style="flex:1;min-width:180px" aria-label="E-mail"><input id="cloudpw" type="password" autocomplete="current-password" placeholder="mot de passe" style="flex:1;min-width:140px" aria-label="Mot de passe"></div>
         <div class="row wrap"><button id="cloudlogin" class="primary">Se connecter</button><button id="cloudsignup">Créer un compte</button></div></div>
       <div id="cloudin" hidden><div class="row wrap" style="margin-top:6px"><span id="cloudwho" class="lbl"></span><button id="cloudlogout" style="margin-left:auto">Se déconnecter</button></div>
-        <div class="row wrap"><button id="cloudupb" class="primary">☁ Mettre ce projet en ligne</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cloudauto" checked style="width:22px;height:22px"> envoi automatique</label></div>
+        <div class="row wrap"><button id="cloudupb" class="primary"><i class="ic" data-ic="cloud"></i> Mettre ce projet en ligne</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cloudauto" checked style="width:22px;height:22px"> envoi automatique</label></div>
         <div id="cloudlist"></div></div></div>
+    <div class="field" id="sendsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="send"><i class="ic" data-ic="users"></i> Envoyer ce projet à quelqu'un</span></div>
+      <div class="row wrap" style="margin-top:6px"><button id="sharelink" class="primary"><i class="ic" data-ic="link"></i> Créer un lien à envoyer</button><button id="sharefile"><i class="ic" data-ic="share"></i> Envoyer le fichier</button></div>
+      <div id="sharebox" hidden><div class="row" style="margin-top:6px"><input id="shareurl" type="text" readonly style="flex:1;min-width:0" aria-label="Lien du projet"><button id="sharecopy">Copier</button></div><p class="hint" id="sharehint" style="margin:4px 0 0"></p></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="install">Installer l'appli</span></div>
-      <div class="row wrap" style="margin-top:6px"><button id="installbtn" class="primary" hidden>📲 Installer LoopBox</button><span id="installhint" class="hint" style="margin:0"></span></div></div>
+      <div class="row wrap" style="margin-top:6px"><button id="installbtn" class="primary" hidden><i class="ic" data-ic="phone"></i> Installer LoopBox</button><span id="installhint" class="hint" style="margin:0"></span></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="projfile">Fichier (sauvegarde de sécurité)</span></div>
-      <div class="row wrap" style="margin-top:6px"><button id="projexp">⬇ Sauvegarder dans un fichier</button><button id="projimp">⬆ Ouvrir un fichier</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div></div>
+      <div class="row wrap" style="margin-top:6px"><button id="projexp"><i class="ic" data-ic="download"></i> Sauvegarder dans un fichier</button><button id="projimp"><i class="ic" data-ic="upload"></i> Ouvrir un fichier</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div></div>
   </div>
 </section>
 <p id="msg" role="status"></p>
+<div class="card" id="sharein" hidden><div class="row" style="margin-top:0"><b class="tn"><i class="ic" data-ic="download"></i> Projet reçu</b></div>
+  <p class="hint" id="shareinfo" style="margin:6px 0 0">Téléchargement du projet partagé…</p>
+  <div class="row wrap"><button id="shareopen" class="primary" disabled>Ouvrir ce projet</button><button id="shareno">Non merci</button></div></div>
 
 <div class="view" data-view="pistes">
 <details class="card how" id="how" open>
   <summary>Comment ça marche ?</summary>
   <ol>
-    <li>Appuie sur <b>● REC</b> sur la piste 1 et joue ta boucle de base (le <b>🔔 Métronome</b> te donne le tempo et un décompte si tu l'actives).</li>
+    <li>Appuie sur <b>● REC</b> sur la piste 1 et joue ta boucle de base (le <b><i class="ic" data-ic="bell"></i> Métronome</b> te donne le tempo et un décompte si tu l'actives).</li>
     <li>Appuie sur <b>■ STOP</b> : l'appli repère ton rythme et crée une boucle parfaitement calée.</li>
     <li><b>+ Piste</b>, <b>+ Basse</b> ou <b>+ Mélodie</b> (en bas de la liste) : tout se superpose en boucle.</li>
-    <li>Touche le <b>nom d'une piste</b> pour ses réglages : 🎚 Son · ⏱ Temps · ✨ Effets · ⚙ Piste (et 🎹 Notes pour la basse et la mélodie).</li>
-    <li>En haut : <b>🎬 Morceau</b> pour composer du début à la fin, <b>🎚 Mix &amp; export</b> pour le volume et les fichiers, <b>⚙ Réglages</b> pour le micro. ↶ ↷ annulent ou rétablissent.</li>
+    <li>Touche le <b>nom d'une piste</b> pour ses réglages : <i class="ic" data-ic="sliders"></i> Son · <i class="ic" data-ic="timer"></i> Temps · <i class="ic" data-ic="sparkle"></i> Effets · <i class="ic" data-ic="gear"></i> Piste (et <i class="ic" data-ic="keys"></i> Notes pour la basse et la mélodie).</li>
+    <li>En haut : <b><i class="ic" data-ic="film"></i> Morceau</b> pour composer du début à la fin, <b><i class="ic" data-ic="sliders"></i> Mix &amp; export</b> pour le volume et les fichiers, <b><i class="ic" data-ic="gear"></i> Réglages</b> pour le micro. ↶ ↷ annulent ou rétablissent.</li>
   </ol>
   <p class="hint">Partout, appuie sur le petit <b>?</b> pour comprendre un réglage. Un casque est conseillé, pour que le micro ne capte pas la musique.</p>
 </details>
@@ -68,14 +74,14 @@
     </div>
   </div>
   <div class="row wrap">
-    <button id="metro" data-help="metro">🔔 Métronome</button>
-    <button id="snap" class="on" data-help="snap">🎯 Auto-caler</button>
+    <button id="metro" data-help="metro"><i class="ic" data-ic="bell"></i> Métronome</button>
+    <button id="snap" class="on" data-help="snap"><i class="ic" data-ic="target"></i> Auto-caler</button>
     <button id="mix" data-help="mix">Prise : remplace</button>
-    <button id="montbtn" hidden aria-expanded="false">🎬 Montage du morceau</button><button id="livebtn" hidden aria-expanded="false">🎛 Mode live</button>
+    <button id="montbtn" hidden aria-expanded="false"><i class="ic" data-ic="film"></i> Montage du morceau</button><button id="livebtn" hidden aria-expanded="false"><i class="ic" data-ic="knobs"></i> Mode live</button>
   </div>
   <div class="dots" id="dots"></div>
   <p class="hint" id="lockhint" style="display:none"></p>
-  <details class="msub" id="loopset" style="margin-top:12px"><summary style="font-size:17px">⏱ Boucle, tempo et métronome</summary>
+  <details class="msub" id="loopset" style="margin-top:12px"><summary style="font-size:17px"><i class="ic" data-ic="timer"></i> Boucle, tempo et métronome</summary>
   <div class="row wrap" id="tempoRow" hidden><span class="lbl" data-help="tempochg">Changer le tempo</span><button class="tstep" data-d="-5">−5</button><button class="tstep" data-d="-1">−1</button><span class="val" id="tnew" style="min-width:64px;text-align:center">96</span><button class="tstep" data-d="1">+1</button><button class="tstep" data-d="5">+5</button><button id="tapply" class="primary">Appliquer</button></div>
 <div id="grow" style="display:none;margin-top:10px">
   <div class="row" style="margin-top:0"><span class="lbl" data-help="grow">Durée de la boucle</span><span id="growlbl" class="lbl" style="margin-left:auto"></span></div>
@@ -98,30 +104,30 @@
 <div class="row" style="justify-content:space-between;margin-top:20px"><h2 style="margin:0 2px">Tes pistes</h2><button id="foldall" class="eqr">Tout déplier</button></div>
 <p class="hint" style="margin:2px 2px 10px">Touche la forme d'onde d'une piste pour <b>relancer la lecture à cet endroit</b> (calé sur le temps le plus proche). Tu peux aussi toucher la barre de progression en bas.</p>
 <div id="tracks"></div>
-<div class="row wrap" style="margin-top:2px"><button id="addtrk" class="primary">🎙 + Piste</button><button id="addbass">🎸 + Basse</button><button id="addsynth">🎹 + Mélodie</button><span id="trkcount" class="lbl"></span></div>
+<div class="row wrap" style="margin-top:2px"><button id="addtrk" class="primary"><i class="ic" data-ic="mic"></i> + Piste</button><button id="addbass"><i class="ic" data-ic="guitar"></i> + Basse</button><button id="addsynth"><i class="ic" data-ic="keys"></i> + Mélodie</button><span id="trkcount" class="lbl"></span></div>
 </div>
 <div class="view" data-view="morceau" hidden>
 <p class="hint" id="montempty" style="margin:4px 2px 10px">Compose ton morceau du début à la fin avec les boucles de tes pistes : chaque piste a sa ligne, chaque bloc joue sa boucle.</p>
 <section class="card" id="mont" hidden>
-  <div class="row" style="margin-top:0"><b class="tn" data-help="mont">🎬 Montage du morceau</b><span id="montinfo" class="lbl" style="margin-left:auto"></span></div>
+  <div class="row" style="margin-top:0"><b class="tn" data-help="mont"><i class="ic" data-ic="film"></i> Montage du morceau</b><span id="montinfo" class="lbl" style="margin-left:auto"></span></div>
   <div class="row wrap"><button id="mplay" class="primary">▶ Lire le morceau</button><button id="mstop" aria-label="Arrêter et revenir au début">■ Début</button><span id="mcurv" class="lbl"></span></div>
   <canvas id="mcv" style="width:100%;display:block;margin-top:10px;border-radius:12px;background:rgba(255,255,255,.04);touch-action:none"></canvas>
   <p id="mlanehint" class="hint" hidden style="color:#FFB020"></p>
-  <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer">🔍−</button><button id="mzoomin" aria-label="Zoomer">🔍+</button><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgrid">Aimant <select id="mgrid" style="width:auto" aria-label="Aimant pour placer les blocs"><option value="M">mesure</option><option value="1" selected>temps</option><option value="0.5">½ temps</option><option value="0.25">¼ temps</option><option value="0">libre</option></select></label></div>
+  <div class="row wrap"><button id="mzoomout" aria-label="Dézoomer"><i class="ic" data-ic="zoomout"></i></button><button id="mzoomin" aria-label="Zoomer"><i class="ic" data-ic="zoomin"></i></button><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgrid">Aimant <select id="mgrid" style="width:auto" aria-label="Aimant pour placer les blocs"><option value="M">mesure</option><option value="1" selected>temps</option><option value="0.5">½ temps</option><option value="0.25">¼ temps</option><option value="0">libre</option></select></label></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mclip">Bloc choisi</span><span id="mclipinfo" class="lbl" style="margin-left:auto"></span></div>
-    <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgroup"><input type="checkbox" id="mmulti" style="width:22px;height:22px"> choisir plusieurs blocs</label><button id="mgrp">⛓ Grouper</button><button id="mungrp">Dissocier</button></div>
+    <div class="row wrap"><label class="lbl" style="display:flex;align-items:center;gap:6px" data-help="mgroup"><input type="checkbox" id="mmulti" style="width:22px;height:22px"> choisir plusieurs blocs</label><button id="mgrp"><i class="ic" data-ic="link"></i> Grouper</button><button id="mungrp">Dissocier</button></div>
     <div class="row wrap"><span class="lbl w2">Déplacer</span><button class="mnudge" data-d="-M">◀◀ 1 mesure</button><button class="mnudge" data-d="-g">◀ <span class="mstep">1 temps</span></button><button class="mnudge" data-d="g"><span class="mstep">1 temps</span> ▶</button><button class="mnudge" data-d="M">1 mesure ▶▶</button></div>
-    <div class="row wrap"><button id="mcut">✂ Couper au curseur</button><select id="mdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="4">4 fois</option><option value="8">8 fois</option></select><button id="mdup">⧉ Dupliquer</button><button id="mdel">🗑 Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div>
+    <div class="row wrap"><button id="mcut"><i class="ic" data-ic="scissors"></i> Couper au curseur</button><select id="mdupn" style="width:auto" aria-label="Nombre de copies"><option value="1">1 fois</option><option value="2">2 fois</option><option value="3">3 fois</option><option value="4">4 fois</option><option value="8">8 fois</option></select><button id="mdup">⧉ Dupliquer</button><button id="mdel"><i class="ic" data-ic="trash"></i> Supprimer</button><button id="mtpm">♭ −1 demi-ton</button><button id="mtpp">♯ +1 demi-ton</button></div>
     <div class="row wrap"><span class="lbl w2" data-help="mtrans">Entrée</span><select id="mtin" style="width:auto" aria-label="Transition d'entrée"><option value="none">aucune transition</option><option value="fade">fondu (le son monte)</option><option value="filter">filtre qui s'ouvre</option><option value="hp">montée par les aigus</option></select><select id="mtinl" style="width:auto" aria-label="Durée de l'entrée"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
     <div class="row wrap"><span class="lbl w2">Sortie</span><select id="mtout" style="width:auto" aria-label="Transition de sortie"><option value="none">aucune transition</option><option value="fade">fondu (le son descend)</option><option value="filter">filtre qui se ferme</option><option value="tape">ralenti (tape stop)</option><option value="echo">écho qui s'éteint</option><option value="stutter">hachage (stutter)</option></select><select id="mtoutl" style="width:auto" aria-label="Durée de la sortie"><option value="1">1 temps</option><option value="2" selected>2 temps</option><option value="4">1 mesure</option><option value="8">2 mesures</option></select></div>
-    <div class="row wrap"><button id="mvar" class="primary" data-help="mvar">✨ Créer une variation de ce bloc</button></div></div>
+    <div class="row wrap"><button id="mvar" class="primary" data-help="mvar"><i class="ic" data-ic="sparkle"></i> Créer une variation de ce bloc</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="msec">Partie du morceau (toutes les pistes)</span><span id="msecv" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="msecs">⇤ Début = curseur</button><button id="msece">Fin = curseur ⇥</button></div>
-    <div class="row wrap"><button id="msecdup" class="primary">⧉ Dupliquer cette partie</button><button id="msecmute">🔇 Rendre muette (blanc)</button><button id="msecdel">🗑 Supprimer cette partie</button></div></div>
+    <div class="row wrap"><button id="msecdup" class="primary">⧉ Dupliquer cette partie</button><button id="msecmute"><i class="ic" data-ic="mute"></i> Rendre muette (blanc)</button><button id="msecdel"><i class="ic" data-ic="trash"></i> Supprimer cette partie</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mblank">Insérer un blanc au curseur</span></div>
-    <div class="row wrap"><select id="mblankl" style="width:auto" aria-label="Durée du blanc"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mblank">⏸ Insérer le blanc</button></div></div>
+    <div class="row wrap"><select id="mblankl" style="width:auto" aria-label="Durée du blanc"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mblank"><i class="ic" data-ic="pause"></i> Insérer le blanc</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mfx">Sons de transition</span></div>
-    <div class="row wrap"><select id="mfxk" style="width:auto" aria-label="Son de transition"><option value="riser">Montée de bruit (finit au curseur)</option><option value="swell">Souffle inversé (finit au curseur)</option><option value="impact">Impact (au curseur)</option><option value="down">Descente (part du curseur)</option></select><select id="mfxl" style="width:auto" aria-label="Durée"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mfxadd" class="primary">✨ Ajouter</button></div>
+    <div class="row wrap"><select id="mfxk" style="width:auto" aria-label="Son de transition"><option value="riser">Montée de bruit (finit au curseur)</option><option value="swell">Souffle inversé (finit au curseur)</option><option value="impact">Impact (au curseur)</option><option value="down">Descente (part du curseur)</option></select><select id="mfxl" style="width:auto" aria-label="Durée"><option value="1">1 temps</option><option value="2">2 temps</option><option value="4" selected>1 mesure</option><option value="8">2 mesures</option></select><button id="mfxadd" class="primary"><i class="ic" data-ic="sparkle"></i> Ajouter</button></div>
     <div id="mfxlist"></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="mend">Fin du morceau</span><span id="mendv" class="lbl" style="margin-left:auto"></span></div>
     <div class="row wrap"><button id="mendm">− 1 mesure</button><button id="mendp">+ 1 mesure</button><button id="mendfit">Fin = dernier bloc</button></div></div>
@@ -135,39 +141,39 @@
 </div>
 <div class="view" data-view="mix" hidden>
 <section class="card">
-  <div class="row" style="margin-top:0"><b class="tn" data-help="mvol">🎚 Mix général</b></div>
+  <div class="row" style="margin-top:0"><b class="tn" data-help="mvol"><i class="ic" data-ic="sliders"></i> Mix général</b></div>
   <div class="row"><span class="lbl w" data-help="mvol">Volume général</span><input type="range" id="mvol" min="0" max="1.2" step="0.01" value="0.9" aria-label="Volume général"></div>
   <div class="row"><span class="lbl w" data-help="mout">Niveau de sortie</span><div class="meter"><b id="mOut"></b></div></div>
   <p id="limst" class="hint" hidden style="color:#FFB020;margin:4px 2px 0"></p>
   <div class="row wrap"><span class="lbl" data-help="fin">Son final</span><div class="seg" id="finseg"><button data-l="0" class="on">Aucun</button><button data-l="1">Doux</button><button data-l="2">Fort</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="exp">Exporter et partager</span></div>
   <div class="row wrap">
-    <span class="lbl" style="flex-basis:100%">🔁 La boucle</span><select id="reps" aria-label="Nombre de répétitions à exporter" style="width:auto"><option value="1">1 boucle</option><option value="2">2 boucles</option><option value="4" selected>4 boucles</option><option value="8">8 boucles</option></select>
-    <button id="exp" class="primary">⬇ Exporter la boucle (WAV)</button>
+    <span class="lbl" style="flex-basis:100%"><i class="ic" data-ic="loop"></i> La boucle</span><select id="reps" aria-label="Nombre de répétitions à exporter" style="width:auto"><option value="1">1 boucle</option><option value="2">2 boucles</option><option value="4" selected>4 boucles</option><option value="8">8 boucles</option></select>
+    <button id="exp" class="primary"><i class="ic" data-ic="download"></i> Exporter la boucle (WAV)</button>
     <label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="expfade" style="width:22px;height:22px"> Fondu de fin</label>
   </div>
-  <div class="row wrap"><span class="lbl" style="flex-basis:100%">🎬 Le morceau (montage)</span><button id="mexp" class="primary">⬇ Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
-  <div class="row wrap"><button id="share" data-help="share">📤 Partager le mix</button><button id="stems" data-help="stems">🎚 Pistes séparées (.zip)</button></div></div>
+  <div class="row wrap"><span class="lbl" style="flex-basis:100%"><i class="ic" data-ic="film"></i> Le morceau (montage)</span><button id="mexp" class="primary"><i class="ic" data-ic="download"></i> Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
+  <div class="row wrap"><button id="share" data-help="share"><i class="ic" data-ic="share"></i> Partager le mix</button><button id="stems" data-help="stems"><i class="ic" data-ic="sliders"></i> Pistes séparées (.zip)</button></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="denoise">Nettoyage</span></div>
-  <div class="row wrap"><select id="dnall" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button id="dnallb">🧹 Nettoyer toutes les pistes</button></div></div>
+  <div class="row wrap"><select id="dnall" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button id="dnallb"><i class="ic" data-ic="broom"></i> Nettoyer toutes les pistes</button></div></div>
 </section>
 </div>
 <div class="view" data-view="reglages" hidden>
 <section class="card">
   <div>
-    <div class="row" style="margin-top:0"><b class="tn">🎤 Micro et latence</b></div>
+    <div class="row" style="margin-top:0"><b class="tn"><i class="ic" data-ic="mic"></i> Micro et latence</b></div>
     <div class="row"><span class="lbl" data-help="setup">Je joue avec</span></div>
-    <div class="seg" id="setupseg" style="margin-top:8px"><button data-s="speaker">🔈 Sans casque</button><button data-s="wired">🎧 Casque filaire</button><button data-s="bt">🎧 Casque Bluetooth</button><button data-s="ext">🎤 Micro externe</button></div>
+    <div class="seg" id="setupseg" style="margin-top:8px"><button data-s="speaker"><i class="ic" data-ic="speaker"></i> Sans casque</button><button data-s="wired"><i class="ic" data-ic="headphones"></i> Casque filaire</button><button data-s="bt"><i class="ic" data-ic="headphones"></i> Casque Bluetooth</button><button data-s="ext"><i class="ic" data-ic="mic"></i> Micro externe</button></div>
     <p class="hint" id="setuphint"></p>
     <div class="row"><span class="lbl w" data-help="micsel">Micro</span><select id="micsel" style="flex:1" aria-label="Micro utilisé"><option value="">Micro par défaut</option></select></div>
-    <div class="row wrap"><span id="micused" class="hint" style="margin:0;flex:1"></span><button id="micscan">🔄 Chercher les micros</button></div>
-    <div class="row wrap"><button id="fidtest" class="primary" data-help="fid">🎙 Test de fidélité (4 s)</button></div>
+    <div class="row wrap"><span id="micused" class="hint" style="margin:0;flex:1"></span><button id="micscan"><i class="ic" data-ic="refresh"></i> Chercher les micros</button></div>
+    <div class="row wrap"><button id="fidtest" class="primary" data-help="fid"><i class="ic" data-ic="mic"></i> Test de fidélité (4 s)</button></div>
     <div id="fidout" class="hint" hidden style="margin:4px 0 0;line-height:1.5"></div>
     <div class="row"><span class="lbl w" data-help="min">Niveau micro</span><div class="meter"><b id="mIn"></b></div></div>
     <div class="row"><span class="lbl w" data-help="ingain">Gain micro</span><input type="range" id="ingain" min="0.1" max="6" step="0.1" value="2"><span class="val" id="ingv" style="width:48px;text-align:right">2.0×</span></div>
     <div class="row"><span class="lbl w" data-help="comp">Latence</span><input type="range" id="comp" min="0" max="800" step="1" value="100"><span class="val" id="compv" style="width:56px;text-align:right">100ms</span></div>
     <div class="row"><button id="norm" class="on" data-help="lvl">Niveau auto des prises</button></div>
-    <div class="row wrap"><button id="cal" data-help="cal">Calibrer automatiquement (sans casque)</button><button id="caltap" class="primary" data-help="caltap">🥁 Calibrer en tapant (casque)</button></div>
+    <div class="row wrap"><button id="cal" data-help="cal">Calibrer automatiquement (sans casque)</button><button id="caltap" class="primary" data-help="caltap"><i class="ic" data-ic="drum"></i> Calibrer en tapant (casque)</button></div>
     <p class="hint" id="calmsg">Calibration : sans casque, volume moyen, pièce calme. À refaire si tu changes de casque ou d'appareil.</p>
   </div>
 </section>
@@ -182,7 +188,7 @@
 <section class="card">
   <div class="row" style="margin-top:0"><b class="tn">⚠ Zone sensible</b></div>
   <p class="hint">Efface toutes les pistes du projet ouvert (↶ permet de revenir en arrière).</p>
-  <div class="row"><button id="clearAll">🗑 Tout effacer</button></div>
+  <div class="row"><button id="clearAll"><i class="ic" data-ic="trash"></i> Tout effacer</button></div>
 </section>
 </div>
 <p class="foot">LoopBox · Movement Practice Bordeaux</p>
@@ -193,6 +199,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=69"></script>
+<script src="app.js?v=70"></script>
 </body>
 </html>

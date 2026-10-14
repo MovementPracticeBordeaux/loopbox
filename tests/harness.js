@@ -27,6 +27,9 @@ function fakeCloud(){
   S.fetch=async(url,opt={})=>{
     if(S.down) throw new TypeError('Failed to fetch');
     const u=new URL(url), m=(opt.method||'GET').toUpperCase(), H=opt.headers||{}; S.log.push(m+' '+u.pathname+u.search);
+    // lien signé : lecture sans clé ni compte, tant que le jeton est valable
+    const sg=u.pathname.match(/^\/storage\/v1\/object\/sign\/([^/]+)\/(.*)$/);
+    if(sg&&m==='GET'){ const tk=S.signs&&S.signs[u.searchParams.get('token')]; if(!tk||tk.exp<Date.now()||tk.key!==sg[1]+'/'+decodeURIComponent(sg[2])) return res(400,{statusCode:'400',error:'InvalidJWT',message:'jwt expired'}); const f=S.files[tk.key]; if(!f) return res(400,{statusCode:'404',error:'not_found',message:'Object not found'}); return {ok:true,status:200,arrayBuffer:async()=>f.slice(0)}; }
     if(!H.apikey) return res(401,{message:'No API key found in request'});
     const body=opt.body==null?null:typeof opt.body==='string'?opt.body:new Uint8Array(await opt.body.arrayBuffer()).buffer;
     const auth=(H.Authorization||'').replace('Bearer ',''), who=S.tokens[auth];
@@ -35,6 +38,7 @@ function fakeCloud(){
     if(u.pathname==='/auth/v1/token'){ const j=JSON.parse(body);
       if(u.searchParams.get('grant_type')==='password'){ const id=Object.keys(S.users).find(k=>S.users[k].email===j.email&&S.users[k].pw===j.password); if(!id) return res(400,{error:'invalid_grant',error_description:'Invalid login credentials'}); if(!S.users[id].ok) return res(400,{error_description:'Email not confirmed'}); return res(200,sess(id)); }
       const t=S.tokens[j.refresh_token]; if(!t||!t.refresh) return res(400,{error:'invalid_grant',error_description:'Invalid Refresh Token'}); delete S.tokens[j.refresh_token]; S.refreshed=(S.refreshed||0)+1; return res(200,sess(t.uid)); }
+    if(sg&&m==='POST'){ const who2=S.tokens[(H.Authorization||'').replace('Bearer ','')]; if(!who2||who2.refresh) return res(400,{statusCode:'403',message:'invalid JWT'}); const path=decodeURIComponent(sg[2]); if(path.split('/')[0]!==who2.uid) return res(400,{statusCode:'403',message:'row-level security'}); const key=sg[1]+'/'+path; if(!S.files[key]) return res(400,{statusCode:'404',message:'Object not found'}); const tk='tk'+(++S.n); S.signs=S.signs||{}; S.signs[tk]={key,exp:Date.now()+JSON.parse(body).expiresIn*1000}; S.lastExpires=JSON.parse(body).expiresIn; return res(200,{signedURL:'/object/sign/'+sg[1]+'/'+path+'?token='+tk}); }
     const sm=u.pathname.match(/^\/storage\/v1\/object\/(authenticated\/)?([^/]+)\/?(.*)$/);
     if(sm){ if(!who||who.refresh||who.exp<Date.now()) return res(400,{statusCode:'403',error:'Unauthorized',message:'invalid JWT'});
       const path=decodeURIComponent(sm[3]), mine=p=>p.split('/')[0]===who.uid;
@@ -53,7 +57,7 @@ async function boot(opt={}){
   const idb=opt.idb||new FI.IDBFactory();
   const P={defaultMic:'Micro intégré',devs:[{kind:'audioinput',deviceId:'default',label:'Par défaut'},{kind:'audioinput',deviceId:'int1',label:'Micro intégré'},{kind:'audioinput',deviceId:'usb1',label:'Micro USB'},{kind:'audiooutput',deviceId:'o1',label:'Haut-parleur'}],gum:[],errs:[],buffers:[],starts:[],blobs:[],k:0,impulses:[],noise:0,amp:0.8,ctx:null,proc:null,wnode:null,idb};
   const mk=()=>new Proxy(function(){},{get:(t,p)=>{ if(p==='value') return t._v??0; return t[p]??(t[p]=mk()); },set:(t,p,v)=>{ t[p]=v; return true; },apply:()=>mk()});
-  const dom=new JSDOM(pageHtml(),{...(opt.cloud?{url:'https://loopbox.test/'}:{}),runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
+  const dom=new JSDOM(pageHtml(),{...(opt.url?{url:opt.url}:opt.cloud?{url:'https://loopbox.test/'}:{}),runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
     class AC{ constructor(){ this.sampleRate=SR; this.currentTime=0; this.destination=mk(); P.ctx=this; }
       resume(){ return Promise.resolve(); }
       createBuffer(c,l,sr){ const d=new Float32Array(l); const b={length:l,duration:l/sr,sampleRate:sr,numberOfChannels:1,getChannelData:()=>d,copyToChannel:a=>d.set(a)}; P.buffers.push(b); return b; } }

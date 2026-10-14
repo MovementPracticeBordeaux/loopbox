@@ -167,10 +167,18 @@ input[type=text],input[type=email],input[type=password]{font:inherit;color:var(-
 /* onglets de l'appli, dans la barre du haut (toujours visibles) */
 .vtabs{margin-top:10px;flex-wrap:nowrap;gap:4px;}
 .vtabs button{flex:1 1 0;min-width:0;padding:4px 2px;font-size:13px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;border-radius:14px;}
-.vtabs button i{font-style:normal;font-size:19px;}
+.vtabs button svg.ic{width:22px;height:22px;margin-bottom:2px;}
 .view[hidden]{display:none!important;}
 
 /* tout doit tenir dans la largeur d'un téléphone */
 select{max-width:100%;}
 .ttabs{flex-wrap:wrap;overflow-x:visible;}
 .ttabs button{flex:1 0 auto;}
+
+/* icônes au trait (style Calisthenics Tracker) */
+svg.ic{display:inline-block;vertical-align:-4px;flex:none;}
+button svg.ic,summary svg.ic,.lbl svg.ic,.tn svg.ic{margin-right:2px;}
+.flags svg.ic{margin-left:4px;vertical-align:-3px;}
+#cloudbtn{display:inline-flex;align-items:center;justify-content:center;gap:1px;}
+#cloudbtn svg.ic{width:22px;height:22px;margin:0;}
+#cloudbtn small{font-size:12px;}
