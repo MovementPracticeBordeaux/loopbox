@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='73';
+const APPVER='74';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -623,7 +623,19 @@ async function fidTest(){
   const box=$('#fidout'); box.hidden=false; box.innerHTML=''; L.forEach(t=>{ const p=document.createElement('div'); p.textContent=t; box.appendChild(p); });
   const row=document.createElement('div'); row.className='row wrap';
   [['▶ Brut','R'],['▶ Après l\'appli','Q']].forEach(([l,k])=>{ const bt=document.createElement('button'); bt.textContent=l; bt.onclick=()=>fidPlay(k); row.appendChild(bt); });
-  const dl=document.createElement('button'); dl.innerHTML=ic('download')+' Les deux en fichiers'; dl.onclick=()=>{ const mkb=x=>{ const b=ctx.createBuffer(1,x.length,SR); b.copyToChannel(x,0); return b; }; downloadBlob(new Blob([makeZipMulti([{name:'1-brut-micro.wav',data:wav16(mkb(fidRes.R))},{name:'2-apres-appli.wav',data:wav16(mkb(fidRes.Q))}])],{type:'application/zip'}),'test-fidelite-micro.zip'); };
+  const dl=document.createElement('button'); dl.innerHTML=ic('download')+' Les deux en fichiers'; dl.onclick=async()=>{
+    // partage des deux WAV (menu du téléphone : Fichiers, Drive, WhatsApp…), sinon .zip téléchargé ; chaque échec est expliqué
+    try{
+      if(!fidRes||!fidRes.R) throw new Error('refais le test, le résultat n\'est plus en mémoire');
+      const mkb=x=>{ const b=ctx.createBuffer(1,x.length,SR); b.copyToChannel(x,0); return b; };
+      const w1=wav16(mkb(fidRes.R)), w2=wav16(mkb(fidRes.Q));
+      let files=null; try{ files=[new File([w1],'1-brut-micro.wav',{type:'audio/wav'}),new File([w2],'2-apres-appli.wav',{type:'audio/wav'})]; }catch(e){}
+      let can=false; try{ can=!!(files&&navigator.canShare&&navigator.share&&navigator.canShare({files})); }catch(e){}
+      if(can){ try{ await navigator.share({files,title:'Test de fidélité LoopBox'}); msg('Fichiers du test partagés.'); return; }catch(e){ if(e&&e.name==='AbortError'){ msg('Partage annulé.'); return; } } }
+      downloadBlob(new Blob([makeZipMulti([{name:'1-brut-micro.wav',data:w1},{name:'2-apres-appli.wav',data:w2}])],{type:'application/zip'}),'test-fidelite-micro.zip');
+      msg('« test-fidelite-micro.zip » envoyé dans tes Téléchargements (regarde la notification de téléchargement du navigateur).');
+    }catch(e){ msg('Fichiers du test impossibles à créer : '+((e&&e.message)||e)+'.'); }
+  };
   row.appendChild(dl); box.appendChild(row);
   msg('Test terminé : compare « Brut » et « Après l\'appli » au casque. Les deux sont joués au même volume, sans passer par les pistes.');
 }

@@ -1596,6 +1596,18 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(P.$$('#liblist .fsrow').length===1,'fichier supprimé du dossier');
     ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
   });
+  await test('test de fidélité : les deux fichiers partent (partage du téléphone ou .zip téléchargé), sinon message',async()=>{
+    for(const share of [true,false]){
+      const P=await boot({share}); await sleep(50); P.noise=0.2;
+      P.$('#fidtest').click(); const t0=Date.now();
+      while(Date.now()-t0<9000&&!P.$$('#fidout button').length){ P.step(); await sleep(8); }
+      const b=P.$$('#fidout button').find(x=>/Les deux en fichiers/.test(x.textContent));
+      ok(b,'bouton présent : '+P.$('#msg').textContent);
+      b.click(); for(let k=0;k<40&&!P.shared&&!P.download;k++) await sleep(50);
+      if(share) ok(P.shared&&P.shared.files.length===2&&P.shared.files.every(f=>f.type==='audio/wav'&&f.size>1000),'2 WAV partagés');
+      else ok(P.download==='test-fidelite-micro.zip'&&/Téléchargements/.test(P.$('#msg').textContent),'zip téléchargé + message : '+P.$('#msg').textContent);
+    }
+  });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
     const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };
