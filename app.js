@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='75';
+const APPVER='76';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -4518,17 +4518,24 @@ window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEv
 window.addEventListener('appinstalled',()=>{ installEvt=null; updInstall(); msg("LoopBox est installée : retrouve-la sur ton écran d'accueil."); });
 $('#installbtn').onclick=async()=>{ if(!installEvt) return; installEvt.prompt(); try{ const r=await installEvt.userChoice; msg(r&&r.outcome==='accepted'?'Installation lancée.':'Installation annulée.'); }catch(e){} installEvt=null; updInstall(); };
 updInstall();
+// bandeau de mise à jour : fixe en haut, jamais effacé par les autres messages ; l'appli vérifie aussi quand on y revient
 function showUpdate(w){
-  const m=$('#msg'); m.textContent='Nouvelle version de LoopBox disponible. ';
+  let bar=document.getElementById('updbar');
+  if(!bar){ bar=document.createElement('div'); bar.id='updbar'; bar.setAttribute('role','alert'); document.body.appendChild(bar); }
+  bar.innerHTML='<span>Nouvelle version de LoopBox prête.</span>';
   const b=document.createElement('button'); b.textContent='Mettre à jour'; b.className='primary';
-  b.onclick=()=>{ if(recObj){ msg('Termine ton enregistrement avant de mettre à jour.'); return; } saveProj().finally(()=>w.postMessage('skip')); };
-  m.appendChild(b);
+  b.onclick=()=>{ if(recObj){ msg('Termine ton enregistrement avant de mettre à jour.'); return; } b.disabled=true; b.textContent='Mise à jour…'; saveProj().finally(()=>{ w.postMessage('skip'); setTimeout(()=>location.reload(),3000); }); };
+  bar.appendChild(b); bar.hidden=false;
 }
 if('serviceWorker' in navigator&&location.protocol==='https:'){
   const hadCtl=!!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('sw.js').then(reg=>{
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
     if(reg.waiting&&hadCtl) showUpdate(reg.waiting);
     reg.addEventListener('updatefound',()=>{ const w=reg.installing; if(!w) return; w.addEventListener('statechange',()=>{ if(w.state==='installed'&&navigator.serviceWorker.controller) showUpdate(w); }); });
+    // une appli laissée ouverte (onglet Chrome, appli installée) ne se recharge pas : on vérifie au retour et toutes les 10 min
+    const chk=()=>{ if(!recObj) reg.update().catch(()=>{}); };
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') chk(); });
+    setInterval(chk,10*60*1000);
   }).catch(()=>{});
   let reloading=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(!hadCtl||reloading) return; reloading=true; location.reload(); });
