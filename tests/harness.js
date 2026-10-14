@@ -79,7 +79,7 @@ async function boot(opt={}){
         async getFileHandle(n,o){ if(!kids.has(n)){ if(!(o&&o.create)) throw Object.assign(new Error('NotFound'),{name:'NotFoundError'}); const fh={kind:'file',name:n,data:new Uint8Array(0),at:Date.now(),async getFile(){ return new w.File([fh.data],n,{type:'audio/wav',lastModified:fh.at}); },async createWritable(){ const parts=[]; return {write:async x=>parts.push(new Uint8Array(x instanceof ArrayBuffer?x:x.buffer||x)),close:async()=>{ const L=parts.reduce((a,p)=>a+p.length,0), u=new Uint8Array(L); let o=0; parts.forEach(p=>{u.set(p,o);o+=p.length;}); fh.data=u; fh.at=Date.now(); }}; }}; kids.set(n,fh); } return kids.get(n); },
         async removeEntry(n){ kids.delete(n); },
         async queryPermission(){ return P.fsPerm||'granted'; }, async requestPermission(){ P.fsAsked=(P.fsAsked||0)+1; P.fsPerm='granted'; return 'granted'; } }; return d; };
-      P.fsRoot=opt.fs===true?mkDir('LoopBox'):opt.fs; w.showDirectoryPicker=async()=>P.fsRoot; }
+      P.fsRoot=opt.fs===true||opt.fs==='blocked'?mkDir('LoopBox'):opt.fs; w.showDirectoryPicker=async()=>{ if(opt.fs==='blocked') throw Object.assign(new Error('The user aborted a request.'),{name:'AbortError'}); return P.fsRoot; }; }
     w.indexedDB=idb;
     w.fetch=async(url,o2)=>{ if(/^sounds\//.test(url)){ P.soundReqs=(P.soundReqs||[]).concat(url); if(P.offline) throw new TypeError('Failed to fetch'); const f=path.join(ROOT,url); if(!fs.existsSync(f)) return {ok:false,status:404,json:async()=>({})}; const txt=fs.readFileSync(f,'utf8'); return {ok:true,status:200,json:async()=>JSON.parse(txt)}; } if(opt.cloud) return opt.cloud.fetch(url,o2); throw new TypeError('Failed to fetch'); };
     if(opt.cloud){ w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }

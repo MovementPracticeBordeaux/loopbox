@@ -1577,6 +1577,9 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
     const N=await boot(); await sleep(50); N.$('#libfold').click(); await sleep(30);
     ok(/ne permet pas de lier/.test(N.$('#msg').textContent),'sans la fonction : '+N.$('#msg').textContent);
+    ok(!N.$('#toast').hidden&&/ne permet pas/.test(N.$('#toast').textContent)&&/Chrome/.test(N.$('#libfoldst').textContent),'message visible même en bas de page');
+    const B=await boot({fs:'blocked'}); await sleep(50); B.$('#libfold').click(); await sleep(50);
+    ok(/bloque/.test(B.$('#libfoldst').textContent)&&/Chrome/.test(B.$('#libfoldst').textContent),'navigateur qui refuse tout de suite (Brave) : '+B.$('#libfoldst').textContent);
     const P=await boot({share:true,fs:true}); await recordBase(P); await sleep(50);
     P.$('#libaddloop').click(); await until(()=>P.$$('#liblist .librow').length===1);
     P.$('#libfold').click(); await until(()=>/lié/.test(P.$('#msg').textContent));
