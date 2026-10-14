@@ -72,6 +72,14 @@ async function boot(opt={}){
       startRendering(){ const d=new Float32Array(this.length); for(let i=0;i<this.length;i+=4800) d[i]=0.5; return Promise.resolve({length:this.length,sampleRate:this.sampleRate,numberOfChannels:1,getChannelData:()=>d}); } };
     for(const m of ['createGain','createBiquadFilter','createDynamicsCompressor','createBufferSource','createStereoPanner','createDelay','createConvolver','createWaveShaper','createOscillator']) w.OfflineAudioContext.prototype[m]=function(){ return mk(); };
     if(opt.share){ w.navigator.canShare=()=>true; w.navigator.share=async d=>{ P.shared=d; }; }
+    // faux dossier de la tablette (File System Access)
+    if(opt.fs){ const mkDir=(name)=>{ const kids=new Map(); const d={kind:'directory',name,kids,
+        async *values(){ for(const v of kids.values()) yield v; },
+        async getDirectoryHandle(n,o){ if(!kids.has(n)){ if(!(o&&o.create)) throw Object.assign(new Error('NotFound'),{name:'NotFoundError'}); kids.set(n,mkDir(n)); } return kids.get(n); },
+        async getFileHandle(n,o){ if(!kids.has(n)){ if(!(o&&o.create)) throw Object.assign(new Error('NotFound'),{name:'NotFoundError'}); const fh={kind:'file',name:n,data:new Uint8Array(0),at:Date.now(),async getFile(){ return new w.File([fh.data],n,{type:'audio/wav',lastModified:fh.at}); },async createWritable(){ const parts=[]; return {write:async x=>parts.push(new Uint8Array(x instanceof ArrayBuffer?x:x.buffer||x)),close:async()=>{ const L=parts.reduce((a,p)=>a+p.length,0), u=new Uint8Array(L); let o=0; parts.forEach(p=>{u.set(p,o);o+=p.length;}); fh.data=u; fh.at=Date.now(); }}; }}; kids.set(n,fh); } return kids.get(n); },
+        async removeEntry(n){ kids.delete(n); },
+        async queryPermission(){ return P.fsPerm||'granted'; }, async requestPermission(){ P.fsAsked=(P.fsAsked||0)+1; P.fsPerm='granted'; return 'granted'; } }; return d; };
+      P.fsRoot=opt.fs===true?mkDir('LoopBox'):opt.fs; w.showDirectoryPicker=async()=>P.fsRoot; }
     w.indexedDB=idb;
     w.fetch=async(url,o2)=>{ if(/^sounds\//.test(url)){ P.soundReqs=(P.soundReqs||[]).concat(url); if(P.offline) throw new TypeError('Failed to fetch'); const f=path.join(ROOT,url); if(!fs.existsSync(f)) return {ok:false,status:404,json:async()=>({})}; const txt=fs.readFileSync(f,'utf8'); return {ok:true,status:200,json:async()=>JSON.parse(txt)}; } if(opt.cloud) return opt.cloud.fetch(url,o2); throw new TypeError('Failed to fetch'); };
     if(opt.cloud){ w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }

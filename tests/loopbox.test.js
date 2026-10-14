@@ -1573,6 +1573,26 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(Q.$$('#liblist .librow').length===1,'supprimé');
     ok(P.errs.length===0&&Q.errs.length===0,'erreurs : '+P.errs.concat(Q.errs).join(';'));
   });
+  await test('bibliothèque : dossier de la tablette lié, WAV écrits par projet, listés, écoutés, partagés, supprimés ; navigateur sans cette fonction expliqué',async()=>{
+    const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
+    const N=await boot(); await sleep(50); N.$('#libfold').click(); await sleep(30);
+    ok(/ne permet pas de lier/.test(N.$('#msg').textContent),'sans la fonction : '+N.$('#msg').textContent);
+    const P=await boot({share:true,fs:true}); await recordBase(P); await sleep(50);
+    P.$('#libaddloop').click(); await until(()=>P.$$('#liblist .librow').length===1);
+    P.$('#libfold').click(); await until(()=>/lié/.test(P.$('#msg').textContent));
+    ok(/LoopBox/.test(P.$('#libfoldst').textContent)&&/Changer de dossier/.test(P.$('#libfold').textContent),'dossier lié : '+P.$('#libfoldst').textContent);
+    P.$('#libaddsong').click(); await until(()=>P.$$('#liblist .fsrow').length===1);
+    const sub=P.fsRoot.kids.get('Mon projet'), f=sub&&[...sub.kids.values()][0];
+    ok(f&&/^Mon projet – morceau\.wav$/.test(f.name)&&new TextDecoder().decode(f.data.slice(0,4))==='RIFF','WAV écrit dans LoopBox/Mon projet : '+(f&&f.name)+' | '+P.$('#msg').textContent);
+    ok(/Tablette : LoopBox\/Mon projet · 1/.test(P.$('#liblist').textContent),'listé sous le dossier de la tablette : '+P.$('#liblist').textContent);
+    P.shared=null; P.$('#liblist .fsrow .libshare').click(); await until(()=>P.shared);
+    ok(P.shared&&P.shared.files[0].type==='audio/wav'&&P.shared.files[0].size===f.data.length,'partagé depuis le dossier');
+    P.$('#liblist .libcopy').click(); await until(()=>P.$$('#liblist .fsrow').length===2);
+    ok(P.$$('#liblist .fsrow').length===2,'ancien morceau de l\'appli copié dans le dossier');
+    P.$('#liblist .fsrow .pn').click(); await sleep(10); const d=P.$('.libedit .libdel'); d.click(); d.click(); await until(()=>P.$$('#liblist .fsrow').length===1);
+    ok(P.$$('#liblist .fsrow').length===1,'fichier supprimé du dossier');
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+  });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
     const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };

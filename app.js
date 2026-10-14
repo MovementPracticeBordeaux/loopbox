@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='71';
+const APPVER='72';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1379,7 +1379,7 @@ const HELP={
   fxamt:"<b>Intensité de l'effet</b> : de très discret (gauche) à très marqué (droite). Écoute en réglant : c'est le plus simple.",
   undo:"<b>Annuler</b> : revient à la prise précédente de cette piste. Appuie encore pour revenir à la dernière prise.",
   clear:"<b>Effacer</b> : vide cette piste. Tu peux annuler juste après avec « Annuler ».",
-  lib:"<b>Ma bibliothèque</b> : garde tes morceaux finis en WAV (qualité CD) dans l'appli. <b>Ranger la boucle</b> ou <b>Ranger le morceau</b> crée le son et le range dans un dossier au nom du projet. Touche un titre pour le renommer, le changer de dossier (écris un nouveau nom pour créer un dossier), le télécharger ou le supprimer. <b>Partager</b> ouvre le menu de partage du téléphone : choisis WhatsApp et la personne reçoit le fichier son. La bibliothèque est gardée <b>sur cet appareil</b> (dans le navigateur) : si tu effaces les données du site, elle disparaît ; télécharge les morceaux importants pour en garder une copie. Un WAV pèse environ 10 Mo par minute.",
+  lib:"<b>Ma bibliothèque</b> : garde tes morceaux finis en WAV (qualité CD) dans l'appli. <b>Ranger la boucle</b> ou <b>Ranger le morceau</b> crée le son et le range dans un dossier au nom du projet. Touche un titre pour le renommer, le changer de dossier (écris un nouveau nom pour créer un dossier), le télécharger ou le supprimer. <b>Partager</b> ouvre le menu de partage du téléphone : choisis WhatsApp et la personne reçoit le fichier son. La bibliothèque est gardée <b>sur cet appareil</b> (dans le navigateur) : si tu effaces les données du site, elle disparaît ; télécharge les morceaux importants pour en garder une copie. <b>Lier un dossier de la tablette</b> : choisis (ou crée) un dossier, par exemple Musique/LoopBox. Ensuite, chaque morceau rangé y est écrit en WAV, dans un sous-dossier au nom du projet : tu le retrouves dans l'appli Fichiers, WhatsApp ou ton lecteur, et LoopBox affiche les WAV de ce dossier pour les écouter et les partager. Prends un dossier dédié, pas celui des photos. Si le navigateur oublie l'autorisation, touche « Réautoriser ». Tous les navigateurs ne le permettent pas (Brave peut le bloquer ; Chrome le permet depuis 2025). Un WAV pèse environ 10 Mo par minute.",
   mvol:"<b>Volume général</b> : la force de toutes les pistes ensemble, juste avant la sortie.",
   mout:"<b>Niveau de sortie</b> : le volume réel de ton mix. Si la barre devient <b>rouge</b>, c'est trop fort et le son sature : baisse le volume général ou celui de certaines pistes.",
   min:"<b>Niveau micro</b> : ce que capte ton micro. Quand tu joues, la barre doit bouger bien franchement sans devenir rouge. Trop faible : augmente le gain micro dans « Réglages ». Rouge : baisse-le.",
@@ -3879,6 +3879,10 @@ async function libAdd(kind){
   await libLoad();
   const base=projName+(kind==='song'?' – morceau':' – boucle'), names=new Set(lib.map(x=>x.name));
   let name=base, k=2; while(names.has(name)) name=base+' '+(k++);
+  if(fsDir&&fsOk){
+    try{ const fn=await fsWrite(projName,name,data); libOpen=null; await fsScan(); renderLib(); msg('« '+fn+' » enregistré dans ton dossier « '+fsDir.name+'/'+safeName(projName)+' » ('+fmtDur(r.length/r.sampleRate)+', '+fmtMo(data.byteLength)+').'); return; }
+    catch(e){ fsOk=false; updFsUI(); msg('Écriture dans le dossier impossible ('+(e.message||e.name)+') : morceau gardé dans l\'appli à la place.'); }
+  }
   const it={id:newId(),name,dir:projName,kind,dur:r.length/r.sampleRate,size:data.byteLength,at:Date.now(),proj:projName};
   lib.unshift(it);
   try{ await libSave([['lw:'+it.id,data]]); }catch(e){ lib.shift(); msg('Rangement impossible : plus de place sur l\'appareil ?'); return; }
@@ -3905,6 +3909,59 @@ async function libPlay(it){
   renderLib();
 }
 async function libDel(it){ lib=lib.filter(x=>x.id!==it.id); if(libPlaying===it.id) libStop(); libOpen=null; await libSave([],['lw:'+it.id]); renderLib(); msg('« '+it.name+' » supprimé de la bibliothèque.'); }
+// ----- dossier de la tablette (File System Access : Chrome Android 132+, desktop) -----
+let fsDir=null, fsOk=false, fsFiles=[];
+const fsSupported=()=>typeof window.showDirectoryPicker==='function';
+async function fsPerm(h,ask){ try{ const o={mode:'readwrite'}; if((await h.queryPermission(o))==='granted') return true; return ask?(await h.requestPermission(o))==='granted':false; }catch(e){ return false; } }
+async function fsWrite(sub,name,data){
+  const d=await fsDir.getDirectoryHandle(safeName(sub),{create:true});
+  let fn=safeName(name)+'.wav', k=2; const exists=async n=>{ try{ await d.getFileHandle(n); return true; }catch(e){ return false; } };
+  while(await exists(fn)) fn=safeName(name)+' '+(k++)+'.wav';
+  const fh=await d.getFileHandle(fn,{create:true}), w=await fh.createWritable(); await w.write(data); await w.close();
+  return fn;
+}
+async function fsScan(){
+  fsFiles=[]; if(!fsDir||!fsOk) return;
+  try{
+    const add=async(dir,folder)=>{ for await (const h of dir.values()){ if(h.kind==='file'&&/\.wav$/i.test(h.name)){ let f=null; try{ f=await h.getFile(); }catch(e){} fsFiles.push({h,parent:dir,name:h.name.replace(/\.wav$/i,''),file:h.name,dir:folder,size:f?f.size:0,at:f?f.lastModified:0}); } else if(h.kind==='directory'&&folder===null) await add(h,h.name); } };
+    await add(fsDir,null);
+  }catch(e){ fsOk=false; }
+}
+function updFsUI(){
+  const b=$('#libfold'), st=$('#libfoldst'); if(!b) return;
+  if(!fsDir){ b.innerHTML=ic('folder')+' Lier un dossier de la tablette'; st.textContent=''; return; }
+  if(fsOk){ b.innerHTML=ic('folder')+' Changer de dossier'; st.textContent='Morceaux enregistrés dans « '+fsDir.name+' » ('+fsFiles.length+' WAV).'; }
+  else { b.innerHTML=ic('folder')+' Réautoriser « '+fsDir.name+' »'; st.textContent='La tablette redemande l\'accès au dossier : touche le bouton.'; }
+}
+async function fsLink(){
+  if(fsDir&&!fsOk){ fsOk=await fsPerm(fsDir,true); if(fsOk){ await fsScan(); msg('Dossier « '+fsDir.name+' » de nouveau accessible.'); } updFsUI(); renderLib(); if(fsOk) return; }
+  if(!fsSupported()){ msg('Ce navigateur ne permet pas de lier un dossier de la tablette (Brave le bloque parfois ; Chrome le permet). Les morceaux restent dans l\'appli : « Télécharger » les met dans Téléchargements, visible avec l\'appli Fichiers.'); return; }
+  let h; try{ h=await window.showDirectoryPicker({id:'loopbox-lib',mode:'readwrite',startIn:'music'}); }catch(e){ if(e&&e.name==='AbortError') return; msg('Dossier non lié : '+(e.message||e.name)+'.'); return; }
+  fsDir=h; fsOk=await fsPerm(h,true);
+  try{ const db=await idb(); await idbPut(db,[['libfs',h]]); }catch(e){}
+  await fsScan(); updFsUI(); renderLib();
+  msg(fsOk?'Dossier « '+h.name+' » lié : les prochains morceaux rangés y seront écrits en WAV (un sous-dossier par projet).':'Accès au dossier refusé.');
+}
+async function fsInit(){ try{ const db=await idb(), h=await idbGet(db,'libfs'); if(h&&h.queryPermission){ fsDir=h; fsOk=await fsPerm(h,false); await fsScan(); } }catch(e){} updFsUI(); renderLib(); }
+async function fsShare(f){
+  try{ const file=await f.h.getFile(); const ff=new File([file],f.file,{type:'audio/wav'}); let can=false; try{ can=!!(navigator.canShare&&navigator.share&&navigator.canShare({files:[ff]})); }catch(e){}
+    if(can){ try{ await navigator.share({files:[ff],title:f.name,text:'Fait avec LoopBox'}); msg('« '+f.name+' » partagé.'); }catch(e){ if(!(e&&e.name==='AbortError')) msg('Partage impossible.'); } return; }
+    msg('Partage direct impossible ici : le fichier est dans ton dossier « '+fsDir.name+(f.dir?'/'+f.dir:'')+' », envoie-le depuis WhatsApp (trombone → Document).');
+  }catch(e){ msg('Fichier introuvable : il a peut-être été déplacé.'); await fsScan(); renderLib(); }
+}
+async function fsPlay(f){
+  const key='fs:'+(f.dir||'')+'/'+f.file;
+  if(libPlaying===key){ libStop(); renderLib(); return; }
+  libStop();
+  try{ const file=await f.h.getFile(), u=URL.createObjectURL(file), a=new Audio(u); a._u=u; libAudio=a; libPlaying=key; a.onended=()=>{ libStop(); renderLib(); }; const p=a.play(); if(p&&p.catch) p.catch(()=>{}); }
+  catch(e){ msg('Lecture impossible.'); libStop(); }
+  renderLib();
+}
+async function libCopyAll(){
+  if(!fsDir||!fsOk||!lib.length) return; let n=0;
+  for(const it of lib){ try{ const d=await libData(it.id); if(d){ await fsWrite(it.dir||'Sans dossier',it.name,d); n++; } }catch(e){} }
+  await fsScan(); renderLib(); msg(n+' morceau'+(n>1?'x':'')+' copié'+(n>1?'s':'')+' dans « '+fsDir.name+' ». Tu peux ensuite les supprimer de l\'appli si tu veux.');
+}
 function libBtn(icon,label,fn){ const b=document.createElement('button'); b.innerHTML=ic(icon); b.setAttribute('aria-label',label); b.title=label; b.onclick=fn; return b; }
 function renderLib(){
   const box=$('#liblist'); if(!box||!lib) return;
@@ -3913,6 +3970,30 @@ function renderLib(){
   const dl=$('#libdirs'); dl.innerHTML=''; dirs.forEach(d=>{ const o=document.createElement('option'); o.value=d; dl.appendChild(o); });
   $('#libinfo').textContent=lib.length?lib.length+' morceau'+(lib.length>1?'x':'')+' · '+fmtMo(lib.reduce((a,x)=>a+(x.size||0),0)):'';
   box.innerHTML='';
+  if(fsDir&&fsOk){
+    const q0=($('#libq').value||'').trim().toLowerCase(), FD=f=>'Tablette : '+fsDir.name+(f.dir?'/'+f.dir:'');
+    const fl=fsFiles.filter(f=>(!sel.value||FD(f)===sel.value)&&(!q0||f.name.toLowerCase().includes(q0)||(f.dir||'').toLowerCase().includes(q0)));
+    [...new Set(fsFiles.map(FD))].forEach(d=>{ if(!dirs.includes(d)){ const o=document.createElement('option'); o.value=d; o.textContent=d; sel.appendChild(o); } });
+    if(cur&&!sel.value&&fsFiles.some(f=>FD(f)===cur)) sel.value=cur;
+    [...new Set(fl.map(FD))].sort((a,b)=>a.localeCompare(b,'fr')).forEach(d=>{
+      const items=fl.filter(f=>FD(f)===d).sort((a,b)=>b.at-a.at);
+      const hd=document.createElement('div'); hd.className='libdir'; hd.innerHTML=ic('folder',16)+' '; hd.append(d+' · '+items.length); box.appendChild(hd);
+      items.forEach(f=>{
+        const key='fs:'+(f.dir||'')+'/'+f.file, row=document.createElement('div'); row.className='prow librow fsrow';
+        const pn=document.createElement('div'); pn.className='pn'; pn.innerHTML='<b></b><small></small>'; $('b',pn).textContent=f.name; $('small',pn).textContent='WAV · '+fmtMo(f.size)+(f.at?' · '+fmtDate(f.at):'');
+        pn.onclick=()=>{ libOpen=libOpen===key?null:key; renderLib(); };
+        const pb=libBtn(libPlaying===key?'pause':'speaker',libPlaying===key?'Arrêter':'Écouter '+f.name,()=>fsPlay(f)); pb.className='libplay'+(libPlaying===key?' on':'');
+        const sb=libBtn('share','Partager '+f.name+' (WhatsApp…)',()=>fsShare(f)); sb.className='libshare';
+        row.append(pb,pn,sb); box.appendChild(row);
+        if(libOpen===key){ const ed=document.createElement('div'); ed.className='libedit'; ed.innerHTML='<div class="row wrap"><button class="libdel">'+ic('trash')+' Supprimer le fichier</button></div>'; const db=$('.libdel',ed);
+          db.onclick=async()=>{ if(db.dataset.arm!=='1'){ db.dataset.arm='1'; db.textContent='Confirmer la suppression ?'; return; } try{ await f.parent.removeEntry(f.file); msg('« '+f.file+' » supprimé du dossier.'); }catch(e){ msg('Suppression impossible : supprime-le avec l\'appli Fichiers.'); } libOpen=null; await fsScan(); renderLib(); };
+          box.appendChild(ed); }
+      });
+    });
+    if(lib.length){ const p=document.createElement('div'); p.className='row wrap'; p.innerHTML='<span class="lbl" style="flex:1">Gardés dans l\'appli</span><button class="libcopy">Tout copier dans le dossier</button>'; $('.libcopy',p).onclick=()=>libCopyAll(); box.appendChild(p); }
+    else if(!fsFiles.length){ const p=document.createElement('p'); p.className='hint'; p.textContent='Dossier lié, encore vide : touche « Ranger la boucle » ou « Ranger le morceau ».'; box.appendChild(p); }
+    if(!lib.length) return;
+  }
   if(!lib.length){ const p=document.createElement('p'); p.className='hint'; p.textContent='Ta bibliothèque est vide : quand une boucle ou un morceau te plaît, touche « Ranger » pour le garder ici.'; box.appendChild(p); return; }
   const q=($('#libq').value||'').trim().toLowerCase();
   const list=lib.filter(x=>(!sel.value||(x.dir||'Sans dossier')===sel.value)&&(!q||x.name.toLowerCase().includes(q)||(x.dir||'').toLowerCase().includes(q)));
@@ -3944,7 +4025,8 @@ $('#libaddloop').onclick=()=>withBusy($('#libaddloop'),'Rangement…',()=>libAdd
 $('#libaddsong').onclick=()=>withBusy($('#libaddsong'),'Rangement…',()=>libAdd('song'));
 $('#libq').oninput=()=>renderLib();
 $('#libdir').onchange=()=>renderLib();
-libLoad().then(renderLib);
+$('#libfold').onclick=()=>fsLink();
+libLoad().then(fsInit);
 $('#stems').onclick=()=>withBusy($('#stems'),'Rendu des pistes…',async()=>{
   const list=tracks.filter(t=>t.buf);
   let reps=+$('#reps').value;

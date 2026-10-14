@@ -1,9 +1,9 @@
 // Service worker de LoopBox : permet l'installation et le fonctionnement hors connexion.
 // La page est cherchée d'abord sur le réseau (pour avoir la dernière version), puis dans le cache si hors ligne.
-const VER='loopbox-v71';
+const VER='loopbox-v72';
 // les sons de la bibliothèque gardent leur propre cache : ils ne sont pas retéléchargés à chaque mise à jour
 const SOUNDS='loopbox-sounds-1';
-const SHELL=['./','./index.html','./style.css?v=71','./app.js?v=71','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
+const SHELL=['./','./index.html','./style.css?v=72','./app.js?v=72','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(VER).then(c=>c.addAll(SHELL))); });
 self.addEventListener('activate',e=>{
   e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith('loopbox-')&&k!==VER&&k!==SOUNDS).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
