@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='74';
+const APPVER='75';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -345,7 +345,7 @@ const SRC_LIST=[
  {id:'perc',name:'Percussions (table, objets)',hp:12,mul:1.25,gate:0},
  {id:'env',name:'Environnement proche (clés, papier…)',hp:120,mul:2,gate:0}
 ];
-const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (son sale)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
+const FX_LIST=[['none','Aucun effet'],['echo','Écho (répétitions)'],['reverb','Réverbération (salle)'],['sat','Saturation (grain dans les graves)'],['lofi','Lo-fi 8 bits'],['muffle','Étouffé (derrière un mur)'],['radio','Radio / téléphone'],['pulse','Pulsation (volume qui bat)'],['flanger','Flanger (effet jet)'],['robot','Robot'],['bass','Basses boostées']];
 const irCache=new WeakMap();
 function makeIR(c){
   if(irCache.has(c)) return irCache.get(c);
@@ -370,9 +370,13 @@ function makeFx(c,type,amt,beat){
     inp.connect(cv); cv.connect(wet);
     upd=a=>{ dry.gain.value=1-0.3*a; wet.gain.value=a*1.4; };
   } else if(type==='sat'){
-    const ws=nd(c.createWaveShaper()); ws.oversample='2x'; inp.connect(ws); ws.connect(wet);
-    let lastK=-1;
-    upd=a=>{ const k=1+a*80; if(Math.abs(k-lastK)>0.5){ lastK=k; const n=2048, cu=new Float32Array(n); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=(1+k)*x/(1+k*Math.abs(x)); } ws.curve=cu; } dry.gain.value=0; wet.gain.value=0.8; };
+    // saturation « parallèle » : le son d'origine reste entier (attaques, silences), on y ajoute du grain dans les graves.
+    // L'ancienne version écrasait tout le signal (×80) : les silences et le souffle remontaient au niveau des coups.
+    const hp=nd(c.createBiquadFilter()), lp=nd(c.createBiquadFilter()), drv=nd(c.createGain()), ws=nd(c.createWaveShaper());
+    hp.type='highpass'; hp.frequency.value=30; hp.Q.value=0.707; lp.type='lowpass'; lp.frequency.value=400; lp.Q.value=0.707;
+    ws.oversample='4x'; { const n=2048, cu=new Float32Array(n), t=Math.tanh(2.5); for(let i=0;i<n;i++){ const x=i*2/(n-1)-1; cu[i]=Math.tanh(2.5*x)/t; } ws.curve=cu; }
+    inp.disconnect(dry); inp.connect(hp); hp.connect(dry); hp.connect(lp); lp.connect(drv); drv.connect(ws); ws.connect(wet);
+    upd=a=>{ drv.gain.value=1+a*6; dry.gain.value=1-a*0.25; wet.gain.value=a*0.5; };
   } else if(type==='lofi'){
     const ws=nd(c.createWaveShaper()), lp=nd(c.createBiquadFilter()); lp.type='lowpass'; lp.frequency.value=5000;
     inp.connect(ws); ws.connect(lp); lp.connect(wet);
