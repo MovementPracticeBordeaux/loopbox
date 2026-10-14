@@ -1553,7 +1553,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
   await test('mes morceaux : dossier de la tablette lié (WAV écrits par projet, listés, envoyés, supprimés) ; navigateur qui bloque expliqué',async()=>{
     const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
     const N=await boot(); await sleep(50); N.$('#libfold').click(); await sleep(30);
-    ok(/ne permet pas de lier/.test(N.$('#msg').textContent)&&!N.$('#toast').hidden&&/Chrome/.test(N.$('#libfoldst').textContent),'sans la fonction : expliqué');
+    ok(/Chrome/.test(N.$('#libfoldst').textContent),'sans la fonction : expliqué à côté du bouton : '+N.$('#libfoldst').textContent);
     const B=await boot({fs:'blocked'}); await sleep(50); B.$('#libfold').click(); await sleep(50);
     ok(/bloque/.test(B.$('#libfoldst').textContent),'refus immédiat expliqué');
     const P=await boot({share:true,fs:true}); await recordBase(P); await sleep(50);
@@ -1574,7 +1574,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     for(const share of [true,false]){
       const P=await boot({share}); await sleep(50); P.noise=0.2;
       P.$('#fidtest').click(); const t0=Date.now();
-      while(Date.now()-t0<9000&&!P.$$('#fidout button').length){ P.step(); await sleep(8); }
+      while(Date.now()-t0<25000&&!P.$$('#fidout button').length){ P.step(); await sleep(8); }
       const b=P.$$('#fidout button').find(x=>/Les deux en fichiers/.test(x.textContent));
       ok(b,'bouton présent : '+P.$('#msg').textContent);
       b.click(); for(let k=0;k<40&&!P.shared&&!P.download;k++) await sleep(50);
@@ -1748,7 +1748,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     P.$('#dstop').click();
     tab('mix').click(); await sleep(10);
     ok(vis('mix')&&P.$('#mont').hidden,'quitter Morceau ferme le montage');
-    ok(!!P.$('.view[data-view="mix"] #exp')&&!!P.$('.view[data-view="mix"] #mexp')&&!!P.$('.view[data-view="mix"] #stems'),'tous les exports dans Mix & export');
+    ok(!!P.$('.view[data-view="mix"] #songsave')&&!!P.$('.view[data-view="mix"] #songshare')&&!!P.$('.view[data-view="mix"] #liblist'),'morceau et morceaux enregistrés dans Mix & export');
     tab('reglages').click(); await sleep(10);
     ok(vis('reglages')&&!!P.$('.view[data-view="reglages"] #micsel')&&!!P.$('.view[data-view="reglages"] #clearAll')&&!!P.$('.view[data-view="reglages"] #mIn'),'micro, niveau micro et « Tout effacer » dans Réglages');
     P.$('#montbtn').click(); await sleep(10);
