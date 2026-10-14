@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=77">
+<link rel="stylesheet" href="style.css?v=78">
 </head>
 <body>
 <header>
@@ -30,7 +30,7 @@
   <div id="projmenu" hidden>
     <div class="field" style="margin-top:12px"><div class="row"><span class="lbl" data-help="proj">Nom du projet</span></div>
       <div class="row" style="margin-top:6px"><input id="projinp" type="text" maxlength="40" style="flex:1" aria-label="Nom du projet"><button id="projren">Renommer</button></div></div>
-    <div class="row wrap"><button id="projsave" class="primary"><i class="ic" data-ic="save"></i> Enregistrer</button><button id="projcopy">⧉ Enregistrer une copie</button><button id="projnew">＋ Nouveau projet</button></div>
+    <div class="row wrap"><button id="projsave" class="primary"><i class="ic" data-ic="save"></i> Enregistrer</button><button id="projnew">＋ Nouveau projet</button></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl">Mes projets</span></div><div id="projlist"></div></div>
     <div class="field" id="cloudsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="cloud"><i class="ic" data-ic="cloud"></i> En ligne (tous tes appareils)</span><span id="cloudst" class="lbl" style="margin-left:auto"></span></div>
       <div id="cloudout"><div class="row wrap" style="margin-top:6px"><input id="cloudmail" type="email" autocomplete="username" placeholder="ton e-mail" style="flex:1;min-width:180px" aria-label="E-mail"><input id="cloudpw" type="password" autocomplete="current-password" placeholder="mot de passe" style="flex:1;min-width:140px" aria-label="Mot de passe"></div>
@@ -38,13 +38,13 @@
       <div id="cloudin" hidden><div class="row wrap" style="margin-top:6px"><span id="cloudwho" class="lbl"></span><button id="cloudlogout" style="margin-left:auto">Se déconnecter</button></div>
         <div class="row wrap"><button id="cloudupb" class="primary"><i class="ic" data-ic="cloud"></i> Mettre ce projet en ligne</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="cloudauto" checked style="width:22px;height:22px"> envoi automatique</label></div>
         <div id="cloudlist"></div></div></div>
-    <div class="field" id="sendsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="send"><i class="ic" data-ic="users"></i> Envoyer ce projet à quelqu'un</span></div>
-      <div class="row wrap" style="margin-top:6px"><button id="sharelink" class="primary"><i class="ic" data-ic="link"></i> Créer un lien à envoyer</button><button id="sharefile"><i class="ic" data-ic="share"></i> Envoyer le fichier</button></div>
+    <div class="field" id="sendsec" style="margin-top:16px"><div class="row"><span class="lbl" data-help="send"><i class="ic" data-ic="users"></i> Envoyer le projet à quelqu'un</span></div>
+      <p class="hint" style="margin:4px 2px 0">Avec toutes les pistes séparées, pour qu'il puisse le reprendre dans LoopBox.</p>
+      <div class="row wrap"><button id="projsend" class="primary"><i class="ic" data-ic="share"></i> Envoyer le projet</button><button id="projimp"><i class="ic" data-ic="upload"></i> Ouvrir un projet reçu</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div>
       <div id="sharebox" hidden><div class="row" style="margin-top:6px"><input id="shareurl" type="text" readonly style="flex:1;min-width:0" aria-label="Lien du projet"><button id="sharecopy">Copier</button></div><p class="hint" id="sharehint" style="margin:4px 0 0"></p></div></div>
     <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="install">Installer l'appli</span></div>
       <div class="row wrap" style="margin-top:6px"><button id="installbtn" class="primary" hidden><i class="ic" data-ic="phone"></i> Installer LoopBox</button><span id="installhint" class="hint" style="margin:0"></span></div></div>
-    <div class="field" style="margin-top:16px"><div class="row"><span class="lbl" data-help="projfile">Fichier (sauvegarde de sécurité)</span></div>
-      <div class="row wrap" style="margin-top:6px"><button id="projexp"><i class="ic" data-ic="download"></i> Sauvegarder dans un fichier</button><button id="projimp"><i class="ic" data-ic="upload"></i> Ouvrir un fichier</button><input type="file" id="projfile" accept=".loopbox,application/octet-stream" hidden></div></div>
+    
   </div>
 </section>
 <p id="msg" role="status"></p>
@@ -147,20 +147,12 @@
   <div class="row"><span class="lbl w" data-help="mout">Niveau de sortie</span><div class="meter"><b id="mOut"></b></div></div>
   <p id="limst" class="hint" hidden style="color:#FFB020;margin:4px 2px 0"></p>
   <div class="row wrap"><span class="lbl" data-help="fin">Son final</span><div class="seg" id="finseg"><button data-l="0" class="on">Aucun</button><button data-l="1">Doux</button><button data-l="2">Fort</button></div></div>
-  <div class="field"><div class="row"><span class="lbl" data-help="exp">Exporter et partager</span></div>
-  <div class="row wrap">
-    <span class="lbl" style="flex-basis:100%"><i class="ic" data-ic="loop"></i> La boucle</span><select id="reps" aria-label="Nombre de répétitions à exporter" style="width:auto"><option value="1">1 boucle</option><option value="2">2 boucles</option><option value="4" selected>4 boucles</option><option value="8">8 boucles</option></select>
-    <button id="exp" class="primary"><i class="ic" data-ic="download"></i> Exporter la boucle (WAV)</button>
-    <label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="expfade" style="width:22px;height:22px"> Fondu de fin</label>
-  </div>
-  <div class="row wrap"><span class="lbl" style="flex-basis:100%"><i class="ic" data-ic="film"></i> Le morceau (montage)</span><button id="mexp" class="primary"><i class="ic" data-ic="download"></i> Exporter le morceau (WAV)</button><label class="lbl" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="mfade" style="width:22px;height:22px"> fondu de fin</label></div>
-  <div class="row wrap"><button id="share" data-help="share"><i class="ic" data-ic="share"></i> Partager le mix</button><button id="stems" data-help="stems"><i class="ic" data-ic="sliders"></i> Pistes séparées (.zip)</button></div></div>
-  <div class="field" id="libsec"><div class="row"><span class="lbl" data-help="lib"><i class="ic" data-ic="folder"></i> Ma bibliothèque de morceaux</span><span id="libinfo" class="lbl" style="margin-left:auto"></span></div>
-  <div class="row wrap" style="margin-top:6px"><button id="libaddloop" class="primary"><i class="ic" data-ic="loop"></i> Ranger la boucle</button><button id="libaddsong" class="primary"><i class="ic" data-ic="film"></i> Ranger le morceau</button></div>
-  <div class="row wrap"><button id="libfold"><i class="ic" data-ic="folder"></i> Lier un dossier de la tablette</button><span id="libfoldst" class="hint" style="margin:0;flex:1;min-width:160px"></span></div>
-  <div class="row wrap"><input id="libq" type="search" placeholder="chercher un titre" style="flex:1;min-width:140px" aria-label="Chercher dans la bibliothèque"><select id="libdir" style="width:auto;max-width:100%" aria-label="Dossier affiché"><option value="">Tous les dossiers</option></select></div>
-  <datalist id="libdirs"></datalist>
-  <div id="liblist"></div></div>
+  <div class="field" id="songsec"><div class="row"><span class="lbl" data-help="song"><i class="ic" data-ic="note"></i> Mon morceau</span></div>
+  <p class="hint" id="songsrc" style="margin:4px 2px 0"></p>
+  <div class="row wrap"><button id="songsave" class="primary"><i class="ic" data-ic="save"></i> Enregistrer le morceau</button><button id="songshare"><i class="ic" data-ic="share"></i> Envoyer le morceau</button></div></div>
+  <div class="field" id="libsec"><div class="row"><span class="lbl" data-help="lib"><i class="ic" data-ic="folder"></i> Mes morceaux enregistrés</span><span id="libinfo" class="lbl" style="margin-left:auto"></span></div>
+  <div id="liblist"></div>
+  <div class="row wrap" style="margin-top:8px"><button id="libfold"><i class="ic" data-ic="folder"></i> Lier un dossier de la tablette</button><span id="libfoldst" class="hint" style="margin:0;flex:1;min-width:160px"></span></div></div>
   <div class="field"><div class="row"><span class="lbl" data-help="denoise">Nettoyage</span></div>
   <div class="row wrap"><select id="dnall" style="width:auto" aria-label="Force du nettoyage"><option value="light">Léger (silences)</option><option value="strong">Fort (aussi sous les sons)</option></select><button id="dnallb"><i class="ic" data-ic="broom"></i> Nettoyer toutes les pistes</button></div></div>
 </section>
@@ -206,6 +198,6 @@
   <button class="dbtn" id="dstop" aria-label="Stop">■</button>
   <div class="dockinfo"><div id="dtxt">À l'arrêt</div><div class="dprog"><i id="dbar"></i></div></div>
 </div></div>
-<script src="app.js?v=77"></script>
+<script src="app.js?v=78"></script>
 </body>
 </html>

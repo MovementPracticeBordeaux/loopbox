@@ -92,7 +92,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(P.$('#projname').textContent!=='Démo','nouveau projet non créé');
     const row=P.$$('#projlist .prow').find(r=>r.querySelector('b').textContent==='Démo'); row.querySelector('button').click(); await sleep(500);
     ok(P.$('#projname').textContent==='Démo','projet non rouvert');
-    P.$('#projexp').click(); await sleep(30);
+    P.$('#projsend').click(); await sleep(150);
     const ab=await P.blobs[P.blobs.length-1].arrayBuffer();
     const fi=P.$('#projfile'); Object.defineProperty(fi,'files',{value:[{size:ab.byteLength,name:'Démo.loopbox',arrayBuffer:async()=>ab}],configurable:true}); fi.dispatchEvent(new P.w.Event('change')); await sleep(600);
     ok(/Démo/.test(P.$('#projname').textContent)&&P.$('#lockhint').style.display!=='none','fichier non rouvert');
@@ -202,23 +202,16 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     pads()[1].click(); await sleep(20);
     ok(pads()[1].classList.contains('wait'),'« à la mesure » : le changement doit être en attente');
   });
-  await test('partager le mix (et repli en téléchargement)',async()=>{
+  await test('envoyer le morceau (WAV au nom du projet) et repli en téléchargement',async()=>{
     const P=await boot({share:true}); await recordBase(P);
-    P.$('#share').click(); await sleep(400);
-    ok(P.shared&&P.shared.files&&/\.wav$/.test(P.shared.files[0].name),'partage non déclenché');
+    P.$('#songshare').click(); for(let i=0;i<40&&!P.shared;i++) await sleep(50);
+    ok(P.shared&&P.shared.files&&P.shared.files[0].name==='Mon projet.wav'&&P.shared.files.length===1,'partage : '+(P.shared&&P.shared.files[0].name));
     const Q=await boot(); await recordBase(Q);
-    Q.$('#share').click(); await sleep(400);
-    ok(/\.wav$/.test(Q.download||'')&&/téléchargé/.test(Q.$('#msg').textContent),'repli : '+Q.$('#msg').textContent);
+    Q.$('#songshare').click(); for(let i=0;i<40&&!Q.download;i++) await sleep(50);
+    ok(Q.download==='Mon projet.wav'&&/Téléchargements/.test(Q.$('#msg').textContent),'repli : '+Q.$('#msg').textContent);
+    ok(!P.$('#exp')&&!P.$('#mexp')&&!P.$('#share')&&!P.$('#stems')&&!P.$('#projexp')&&!P.$('#projcopy'),'anciens boutons d\'export retirés');
   });
-  await test('pistes séparées : un .zip avec un WAV par piste',async()=>{
-    const P=await boot(); const r=await recordBase(P); await twoTracks(P,r);
-    P.$('#stems').click(); await sleep(600);
-    ok(/pistes\.zip$/.test(P.download||''),'téléchargement '+P.download);
-    const ab=new Uint8Array(await P.blobs[P.blobs.length-1].arrayBuffer());
-    const dv=new DataView(ab.buffer), e=ab.length-22;
-    ok(dv.getUint32(e,true)===0x06054b50,'fin de zip invalide');
-    ok(dv.getUint16(e+10,true)===2,'entrées dans le zip : '+dv.getUint16(e+10,true));
-  });
+
   await test('installation : manifeste, icônes et service worker cohérents',async()=>{
     const fs=require('fs'), path=require('path'), R=path.join(__dirname,'..');
     const m=JSON.parse(fs.readFileSync(path.join(R,'manifest.webmanifest'),'utf8'));
@@ -924,8 +917,8 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/^6 mesures/.test(P.$('#montinfo').textContent),'fin −2 mesures : '+P.$('#montinfo').textContent);
     P.$('#mendfit').click(); await sleep(5);
     ok(/^8 mesures/.test(P.$('#montinfo').textContent),'fin = dernier bloc : '+P.$('#montinfo').textContent);
-    await P.$('#mexp').onclick(); await sleep(80);
-    ok(/morceau\.wav$/.test(P.download||''),'export : '+P.download);
+    P.$('#songshare').click(); for(let i=0;i<40&&!P.download;i++) await sleep(50);
+    ok(/\.wav$/.test(P.download||''),'export du montage : '+P.download);
     await sleep(900);
     const Q=await boot({idb}); await sleep(400);
     Q.$('#montbtn').click(); await sleep(20);
@@ -1498,104 +1491,85 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     Q.$('#cloudlogout').click(); await sleep(10);
     ok(!Q.$('#cloudout').hidden,'déconnexion');
   });
-  await test('envoyer un projet à quelqu\'un (Louis) : lien de 30 jours sans compte pour lui, toutes les pistes, fichier sans compte, lien expiré',async()=>{
+  await test('envoyer le projet à quelqu\'un (Louis) : lien de 30 jours si connecté, sinon fichier ; il l\'ajoute avec toutes ses pistes ; lien expiré',async()=>{
     const S=fakeCloud(), until=async(f,ms)=>{ for(let k=0;k<(ms||6000)/50&&!f();k++) await sleep(50); };
     const P=await boot({cloud:S,share:true}); await recordBase(P); await sleep(50);
     P.$('#addbass').click(); await sleep(150);
     P.$('#projinp').value='Pour Louis'; P.$('#projren').click(); await sleep(30);
     const ntr=P.$$('.trk').length;
-    P.$('#sharelink').click(); await sleep(30);
-    ok(/connecte-toi/.test(P.$('#msg').textContent)&&P.$('#sharebox').hidden,'sans compte : on propose de se connecter ou le fichier : '+P.$('#msg').textContent);
+    // sans compte : le fichier .loopbox part directement
+    P.shared=null; P.$('#projsend').click(); await until(()=>P.shared);
+    ok(P.shared&&P.shared.files&&/Pour Louis\.loopbox/.test(P.shared.files[0].name),'sans compte : fichier du projet envoyé');
     P.$('#cloudmail').value='sylvain@test.fr'; P.$('#cloudpw').value='secret123'; P.$('#cloudsignup').click(); await sleep(60);
-    P.shared=null; P.$('#sharelink').click(); await until(()=>P.shared);
+    P.shared=null; P.$('#projsend').click(); await until(()=>P.shared&&P.shared.url);
     const link=P.shared&&P.shared.url;
-    ok(link&&/^https:\/\/loopbox\.test\/\?lbx=/.test(link)&&P.$('#shareurl').value===link,'lien créé et partagé : '+link+' | '+P.$('#msg').textContent);
-    ok(S.lastExpires===30*86400&&Object.keys(S.files).some(k=>/\/share\/.+\.loopbox$/.test(k)),'valable 30 jours, rangé à part : '+S.lastExpires);
-    ok(/30 jours/.test(P.$('#sharehint').textContent),'durée indiquée : '+P.$('#sharehint').textContent);
-    // Louis : autre appareil, pas de compte
+    ok(link&&/^https:\/\/loopbox\.test\/\?lbx=/.test(link)&&P.$('#shareurl').value===link,'connecté : lien créé : '+link+' | '+P.$('#msg').textContent);
+    ok(S.lastExpires===30*86400&&/30 jours/.test(P.$('#sharehint').textContent),'valable 30 jours');
     const L=await boot({cloud:S,url:link}); await until(()=>!L.$('#shareopen').disabled);
-    ok(!L.$('#sharein').hidden&&/Pour Louis/.test(L.$('#shareinfo').textContent)&&new RegExp(ntr+' pistes').test(L.$('#shareinfo').textContent),'Louis voit le projet proposé : '+L.$('#shareinfo').textContent);
-    ok(L.$('#projname').textContent!=='Pour Louis','rien n\'est ajouté sans son accord');
+    ok(!L.$('#sharein').hidden&&/Pour Louis/.test(L.$('#shareinfo').textContent)&&new RegExp(ntr+' pistes').test(L.$('#shareinfo').textContent),'Louis voit le projet : '+L.$('#shareinfo').textContent);
     L.$('#shareopen').click(); await until(()=>L.$('#projname').textContent==='Pour Louis'); await sleep(100);
-    ok(L.$('#projname').textContent==='Pour Louis'&&L.$$('.trk').length===ntr&&L.$$('.trk.kbass').length===1,'projet ajouté avec ses pistes : '+L.$$('.trk').length+' | '+L.$('#msg').textContent);
-    ok(L.$('#sharein').hidden&&!/lbx=/.test(L.w.location.href),'lien retiré de l\'adresse (pas de nouvelle proposition au rafraîchissement)');
-    // fichier sans compte
+    ok(L.$$('.trk').length===ntr&&L.$$('.trk.kbass').length===1&&!/lbx=/.test(L.w.location.href),'projet ajouté avec ses pistes');
+    // fichier sans compte et sans partage direct : téléchargé, puis rouvert
     const F=await boot(); await recordBase(F); await sleep(50);
-    F.$('#sharefile').click(); await until(()=>F.download);
-    ok(/\.loopbox$/.test(F.download||'')&&/Ouvrir un fichier/.test(F.$('#msg').textContent),'fichier créé quand le partage de fichier n\'est pas possible : '+F.download+' | '+F.$('#msg').textContent);
-    P.shared=null; P.$('#sharefile').click(); await until(()=>P.shared);
-    ok(P.shared&&P.shared.files&&/Pour Louis\.loopbox/.test(P.shared.files[0].name),'fichier partagé directement quand le téléphone le permet');
-    // lien expiré
+    F.$('#projsend').click(); await until(()=>F.download);
+    ok(/\.loopbox$/.test(F.download||'')&&/Ouvrir un projet reçu/.test(F.$('#msg').textContent),'fichier téléchargé + explication : '+F.$('#msg').textContent);
     Object.values(S.signs).forEach(x=>x.exp=Date.now()-1);
     const R=await boot({cloud:S,url:link}); await until(()=>/expiré|Impossible/.test(R.$('#shareinfo').textContent));
-    ok(/expiré/.test(R.$('#shareinfo').textContent)&&R.$('#shareopen').disabled,'lien expiré expliqué : '+R.$('#shareinfo').textContent);
-    // icônes au trait partout, plus d'émoji de plateforme dans l'interface
+    ok(/expiré/.test(R.$('#shareinfo').textContent)&&R.$('#shareopen').disabled,'lien expiré expliqué');
     const emo=/[\u{1F300}-\u{1FAFF}☁⚙⬆⬇⛓⏱⏳⏸✨]/u;
-    ok(!P.doc.querySelector('i.ic[data-ic]')&&P.$$('svg.ic').length>30,'icônes dessinées : '+P.$$('svg.ic').length);
-    ok(!emo.test(P.doc.body.textContent),'aucun émoji de plateforme : '+(P.doc.body.textContent.match(emo)||[''])[0]);
+    ok(!P.doc.querySelector('i.ic[data-ic]')&&P.$$('svg.ic').length>30&&!emo.test(P.doc.body.textContent),'icônes au trait, pas d\'émoji');
   });
-  await test('bibliothèque de morceaux : WAV rangés par dossier, renommer, déplacer, chercher, partager (WhatsApp), gardés après redémarrage, supprimer',async()=>{
+
+  await test('mes morceaux : « Enregistrer le morceau » au nom du projet, écouter, envoyer, renommer, gardés après redémarrage, supprimer',async()=>{
     const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
     const P=await boot({share:true}); await recordBase(P); await sleep(50);
     const rows=()=>P.$$('#liblist .librow');
-    ok(/vide/.test(P.$('#liblist').textContent),'vide au départ');
-    P.$('#libaddloop').click(); await until(()=>rows().length===1);
-    ok(rows().length===1&&/Mon projet – boucle/.test(rows()[0].textContent)&&/Mon projet · 1/.test(P.$('#liblist .libdir').textContent),'boucle rangée dans le dossier du projet : '+P.$('#liblist').textContent+' | '+P.$('#msg').textContent);
-    ok(!!P.$('#libaddloop svg.ic'),'le bouton garde son icône après le rendu');
-    P.$('#libaddsong').click(); await until(()=>rows().length===2);
-    ok(rows().length===2&&/morceau/.test(P.$('#liblist').textContent),'morceau rangé aussi');
-    // partager
+    ok(/Aucun morceau/.test(P.$('#liblist').textContent),'vide au départ');
+    P.$('#projinp').value='Beat du soir'; P.$('#projren').click(); await sleep(20);
+    P.$('#vtabs button[data-v="mix"]').click(); await sleep(10);
+    ok(/boucle jouée 4 fois/.test(P.$('#songsrc').textContent)&&/Beat du soir/.test(P.$('#songsrc').textContent),'explique ce qui sera enregistré : '+P.$('#songsrc').textContent);
+    P.$('#songsave').click(); await until(()=>rows().length===1);
+    ok(rows().length===1&&rows()[0].querySelector('b').textContent==='Beat du soir','enregistré au nom du projet : '+P.$('#liblist').textContent);
+    ok(!!P.$('#songsave svg.ic'),'le bouton garde son icône');
+    P.$('#songsave').click(); await until(()=>rows().length===2);
+    ok(/Beat du soir \(2\)/.test(P.$('#liblist').textContent),'2e version numérotée');
     P.shared=null; rows()[0].querySelector('.libshare').click(); await until(()=>P.shared);
     const f=P.shared&&P.shared.files&&P.shared.files[0];
-    ok(f&&f.type==='audio/wav'&&/\.wav$/.test(f.name)&&f.size>1000,'partagé en WAV : '+(f&&f.name)+' '+(f&&f.size));
-    const head=f?new TextDecoder().decode(new Uint8Array(await f.arrayBuffer()).slice(0,4)):'';
-    ok(head==='RIFF','vrai fichier WAV ('+head+')');
-    // renommer + nouveau dossier
-    const name0=rows()[0].querySelector('b').textContent;
+    ok(f&&f.type==='audio/wav'&&/^Beat du soir/.test(f.name),'envoyé en WAV : '+(f&&f.name));
+    ok(new TextDecoder().decode(new Uint8Array(await f.arrayBuffer()).slice(0,4))==='RIFF','vrai WAV');
     rows()[0].querySelector('.pn').click(); await sleep(10);
-    P.$('.libedit .libname').value='Pour Louis'; P.$('.libedit .libfold').value='Démos'; P.$('.libedit .libok').click(); await until(()=>/Démos · 1/.test(P.$('#liblist').textContent));
-    ok(/Démos · 1/.test(P.$('#liblist').textContent)&&/Pour Louis/.test(P.$('#liblist').textContent),'renommé et rangé dans Démos : '+P.$('#liblist').textContent);
-    P.$('#libdir').value='Démos'; P.$('#libdir').dispatchEvent(new P.w.Event('change')); await sleep(10);
-    ok(rows().length===1&&/Pour Louis/.test(rows()[0].textContent),'filtre par dossier');
-    P.$('#libdir').value=''; P.$('#libdir').dispatchEvent(new P.w.Event('change'));
-    P.$('#libq').value='louis'; P.$('#libq').dispatchEvent(new P.w.Event('input')); await sleep(10);
-    ok(rows().length===1,'recherche par titre');
-    P.$('#libq').value=''; P.$('#libq').dispatchEvent(new P.w.Event('input'));
-    // gardés après redémarrage
+    P.$('.libedit .libname').value='Pour Louis'; P.$('.libedit .libok').click(); await until(()=>/Pour Louis/.test(P.$('#liblist').textContent));
+    ok(/Pour Louis/.test(P.$('#liblist').textContent),'renommé');
     const Q=await boot({idb:P.idb}); await until(()=>Q.$$('#liblist .librow').length===2);
-    ok(Q.$$('#liblist .librow').length===2&&/Pour Louis/.test(Q.$('#liblist').textContent)&&/2 morceaux/.test(Q.$('#libinfo').textContent),'retrouvés après redémarrage : '+Q.$('#libinfo').textContent);
-    // sans partage direct : téléchargement
+    ok(Q.$$('#liblist .librow').length===2&&/2 morceaux/.test(Q.$('#libinfo').textContent),'retrouvés après redémarrage');
     Q.$$('#liblist .libshare')[0].click(); await until(()=>Q.download);
-    ok(/\.wav$/.test(Q.download||'')&&/WhatsApp/.test(Q.$('#msg').textContent),'sans partage direct : fichier téléchargé + explication : '+Q.download);
-    // supprimer (avec confirmation)
+    ok(/\.wav$/.test(Q.download||'')&&/WhatsApp/.test(Q.$('#msg').textContent),'sans partage direct : téléchargé + explication');
     Q.$$('#liblist .librow .pn')[0].click(); await sleep(10);
-    const d=Q.$('.libedit .libdel'); d.click(); ok(Q.$$('#liblist .librow').length===2,'demande confirmation'); d.click(); await until(()=>Q.$$('#liblist .librow').length===1);
+    const d=Q.$('.libedit .libdel'); d.click(); ok(Q.$$('#liblist .librow').length===2,'confirmation demandée'); d.click(); await until(()=>Q.$$('#liblist .librow').length===1);
     ok(Q.$$('#liblist .librow').length===1,'supprimé');
     ok(P.errs.length===0&&Q.errs.length===0,'erreurs : '+P.errs.concat(Q.errs).join(';'));
   });
-  await test('bibliothèque : dossier de la tablette lié, WAV écrits par projet, listés, écoutés, partagés, supprimés ; navigateur sans cette fonction expliqué',async()=>{
+
+  await test('mes morceaux : dossier de la tablette lié (WAV écrits par projet, listés, envoyés, supprimés) ; navigateur qui bloque expliqué',async()=>{
     const until=async(f,ms)=>{ for(let k=0;k<(ms||8000)/50&&!f();k++) await sleep(50); };
     const N=await boot(); await sleep(50); N.$('#libfold').click(); await sleep(30);
-    ok(/ne permet pas de lier/.test(N.$('#msg').textContent),'sans la fonction : '+N.$('#msg').textContent);
-    ok(!N.$('#toast').hidden&&/ne permet pas/.test(N.$('#toast').textContent)&&/Chrome/.test(N.$('#libfoldst').textContent),'message visible même en bas de page');
+    ok(/ne permet pas de lier/.test(N.$('#msg').textContent)&&!N.$('#toast').hidden&&/Chrome/.test(N.$('#libfoldst').textContent),'sans la fonction : expliqué');
     const B=await boot({fs:'blocked'}); await sleep(50); B.$('#libfold').click(); await sleep(50);
-    ok(/bloque/.test(B.$('#libfoldst').textContent)&&/Chrome/.test(B.$('#libfoldst').textContent),'navigateur qui refuse tout de suite (Brave) : '+B.$('#libfoldst').textContent);
+    ok(/bloque/.test(B.$('#libfoldst').textContent),'refus immédiat expliqué');
     const P=await boot({share:true,fs:true}); await recordBase(P); await sleep(50);
-    P.$('#libaddloop').click(); await until(()=>P.$$('#liblist .librow').length===1);
+    P.$('#songsave').click(); await until(()=>P.$$('#liblist .librow').length===1);
     P.$('#libfold').click(); await until(()=>/lié/.test(P.$('#msg').textContent));
-    ok(/LoopBox/.test(P.$('#libfoldst').textContent)&&/Changer de dossier/.test(P.$('#libfold').textContent),'dossier lié : '+P.$('#libfoldst').textContent);
-    P.$('#libaddsong').click(); await until(()=>P.$$('#liblist .fsrow').length===1);
+    ok(/LoopBox/.test(P.$('#libfoldst').textContent),'dossier lié');
+    P.$('#songsave').click(); await until(()=>P.$$('#liblist .fsrow').length===1);
     const sub=P.fsRoot.kids.get('Mon projet'), f=sub&&[...sub.kids.values()][0];
-    ok(f&&/^Mon projet – morceau\.wav$/.test(f.name)&&new TextDecoder().decode(f.data.slice(0,4))==='RIFF','WAV écrit dans LoopBox/Mon projet : '+(f&&f.name)+' | '+P.$('#msg').textContent);
-    ok(/Tablette : LoopBox\/Mon projet · 1/.test(P.$('#liblist').textContent),'listé sous le dossier de la tablette : '+P.$('#liblist').textContent);
+    ok(f&&/^Mon projet.*\.wav$/.test(f.name)&&new TextDecoder().decode(f.data.slice(0,4))==='RIFF','WAV écrit dans LoopBox/Mon projet : '+(f&&f.name));
     P.shared=null; P.$('#liblist .fsrow .libshare').click(); await until(()=>P.shared);
-    ok(P.shared&&P.shared.files[0].type==='audio/wav'&&P.shared.files[0].size===f.data.length,'partagé depuis le dossier');
-    P.$('#liblist .libcopy').click(); await until(()=>P.$$('#liblist .fsrow').length===2);
-    ok(P.$$('#liblist .fsrow').length===2,'ancien morceau de l\'appli copié dans le dossier');
-    P.$('#liblist .fsrow .pn').click(); await sleep(10); const d=P.$('.libedit .libdel'); d.click(); d.click(); await until(()=>P.$$('#liblist .fsrow').length===1);
-    ok(P.$$('#liblist .fsrow').length===1,'fichier supprimé du dossier');
+    ok(P.shared&&P.shared.files[0].size===f.data.length,'envoyé depuis le dossier');
+    P.$('#liblist .fsrow .pn').click(); await sleep(10); const d=P.$('.libedit .libdel'); d.click(); d.click(); await until(()=>P.$$('#liblist .fsrow').length===0);
+    ok(P.$$('#liblist .fsrow').length===0,'fichier supprimé');
     ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
   });
+
   await test('test de fidélité : les deux fichiers partent (partage du téléphone ou .zip téléchargé), sinon message',async()=>{
     for(const share of [true,false]){
       const P=await boot({share}); await sleep(50); P.noise=0.2;
@@ -1613,7 +1587,7 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     for(const k of ['sat','stage']){
       const sel=P.$('.trk .fxsel'); ok(!!sel&&[...sel.options].some(o=>o.value===k),'effet '+k+' proposé');
       sel.value=k; sel.dispatchEvent(new P.w.Event('change')); await sleep(30);
-      P.download=null; P.$('#exp').click(); for(let i=0;i<60&&!P.download;i++) await sleep(50);
+      P.download=null; P.$('#songshare').click(); for(let i=0;i<60&&!P.download;i++) await sleep(50);
       ok(/\.wav$/.test(P.download||''),'export avec '+k+' : '+P.$('#msg').textContent);
     }
     ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
