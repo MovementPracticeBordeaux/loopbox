@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='78';
+const APPVER='79';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -631,7 +631,7 @@ async function fidTest(){
   L.push('Micro : '+(s.deviceId&&micStream.getAudioTracks()[0].label||'micro par défaut')+' · '+(s.sampleRate||'?')+' Hz · '+(s.channelCount||'?')+' canal(aux) · appli '+SR+' Hz');
   L.push('Traitements du navigateur : écho '+(s.echoCancellation===true?'⚠ OUI':'non')+', bruit '+(s.noiseSuppression===true?'⚠ OUI':'non')+', volume auto '+(s.autoGainControl===true?'⚠ OUI':'non')+(s.voiceIsolation!=null?', isolation voix '+(s.voiceIsolation?'⚠ OUI':'non'):''));
   const rc=rawCheck(R);
-  L.push('Brut (sortie du micro) : crête '+db(pR)+' dB'+(rc&&rc.clipped?' ⚠ ÉCRÊTÉ ('+rc.runs+' crêtes coupées net contre un plafond)':' (pas d\'écrêtage)')+(rc?' · souffle d\'air (infrason) '+db(rc.infra)+' dB, sons audibles '+db(rc.aud)+' dB':''));
+  L.push('Brut (sortie du micro) : crête '+db(pR)+' dB'+(rc&&rc.clipped?' ⚠ ÉCRÊTÉ ('+rc.runs+' crêtes coupées net contre un plafond)':pR>=0.94?' ⚠ AU MAXIMUM : baisse le gain sur le micro (visé : entre −12 et −6 dB)':pR<0.1?' (faible : tu peux monter le gain du micro)':' (bon niveau, pas d\'écrêtage)')+(rc?' · souffle d\'air (infrason) '+db(rc.infra)+' dB, sons audibles '+db(rc.aud)+' dB':''));
   { const ad=rawAdvice(rc); if(ad) L.push(ad); }
   if(a) L.push('Brut (niveaux par rapport aux médiums) : graves 20-60 Hz '+a.sub.toFixed(0)+' dB, 60-150 Hz '+a.low.toFixed(0)+' dB, aigus >5 kHz '+a.high.toFixed(0)+' dB, son jusqu\'à '+String(Math.round(a.roll/100)/10).replace('.',',')+' kHz'+(a.roll<9000?' ⚠ bande étroite (traitement « téléphone » probable)':''));
   if(a&&b) L.push('Après l\'appli : crête '+db(pQ)+' dB (gain '+(pR>0?(pQ/pR).toFixed(2).replace('.',','):'?')+'×), graves 20-60 Hz '+b.sub.toFixed(0)+' dB ('+(b.sub-a.sub>=0?'+':'')+(b.sub-a.sub).toFixed(1).replace('.',',')+'), aigus '+(b.high-a.high>=0?'+':'')+(b.high-a.high).toFixed(1).replace('.',',')+' dB : '+(Math.abs(b.sub-a.sub)<1.5&&Math.abs(b.high-a.high)<1.5?'l\'appli ne change pas le son ✓':'⚠ l\'appli modifie le son'));
