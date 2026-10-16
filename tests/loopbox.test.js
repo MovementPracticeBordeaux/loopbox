@@ -1592,6 +1592,16 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     }
     ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
   });
+  await test('micro USB débranché puis rebranché : l\'appli rouvre le micro au lieu de rester muette',async()=>{
+    const P=await boot(); await recordBase(P); await sleep(50);
+    const n0=P.gum.length, old=P.track;
+    old.readyState='ended'; old.onended&&old.onended(); await sleep(900);
+    ok(P.gum.length>n0&&P.track!==old,'micro rouvert après débranchement : '+n0+' → '+P.gum.length+' | '+P.$('#msg').textContent);
+    // micro « mort » sans événement : rouvert à la prochaine prise
+    const n1=P.gum.length; P.track.readyState='ended'; P.$('#addtrk').click(); await sleep(100); P.rec(1).click(); await sleep(150);
+    ok(P.gum.length>n1,'flux mort détecté avant la prise');
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+  });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
     const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };

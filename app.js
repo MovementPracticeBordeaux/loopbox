@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='79';
+const APPVER='80';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -530,11 +530,14 @@ async function openStream(){
 }
 async function ensureMic(){
   try{ await ctx.resume(); }catch(e){}
+  // un micro USB débranché/rebranché laisse un flux « mort » : on le jette et on rouvre au lieu de garder le silence
+  if(micStream&&!micAlive()) dropMic();
   if(micStream) return true;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ msg("Micro indisponible dans cette vue."); return false; }
   try{ micStream=await openStream(); }
   catch(e){ micStream=null; msg("Micro refusé ou bloqué ("+(e.name||'erreur')+"). Autorise-le dans les réglages du navigateur."); return false; }
   micSrc=ctx.createMediaStreamSource(micStream);
+  try{ micStream.getAudioTracks().forEach(tr=>{ tr.onended=()=>{ if(micStream&&micStream.getAudioTracks().indexOf(tr)>=0){ dropMic(); if(!recObj) setTimeout(()=>{ if(!micStream) ensureMic().then(ok=>{ if(ok){ showMicUsed(); msg('Micro reconnecté : '+(($('#micused')||{}).textContent||'').replace(/^Micro utilisé : /,'')); } }); },700); } }; }); }catch(e){}
   let engNotice=false;
   if(!inGainNode){
     inGainNode=ctx.createGain(); inGainNode.gain.value=ingain;
@@ -552,9 +555,11 @@ async function ensureMic(){
   listMics();
   return true;
 }
+function micAlive(){ try{ const tr=micStream.getAudioTracks(); return tr.length>0&&tr.every(t=>t.readyState!=='ended'); }catch(e){ return true; } }
+function dropMic(){ try{ (micStream.getTracks?micStream.getTracks():[]).forEach(tr=>{ tr.onended=null; tr.stop(); }); }catch(e){} try{ micSrc.disconnect(); }catch(e){} micStream=null; micSrc=null; }
 async function reopenMic(){
   if(recObj){ msg("Termine l'enregistrement avant de changer de micro."); return; }
-  if(micStream){ try{ (micStream.getTracks?micStream.getTracks():[]).forEach(tr=>tr.stop()); }catch(e){} try{ micSrc.disconnect(); }catch(e){} micStream=null; micSrc=null; }
+  if(micStream) dropMic();
   if(await ensureMic()){ showMicUsed(); msg('Micro activé : '+($('#micsel').selectedOptions[0]||{}).textContent+'.'); }
 }
 async function listMics(){
@@ -677,7 +682,11 @@ if(navigator.mediaDevices){
   navigator.mediaDevices.ondevicechange=async()=>{
     await listMics();
     // un micro vient d'être branché ou débranché : si aucun micro précis n'est choisi, on repasse sur celui par défaut (souvent le micro USB)
-    if(micStream&&!micId&&!recObj){ await reopenMic(); await listMics(); msg('Micro branché ou débranché : '+($('#micused').textContent||'').replace(/^Micro utilisé : /,'micro utilisé : ')); }
+    // (avant : seulement sans micro choisi ; un micro USB choisi puis rebranché restait muet)
+    if(micStream&&!recObj){
+      let ids=[]; try{ ids=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput').map(d=>d.deviceId); }catch(e){}
+      if(!micId||!micAlive()||(micId&&ids.length&&ids.indexOf(micId)<0)){ if(micId&&ids.length&&ids.indexOf(micId)<0) micId=''; await reopenMic(); await listMics(); msg('Micro branché ou débranché : '+($('#micused').textContent||'').replace(/^Micro utilisé : /,'micro utilisé : ')); }
+    }
   };
 }
 // Le processeur reçoit le son du micro par blocs de 128 échantillons, chacun avec son numéro exact

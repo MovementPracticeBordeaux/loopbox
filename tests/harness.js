@@ -84,7 +84,7 @@ async function boot(opt={}){
     w.fetch=async(url,o2)=>{ if(/^sounds\//.test(url)){ P.soundReqs=(P.soundReqs||[]).concat(url); if(P.offline) throw new TypeError('Failed to fetch'); const f=path.join(ROOT,url); if(!fs.existsSync(f)) return {ok:false,status:404,json:async()=>({})}; const txt=fs.readFileSync(f,'utf8'); return {ok:true,status:200,json:async()=>JSON.parse(txt)}; } if(opt.cloud) return opt.cloud.fetch(url,o2); throw new TypeError('Failed to fetch'); };
     if(opt.cloud){ w.__cloudDelay=opt.cloudDelay!=null?opt.cloudDelay:30; }
     w.navigator.mediaDevices={
-      getUserMedia:c=>{ P.gum.push(c); const lab=(c&&c.audio&&c.audio.deviceId)?((P.devs.find(d=>d.deviceId===c.audio.deviceId.exact)||{}).label||'?'):P.defaultMic; return Promise.resolve({getTracks:()=>[{stop(){}}],getAudioTracks:()=>[{label:lab,stop(){}}]}); },
+      getUserMedia:c=>{ P.gum.push(c); const lab=(c&&c.audio&&c.audio.deviceId)?((P.devs.find(d=>d.deviceId===c.audio.deviceId.exact)||{}).label||'?'):P.defaultMic; const tr={label:lab,readyState:'live',stop(){ this.readyState='ended'; }}; P.track=tr; return Promise.resolve({getTracks:()=>[tr],getAudioTracks:()=>[tr]}); },
       enumerateDevices:async()=>P.devs.slice()
     };
     w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},fillRect(){},set fillStyle(v){}});
