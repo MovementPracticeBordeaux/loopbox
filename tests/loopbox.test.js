@@ -416,6 +416,21 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(qb.querySelector('.btlinfo').textContent.startsWith('Do → Fa'),'rechargement : '+qb.querySelector('.btlinfo').textContent);
   });
 
+  await test('basse / mélodie : une coupe de bloc s\'annule avec ↶ et se rétablit avec ↷',async()=>{
+    const {P,tb}=await bassBoot();
+    const info=()=>tb.querySelector('.btlinfo').textContent;
+    const n0=info();
+    tb.querySelector('.bsplit').click(); await sleep(900);
+    tb.querySelector('.bsplit').click(); await sleep(20);
+    ok(info().includes('3 blocs'),'deux coupes : '+info());
+    P.$('#undo').click(); await sleep(20);
+    ok(info().includes('2 blocs'),'↶ annule la dernière coupe : '+info());
+    P.$('#undo').click(); await sleep(20);
+    ok(info()===n0,'↶ annule la première coupe : '+info()+' / '+n0);
+    P.$('#redo').click(); await sleep(20);
+    ok(info().includes('2 blocs'),'↷ rétablit : '+info());
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+  });
   await test('basse : un tout petit bloc (1 temps) se sélectionne d\'un simple toucher, même près des limites',async()=>{
     const {P,tb}=await bassBoot();
     const nb=8, c=tb.querySelector('.btl'); c.getBoundingClientRect=()=>({left:0,width:800});

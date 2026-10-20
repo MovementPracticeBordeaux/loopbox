@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='82';
+const APPVER='83';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1129,7 +1129,7 @@ function setRep(k){
 function snapState(){
   return {song:songSnapData(),loopLen,beats,baseLen,baseBeats,rep,gridOff,mvol,fin,mt:masterTake?{...masterTake}:null,
     tr:tracks.map(t=>({t,buf:t.buf,sel:t.sel?{...t.sel}:null,selMode:t.selMode,off:t.off||0,anc:!!t.anc,speed:t.speed||1,pitch:t.pitch,vol:t.vol,panv:t.panv,mute:t.mute,solo:t.solo,
-      fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut,kind:t.kind||'rec',bass:t.bass?JSON.parse(JSON.stringify(t.bass)):null,voice:t.voice||null}))};
+      fxs:t.fxs.map(f=>({type:f.type,amt:f.amt})),eqv:t.eqv.slice(),srcType:t.srcType,name:t.name,fadeIn:t.fadeIn,fadeOut:t.fadeOut,kind:t.kind||'rec',bass:t.bass?JSON.parse(JSON.stringify(t.bass)):null,voice:t.voice||null,bd:t.bdraft?JSON.parse(JSON.stringify(t.bdraft)):null,bsel:t.bsel||0}))};
 }
 function touchSettings(){ if(!H.pend) H.pend=snapState(); }
 function commitSettings(){
@@ -1169,7 +1169,7 @@ function restoreState(sn){
     const x=map.get(t);
     t.buf=x?x.buf:null;
     t.sel=x&&x.sel?{...x.sel}:null; t.selMode=(x&&x.selMode)||'mute'; t.off=(x&&x.off)||0; t.anc=!!(x&&x.anc); t.speed=(x&&x.speed)||1; t.sp=null; t.po=null; t.pc=null; updOffUI(t); updSpeedUI(t);
-    { const k=(x&&x.kind)||'rec', bs=x&&x.bass?JSON.parse(JSON.stringify(x.bass)):null, vo=(x&&x.voice)||null; if(k!==t.kind||JSON.stringify(bs)!==JSON.stringify(t.bass)||vo!==t.voice){ t.kind=k; t.bass=bs; t.voice=vo; t.bdraft=null; if(t.el){ setKindUI(t); if(isGen(t)) showBassOpts(t); } } }
+    { const k=(x&&x.kind)||'rec', bs=x&&x.bass?JSON.parse(JSON.stringify(x.bass)):null, vo=(x&&x.voice)||null; t._bReset=false; if(k!==(t.kind||'rec')||JSON.stringify(bs)!==JSON.stringify(t.bass||null)||vo!==(t.voice||null)){ t._bReset=true; t.kind=k; t.bass=bs; t.voice=vo; t.bdraft=null; if(t.el){ setKindUI(t); if(isGen(t)) showBassOpts(t); } } }
     const p=x?x.pitch:0; if(p!==t.pitch){ t.pitch=p; if(!p) t.pp=null; }
     if(x){
       t.vol=x.vol; t.panv=x.panv; t.mute=x.mute; t.solo=x.solo; t.srcType=x.srcType; t.fadeIn=x.fadeIn||0; t.fadeOut=x.fadeOut||0;
@@ -1178,6 +1178,8 @@ function restoreState(sn){
       t.fxs=x.fxs.map(f=>({type:f.type,amt:f.amt})); if(fxChanged) setFx(t);
     }
     syncTrackUI(t); drawWave(t);
+    // notes de basse / mélodie en cours d'édition (coupes, notes, durées) : annulables aussi
+    if(x&&isGen(t)&&!t._bReset){ const bj=x.bd?JSON.stringify(x.bd):null; if(bj!==(t.bdraft?JSON.stringify(t.bdraft):null)){ t.bdraft=x.bd?JSON.parse(bj):null; t.bsel=x.bsel||0; t.brange=null; t._bjs=undefined; if(t.el){ try{ ensureDraft(t); bassChanged(t); }catch(e){} } } }
     if(t.buf) startSrc(t); else stopSrc(t);
   });
   if(masterTake&&masterTake.ref){ const k=tracks.indexOf(masterTake.ref); if(k>=0) masterTake.i=k; else masterTake=null; }
@@ -1839,7 +1841,7 @@ function normBass(o,nb,kind){
   r.segs=normSegs(o&&o.segs?o.segs:(o&&o.note!=null?legacySegs(o,nb):d.segs),nb);
   return r;
 }
-function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft) t.bdraft=normBass(t.bass,nb,t.kind); t.bdraft.segs=normSegs(t.bdraft.segs,nb); if((t.bsel||0)>=t.bdraft.segs.length) t.bsel=t.bdraft.segs.length-1; if(t.brange&&t.brange[1]>=t.bdraft.segs.length) t.brange=null; return t.bdraft; }
+function ensureDraft(t){ const nb=nbOf(t); if(!t.bdraft){ t.bdraft=normBass(t.bass,nb,t.kind); t._bjs=undefined; } t.bdraft.segs=normSegs(t.bdraft.segs,nb); if((t.bsel||0)>=t.bdraft.segs.length) t.bsel=t.bdraft.segs.length-1; if(t.brange&&t.brange[1]>=t.bdraft.segs.length) t.brange=null; if(t._bjs===undefined){ t._bjs=JSON.stringify(t.bdraft); t._bsel=t.bsel||0; } return t.bdraft; }
 // ----- blocs choisis ensemble, groupes, duplication d'un motif -----
 let gidN=0; const newGid=()=>'g'+Date.now().toString(36)+(++gidN);
 // zoom de la ligne de temps : on voit nb/zoom temps à partir de bview
@@ -2121,7 +2123,17 @@ function drawBassTimeline(t){
   for(let k=0;k<nb;k++){ if(k%step!==0) continue; const xc=X(k+0.5); if(xc<-20||xc>w+20) continue; const s=String(k+1), tw=g.measureText?g.measureText(s).width:10;
     g.fillStyle='rgba(20,20,22,.85)'; g.fillRect(xc-tw/2-3*dpr,RH*0.12,tw+6*dpr,RH*0.6); g.fillStyle=k%meter===0?'rgba(255,255,255,.9)':'rgba(255,255,255,.6)'; g.fillText(s,xc,RH*0.42); }
 }
-function bassChanged(t,live){ drawBassTimeline(t); drawBassViz(t); if(live!==false&&preview&&preview.t===t) startPreview(t); }
+function bassHistTrack(t){
+  if(!t.bdraft) return; const cur=JSON.stringify(t.bdraft);
+  if(t._bjs!==undefined&&cur!==t._bjs&&!(t._bDrag&&t._bDragPushed)){
+    if(H.pend) commitSettings();
+    const sn=snapState(), e=sn.tr.find(x=>x.t===t); if(e){ e.bd=JSON.parse(t._bjs); e.bsel=t._bsel||0; }
+    H.past.push(sn); if(H.past.length>HMAX) H.past.shift(); H.future.length=0; updHistUI();
+    if(t._bDrag) t._bDragPushed=true;
+  }
+  t._bjs=cur; t._bsel=t.bsel||0;
+}
+function bassChanged(t,live){ bassHistTrack(t); drawBassTimeline(t); drawBassViz(t); if(live!==false&&preview&&preview.t===t) startPreview(t); }
 // écoute immédiate d'une note (palette, octave) avec le son choisi pour la piste
 let auditionSrc=null;
 function libWait(type,then){
@@ -2158,7 +2170,7 @@ function initBassTimeline(t){
     else { const i=segs.findIndex(x=>k>x.s+1e-6&&k<x.e-1e-6); if(i<0) return; const x=segs[i]; segs.splice(i+1,0,{s:k,e:x.e,n:x.n,m:x.m,glide:x.glide,g:x.g,ch:x.ch}); x.e=k; x.glide=false; t.bsel=i+1; t.brange=null; $('.bst',t.el).textContent='Coupé au '+beatLbl(k)+' : touche une note pour ce nouveau bloc.'+ensureFollow(t); }
     bassChanged(t);
   };
-  c.addEventListener('pointerdown',ev=>{
+  c.addEventListener('pointerdown',ev=>{ t._bDrag=true; t._bDragPushed=false;
     const d=ensureDraft(t), segs=d.segs, nb=nbOf(t), p=posAt(ev), r=c.getBoundingClientRect(), px=tlSpan(t,nb)/(r.width||1);
     if(r.height&&ev.clientY-(r.top||0)<r.height*0.32){ toggleCut(snapG(t,p)); drag=null; return; }
     let bi=-1, best=1e9;
@@ -2176,7 +2188,7 @@ function initBassTimeline(t){
     if(v!==segs[i].e){ segs[i].e=v; segs[i+1].s=v; bassChanged(t,false); }
   });
   const end=ev=>{ if(!drag) return; const d=drag; drag=null; if(d.moved){ const f=ensureFollow(t); bassChanged(t); if(f) $('.bst',t.el).textContent=f.trim(); } else pick(d.p0); };
-  c.addEventListener('pointerup',end); c.addEventListener('pointercancel',()=>{ drag=null; });
+  c.addEventListener('pointerup',ev=>{ end(ev); t._bDrag=false; }); c.addEventListener('pointercancel',()=>{ drag=null; t._bDrag=false; });
   $('.bprevb',t.el).onclick=()=>{ t.bsel=Math.max(0,(t.bsel||0)-1); t.brange=null; tlFollow(t); drawBassTimeline(t); };
   $('.bnextb',t.el).onclick=()=>{ t.bsel=Math.min(ensureDraft(t).segs.length-1,(t.bsel||0)+1); t.brange=null; tlFollow(t); drawBassTimeline(t); };
   t.el.querySelectorAll('.bzm').forEach(b=>b.onclick=()=>{
