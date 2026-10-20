@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='80';
+const APPVER='81';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -1103,7 +1103,7 @@ function buildFromSel(){
   const m=masterTake, Tn=m.T*SR, t=tracks[m.i], rp=m.rep||1;
   let startS=Math.round(m.anchor+m.s*Tn)-m.pre;
   const LS=Math.round(m.n*Tn);
-  if(m.det){
+  if(m.det&&!m.free){
     const c=Math.round(m.anchor+m.s*Tn), w=Math.round(0.03*SR), a=Math.max(0,c-w), b=Math.min(m.raw.length,c+w);
     let pk=0; for(let i=a;i<b;i++){ const v=Math.abs(m.raw[i]); if(v>pk) pk=v; }
     if(pk>0.05){ for(let i=a;i<b;i++){ if(Math.abs(m.raw[i])>0.25*pk){ startS=i-m.pre; break; } } }
@@ -1281,23 +1281,36 @@ function drawEditor(){
   g.fillStyle='#9b968d';
   for(let x=0;x<w;x++){ const hh=Math.max(1,m.pk[x]/mx*h*0.85); g.fillRect(x,(h-hh)/2,1,hh); }
   for(let k=Math.ceil(-m.anchor/Tn); m.anchor+k*Tn<N; k++){ const x=px(m.anchor+k*Tn); g.fillStyle=mod(k,4)===0?'rgba(128,128,128,.6)':'rgba(128,128,128,.25)'; g.fillRect(x,0,1,h); }
-  const s0=drag?drag.s:m.s, e0=drag?drag.e:m.s+m.n;
+  const fo=(m.nudge||0)/m.T, s0=drag?drag.s:m.s+fo, e0=drag?drag.e:m.s+m.n+fo;
   const sx=px(m.anchor+s0*Tn), ex=px(m.anchor+e0*Tn);
   g.fillStyle='rgba(232,71,43,.18)'; g.fillRect(sx,0,ex-sx,h);
   g.fillStyle='#e8472b'; g.fillRect(sx-1.5*dpr,0,3*dpr,h); g.fillRect(ex-1.5*dpr,0,3*dpr,h);
-  $('#edlbl').textContent='Temps '+(s0+1)+' → '+e0+' ('+(e0-s0)+' temps)'+((m.rep||1)>1?' ×'+m.rep:'');
+  { const r1=x=>Math.abs(x-Math.round(x))<0.005?String(Math.round(x)):x.toFixed(2).replace('.',','); $('#edlbl').textContent='Temps '+r1(s0+1)+' → '+r1(e0)+' ('+Math.round(e0-s0)+' temps)'+((m.rep||1)>1?' ×'+m.rep:''); }
 }
 (()=>{
   const ed=$('#edc');
-  const beatAt=ev=>{ const m=masterTake, r=ed.getBoundingClientRect(); const smp=(ev.clientX-r.left)/r.width*m.raw.length; return Math.round((smp-m.anchor)/(m.T*SR)); };
+  // aimanté : repères sur les temps ; libre : le début se place où on veut (au 1/1000 de temps), la longueur reste en temps entiers
+  const free=()=>{ const c=$('#edsnap'); return !!c&&!c.checked; };
+  const beatAt=ev=>{ const m=masterTake, r=ed.getBoundingClientRect(); const smp=(ev.clientX-r.left)/r.width*m.raw.length, v=(smp-m.anchor)/(m.T*SR); return free()?v:Math.round(v); };
   const move=ev=>{ const m=masterTake; if(!m||!drag) return; const b=beatAt(ev), L=selLimits(m);
-    if(drag.which==='s') drag.s=clamp(b,L.smin,drag.e-1); else drag.e=clamp(b,drag.s+1,L.emax);
+    if(!free()){ if(drag.which==='s') drag.s=clamp(b,L.smin,drag.e-1); else drag.e=clamp(b,drag.s+1,L.emax); }
+    else if(drag.which==='s'){ drag.s=clamp(b,L.smin-0.49,drag.e0-1); drag.e=drag.s+clamp(Math.round(drag.e0-drag.s),1,64); }
+    else { drag.e=drag.s+clamp(Math.round(clamp(b,drag.s+0.5,L.emax+0.49)-drag.s),1,64); }
     drawEditor(); };
   ed.addEventListener('pointerdown',ev=>{ const m=masterTake; if(!m||recObj) return; try{ ed.setPointerCapture(ev.pointerId); }catch(e){}
-    const b=beatAt(ev), s=m.s, e=m.s+m.n; drag={s,e,which:Math.abs(b-s)<=Math.abs(b-e)?'s':'e'}; move(ev); });
+    const fo=free()?(m.nudge||0)/m.T:0, b=beatAt(ev), s=m.s+fo, e=m.s+m.n+fo; drag={s,e,e0:e,which:Math.abs(b-s)<=Math.abs(b-e)?'s':'e'}; move(ev); });
   ed.addEventListener('pointermove',move);
-  const end=()=>{ if(!drag) return; const d=drag; drag=null; setSel(d.s,d.e); drawEditor(); };
+  const end=()=>{ if(!drag) return; const d=drag; drag=null;
+    if(!free()){ setSel(d.s,d.e); drawEditor(); return; }
+    const m=masterTake; if(!m||recObj) return;
+    const si=Math.round(d.s), n=Math.round(d.e-d.s), nud=Math.round((d.s-si)*m.T*1000)/1000;
+    if(si===m.s&&n===m.n&&Math.abs(nud-(m.nudge||0))<0.0005){ drawEditor(); return; }
+    pushHist(); m.s=si; m.n=n; m.nudge=nud; m.free=true; buildFromSel(); drawEditor(); };
   ed.addEventListener('pointerup',end); ed.addEventListener('pointercancel',end);
+  { const c=$('#edsnap'); if(c){ try{ c.checked=localStorage.getItem('lbx-edsnap')!=='0'; }catch(e){}
+    c.onchange=()=>{ try{ localStorage.setItem('lbx-edsnap',c.checked?'1':'0'); }catch(e){} const m=masterTake;
+      if(c.checked&&m&&m.free&&!recObj){ pushHist(); m.free=false; m.nudge=0; buildFromSel(); drawEditor(); msg('Repères recalés sur les temps.'); }
+      else msg(c.checked?'Repères aimantés aux temps.':'Repères libres : place le début où tu veux ; la longueur reste en temps entiers pour que la boucle tourne en rythme.'); }; } }
   $('#growb').onclick=e=>{ const b=e.target.closest('button'); if(b&&!b.disabled) setRepAll(+b.dataset.k); };
   $('#sm').onclick=()=>{ const m=masterTake; if(m) setSel(m.s-1,m.s+m.n); };
   $('#sp').onclick=()=>{ const m=masterTake; if(m) setSel(m.s+1,m.s+m.n); };
@@ -1397,6 +1410,7 @@ const HELP={
   btl:"<b>Notes sur la ligne de temps</b> : comme sur un logiciel de montage, chaque bloc coloré est une portion de la boucle jouée sur une note. <b>Pour couper</b> : touche la règle (les numéros de temps en haut) à l'endroit voulu ; toucher une coupe existante (<i class='ic' data-ic='scissors'></i>) l'enlève. <b>Pour changer une note</b> : touche le bloc, puis une note de la palette (elle se fait entendre aussitôt, avec le son de la piste). ◀ ▶ passent d'un bloc à l'autre. <b>Fais glisser la limite orange</b> entre deux blocs pour régler leur durée (au temps près). « Retirer le bloc » le fusionne avec son voisin. « Glisser vers le bloc suivant » fait monter ou descendre la dernière note du bloc jusqu'à la note suivante. Le dessin « Notes jouées » montre le résultat.",
   bass:"<b>Piste de basse</b> : la basse est fabriquée à partir des blocs de la ligne de temps. <b>Rythme</b> = où tombent les notes. <b>Mélodie</b> = quelles notes jouer dans chaque bloc : « Même note » ne joue que la note du bloc ; les autres ajoutent l'octave, la quinte ou une marche vers le bloc suivant. <b>Son</b> : Sub (rond), Électrique (pincée), Acid (filtrée), 808 (grave qui chute). « ▶ Aperçu » fait entendre la basse sans l'enregistrer, et chaque changement s'entend tout de suite ; « Créer la basse » la valide.",  warp:"<b>Caler un jeu au tempo irrégulier</b> : pour un musicien qui accélère ou ralentit en jouant. L'appli retrouve chacun de ses temps (même quand son tempo bouge), puis étire ou resserre chaque intervalle pour qu'il dure exactement un temps du morceau, <b>sans changer la note et sans couper de son</b>. <b>Repère à chaque temps</b> : le plus précis. <b>À chaque mesure</b> : seuls les débuts de mesure sont calés, le jeu garde plus de souplesse à l'intérieur. Ensuite, « Recaler chaque son » peut affiner les quelques sons restés à côté. ↶ annule.",
   slip:"<b>Décaler la piste dans le temps</b> : avance (−) ou retarde (+) toute la piste, à la milliseconde, <b>sans rien couper</b>. C'est la bonne solution quand une prise est un peu en retard à cause de la latence du micro. <b>« Caler la piste sur le rythme »</b> mesure tout seul de combien tes sons tombent à côté de la grille choisie juste en dessous (temps, croches ou doubles-croches), et décale toute la piste d'autant. Le son d'origine n'est pas modifié : « 0 » revient au départ.",
+  edsnap:"<b>Aimanter aux temps</b> : coché, les repères se posent sur les temps. Décoché, tu places le <b>début</b> exactement où tu veux (par exemple juste avant l'attaque de ton premier son) ; la <b>longueur</b> de la boucle reste un nombre entier de temps, sinon elle ne tournerait plus en rythme : la fin suit donc le début. Les boutons −10 ms / +10 ms affinent encore.",
   mnudge:"<b>Ajuster le début</b> : déplace le point de départ de ta boucle de base à la milliseconde, sans changer sa durée. Utile si le début de la boucle tombe un peu avant ou après l'attaque de ton premier son.",
   mtrans:"<b>Transitions du bloc</b> : comment le bloc choisi commence et se termine. <b>Entrée</b> : fondu (le son monte), filtre qui s'ouvre (sourd puis clair), montée par les aigus (le grave arrive peu à peu). <b>Sortie</b> : fondu, filtre qui se ferme, ralenti (le son ralentit et descend comme une cassette qu'on arrête), écho qui s'éteint (le son s'arrête et ses échos continuent), hachage (le son se répète en petits morceaux). Choisis aussi la durée (1 temps à 2 mesures).",
   mblank:"<b>Insérer un blanc</b> : ajoute un silence de la durée choisie à l'endroit du curseur, sur toutes les pistes ; la suite du morceau recule d'autant. Pour un blanc sans rien décaler, choisis une partie et « Rendre muette ».",

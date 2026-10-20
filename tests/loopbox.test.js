@@ -1602,6 +1602,22 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(P.gum.length>n1,'flux mort détecté avant la prise');
     ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
   });
+  await test('prise de base : « aimanter aux temps » décoché, début placé librement, longueur gardée en temps entiers, retour aimanté',async()=>{
+    const P=await boot(); const c=P.$('#edc'); c.getBoundingClientRect=()=>({left:0,top:0,width:1000,height:92});
+    Object.defineProperty(c,'clientWidth',{value:1000}); Object.defineProperty(c,'clientHeight',{value:92});
+    const r=await recordBase(P); await sleep(50);
+    const pe=(type,x)=>c.dispatchEvent(Object.assign(new P.w.MouseEvent(type,{clientX:x,bubbles:true}),{pointerId:1}));
+    const lbl=()=>P.$('#edlbl').textContent, len0=P.lastBuf().length;
+    ok(/\(8 temps\)/.test(lbl())&&!/,/.test(lbl()),'départ aimanté : '+lbl());
+    const sn=P.$('#edsnap'); sn.checked=false; sn.dispatchEvent(new P.w.Event('change'));
+    // repère du début : on cherche sa position en balayant, puis on le décale d'un petit bout
+    for(let x=40;x<120&&!/Temps -?\d+,\d\d/.test(lbl());x+=1){ pe('pointerdown',x); pe('pointerup',x); }
+    await sleep(30);
+    ok(/Temps -?\d+,\d\d → -?\d+,\d\d \(\d+ temps\)/.test(lbl()),'début libre (fraction de temps), fin qui suit, longueur en temps entiers : '+lbl());
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+    sn.checked=true; sn.dispatchEvent(new P.w.Event('change')); await sleep(30);
+    ok(!/,/.test(lbl())&&/\(\d+ temps\)/.test(lbl()),'retour aimanté : '+lbl());
+  });
   await test('montage : aimant au choix (mesure, temps, ¼, libre) et boutons pour placer un bloc au temps près',async()=>{
     const {P,tap,drag,X,Y}=await montBoot();
     const info=()=>P.$('#mclipinfo').textContent, setG=v=>{ P.$('#mgrid').value=v; P.$('#mgrid').dispatchEvent(new P.w.Event('change')); };
