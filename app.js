@@ -1,6 +1,6 @@
 // LoopBox — studio de loops (Movement Practice Bordeaux)
 // Tout le code de l'appli. Tests : npm test (voir tests/).
-const APPVER='81';
+const APPVER='82';
 // Toute erreur interne s'affiche à l'écran (et dans le diagnostic) pour pouvoir la signaler.
 window.__lbErrors=[];
 (()=>{
@@ -3282,8 +3282,10 @@ function updSongUI(){
       const c=song.clips[idx], ex=Math.abs(p.x-(c.s+c.len-song.view)*song.zoom), sx=Math.abs(p.x-(c.s-song.view)*song.zoom), wpx=c.len*song.zoom;
       const edge=Math.min(16,wpx/3);
       drag={k:ex<=edge?'right':sx<=edge?'left':'move',i:idx,b0:b,s0:c.s,len0:c.len,off0:c.off,x0:p.x,moved:false,hist:false};
-      if(drag.k!=='move'||!(c.g&&songSelSet().includes(c))||song.multi) songPickClip(idx); else song.sel=idx;
-      drag.grp=drag.k==='move'?songSelSet().map(x=>({c:x,s0:x.s})):null;
+      // mode « plusieurs blocs » : un simple toucher ajoute/retire le bloc (au relâcher) ; glisser déplace toute la sélection
+      if(song.multi&&drag.k==='move'){ drag.pick=idx; const cur=songSelSet(); drag.grp=(cur.includes(c)?cur:songGroupOf(c)).map(x=>({c:x,s0:x.s})); }
+      else { if(drag.k!=='move'||!(c.g&&songSelSet().includes(c))||song.multi) songPickClip(idx); else song.sel=idx;
+        drag.grp=drag.k==='move'?songSelSet().map(x=>({c:x,s0:x.s})):null; }
     } else { drag={k:'empty',x0:p.x,b0:b,v0:song.view,t,moved:false}; }
     drawSong();
   });
@@ -3297,13 +3299,15 @@ function updSongUI(){
     const c=song.clips[drag.i]; if(!c) return;
     if(!drag.hist){ pushHist(); drag.hist=true; }
     const mn=Math.max(0.25,songGrid()), d=b-drag.b0;
-    if(drag.k==='move'){ if(song.multi){ drag.moved=false; return; } if(drag.grp&&drag.grp.length>1){ const mn0=Math.min(...drag.grp.map(o=>o.s0)), dd=Math.max(-mn0,songSnap(drag.s0+d)-drag.s0); drag.grp.forEach(o=>{ o.c.s=o.s0+dd; }); } else c.s=Math.max(0,songSnap(drag.s0+d)); }
+    if(drag.k==='move'){ if(drag.grp&&drag.grp.length>1){ const mn0=Math.min(...drag.grp.map(o=>o.s0)), dd=Math.max(-mn0,songSnap(drag.s0+d)-drag.s0); drag.grp.forEach(o=>{ o.c.s=o.s0+dd; }); } else c.s=Math.max(0,songSnap(drag.s0+d)); }
     else if(drag.k==='right') c.len=Math.max(mn,songSnap(drag.s0+drag.len0+d)-c.s);
     else { const ns=clamp(songSnap(drag.s0+d),0,drag.s0+drag.len0-mn), dd=ns-drag.s0; c.s=ns; c.len=drag.len0-dd; c.off=mod(drag.off0+dd,beats); }
     drawSong();
   });
   const end=()=>{
     if(!drag) return; const d=drag; drag=null;
+    if(d.pick!=null&&!d.moved){ songPickClip(d.pick); drawSong(); return; }
+    if(d.pick!=null&&d.moved&&d.grp&&d.grp.length>1){ song.ms=d.grp.map(o=>o.c); song.sel=d.pick; }
     if(d.k==='empty'&&!d.moved){ pushHist(); song.ms=[]; const s=Math.max(0,Math.floor(d.b0/meter)*meter); song.clips.push({u:d.t.uid,s,len:beats,off:0,tp:0}); song.sel=song.clips.length-1; if(s+beats>song.end) song.end=s+beats; msg('Bloc ajouté sur « '+d.t.name+' » (un tour de boucle). Fais glisser son bord pour l\'allonger.'); }
     if(d.k==='pan'||(d.k==='empty'&&d.moved)) return;
     scheduleSave(true); songRestartIfPlaying(); drawSong();

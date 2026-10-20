@@ -1438,6 +1438,26 @@ function ok(cond,msg){ if(!cond) throw new Error(msg); }
     ok(/« Piste 2 » · mesures 5 → 6/.test(info()),'dissocié : '+info());
     P.$('#undo').click(); P.$('#undo').click(); await sleep(10);
   });
+  await test('montage : groupe déplaçable même avec « choisir plusieurs blocs » coché (toucher = choisir, glisser = déplacer)',async()=>{
+    const {P,tap,drag,X,Y}=await montBoot();
+    const info=()=>P.$('#mclipinfo').textContent;
+    tap(X(4),12); tap(X(14),Y(0)); P.$('#mcut').click(); P.$('#mdel').click();
+    tap(X(14),Y(1)); P.$('#mcut').click(); P.$('#mdel').click(); await sleep(5);
+    const mm=P.$('#mmulti'); mm.checked=true; mm.dispatchEvent(new P.w.Event('change'));
+    tap(X(2),Y(0)); tap(X(2),Y(1)); await sleep(5);
+    ok(/^2 blocs choisis$/.test(info()),'deux blocs choisis : '+info());
+    P.$('#mgrp').click(); await sleep(5);
+    // la case reste cochée : on glisse le groupe d'une mesure
+    drag(X(2),Y(0),X(6)); await sleep(5);
+    ok(/^2 blocs choisis/.test(info()),'sélection gardée après le glissé : '+info());
+    mm.checked=false; mm.dispatchEvent(new P.w.Event('change'));
+    P.$('#mungrp').click(); tap(X(6),Y(1)); await sleep(5);
+    ok(/« Piste 2 » · mesures 2 →/.test(info()),'le bloc de la piste 2 a bougé avec le groupe : '+info());
+    // un simple toucher en mode plusieurs blocs ajoute / retire toujours
+    mm.checked=true; mm.dispatchEvent(new P.w.Event('change')); tap(X(6),Y(0)); await sleep(5);
+    ok(/blocs choisis|« /.test(info()),'toucher choisit : '+info());
+    ok(P.errs.length===0,'erreurs : '+P.errs.join(';'));
+  });
   await test('projets en ligne : compte, envoi, envoi automatique, ouverture sur un 2e appareil, session renouvelée, hors connexion, retrait',async()=>{
     const S=fakeCloud();
     const P=await boot({cloud:S}); await recordBase(P); await sleep(50);
